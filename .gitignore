@@ -1,0 +1,12 @@
+.DS_Store
+.pixi/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.egg-info/
+*.py[cod]
+build/
+dist/
+site/
+beyondmlst_results/
+/tmp*/

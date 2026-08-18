@@ -1,0 +1,8 @@
+.git
+.github
+.pixi
+.pytest_cache
+.ruff_cache
+__pycache__
+*.pyc
+beyondmlst_results

@@ -1,0 +1,27 @@
+[workspace]
+authors = ["Nabil-Fareed Alikhan <nabil.alikhan@cgps.group>"]
+channels = ["conda-forge", "bioconda"]
+name = "beyondmlst"
+platforms = ["osx-64", "linux-64", "linux-aarch64"]
+version = "0.1.0"
+
+[dependencies]
+python = "3.10.*"
+gubbins = ">=3.4.3,<3.5"
+treetime = ">=0.12.1,<0.13"
+
+[pypi-dependencies]
+beyondmlst = { path = ".", editable = true }
+
+[tasks]
+beyondmlst = "beyondmlst"
+test = "python -m pytest -q"
+lint = "ruff check ."
+format = "ruff format ."
+
+[feature.dev.pypi-dependencies]
+pytest = ">=8,<9"
+ruff = ">=0.12,<0.13"
+
+[environments]
+default = { features = ["dev"], solve-group = "default" }

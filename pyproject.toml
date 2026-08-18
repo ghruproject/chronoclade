@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "beyondmlst"
+version = "0.1.0"
+description = "Recombination-aware temporal and contextual bacterial phylogenetics"
+readme = "README.md"
+requires-python = ">=3.10,<3.11"
+license = { text = "GPL-3.0-or-later" }
+authors = [
+  { name = "Nabil-Fareed Alikhan", email = "nabil.alikhan@cgps.group" },
+]
+keywords = ["bacterial-genomics", "phylogenetics", "temporal-signal", "gubbins", "treetime"]
+dependencies = [
+  "rich>=14,<15",
+  "typer>=0.19,<1",
+]
+
+[project.urls]
+Homepage = "https://github.com/ghruproject/beyondmlst"
+Repository = "https://github.com/ghruproject/beyondmlst"
+
+[project.scripts]
+beyondmlst = "beyondmlst.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["beyondmlst"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: exercises installed bioinformatics command-line tools"]
