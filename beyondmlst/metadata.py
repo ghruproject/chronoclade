@@ -59,9 +59,7 @@ def _parse_boolean(value: str, *, row_number: int) -> bool:
         return True
     if normalised in FALSE_VALUES:
         return False
-    raise MetadataError(
-        f"Row {row_number}: is_reference must be true/false, not {value!r}"
-    )
+    raise MetadataError(f"Row {row_number}: is_reference must be true/false, not {value!r}")
 
 
 def _validate_date(value: str, *, row_number: int) -> None:
@@ -188,7 +186,9 @@ def fasta_lengths(path: Path) -> list[int]:
                 current = 0
             else:
                 if not lengths and current == 0 and line.startswith("@"):  # obvious FASTQ
-                    raise MetadataError(f"Expected an assembly FASTA, found FASTQ-like data: {path}")
+                    raise MetadataError(
+                        f"Expected an assembly FASTA, found FASTQ-like data: {path}"
+                    )
                 current += len(line)
     if current:
         lengths.append(current)

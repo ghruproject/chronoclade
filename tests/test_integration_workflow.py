@@ -16,7 +16,7 @@ def write_variant_assembly(path: Path, mutations: dict[int, str]) -> None:
 
 
 @pytest.mark.integration
-def test_small_workflow_reaches_location_tree(tmp_path: Path) -> None:
+def test_small_workflow_reaches_time_scaled_and_location_trees(tmp_path: Path) -> None:
     if not native_platform_supported():
         pytest.skip("the compiled workflow is validated natively on Linux")
     if any(path is None for path in tool_status().values()):
@@ -50,13 +50,19 @@ def test_small_workflow_reaches_location_tree(tmp_path: Path) -> None:
         samples,
         output=output,
         threads=1,
-        randomisations=0,
-        temporal_p_value=0.05,
+        lineage_jobs=1,
+        randomisation_jobs=1,
+        randomisations=1,
+        # This plumbing test deliberately uses a permissive gate so CI executes
+        # TreeTime's confidence-aware dated-tree branch with a tiny dataset.
+        temporal_p_value=1.0,
         min_samples=4,
         seed=1,
         force=False,
     )
 
     assert len(summary["lineages"]) == 1
-    assert (output / "E_coli__ST_test" / "gubbins.final_tree.tre").is_file()
+    assert (output / "E_coli__ST_test" / "clonalframeml.labelled_tree.newick").is_file()
+    assert (output / "E_coli__ST_test" / "timetree" / "timetree.nexus").is_file()
+    assert (output / "E_coli__ST_test" / "timetree" / "timetree.svg").is_file()
     assert (output / "E_coli__ST_test" / "location" / "annotated_tree.nexus").is_file()

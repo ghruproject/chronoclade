@@ -9,4 +9,5 @@ build/
 dist/
 site/
 beyondmlst_results/
-/tmp*/
+demo_run/
+tmp/
