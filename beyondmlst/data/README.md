@@ -2,10 +2,11 @@
 
 `atb_context_202505.parquet` is a compact, analysis-ready subset of the
 AllTheBacteria 2025-05 metadata release. It contains high-quality downloadable
-assemblies assigned to these species/scheme pairs:
+assemblies across every bacterial species and MLST scheme represented by a
+perfect ATB sequence-type assignment.
 
-- *Escherichia coli* / `ecoli_achtman_4`
-- *Klebsiella pneumoniae* / `klebsiella`
+The 2025-05 snapshot contains 2,047,053 genomes across 942 species and 146 MLST
+schemes in a 32 MiB Parquet file.
 
 The fields are limited to those used for same-ST discovery, metadata filtering,
 context reporting and assembly retrieval. `atb_context_202505.json` records the

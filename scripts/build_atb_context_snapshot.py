@@ -18,10 +18,6 @@ import pyarrow.parquet as pq
 from beyondmlst.context import normalise_collection_date
 
 
-SPECIES_SCHEMES = {
-    "Escherichia coli": "ecoli_achtman_4",
-    "Klebsiella pneumoniae": "klebsiella",
-}
 ATB_RELEASE = "2025-05"
 ATB_SQLITE_URL = "https://osf.io/download/my56u/"
 ATB_MLST_URL = "https://osf.io/download/69c66d33fa3d973d94254f46/"
@@ -60,18 +56,14 @@ def build_snapshot(sqlite_path: Path, mlst_path: Path) -> tuple[pd.DataFrame, st
                c.Contamination AS contamination,
                c.Genome_Size AS genome_size,
                c.Contig_N50 AS contig_n50
-          FROM assembly a
+         FROM assembly a
      LEFT JOIN checkm2 c ON a.sample_accession = c.sample_accession
          WHERE a.hq_filter = 'PASS'
            AND a.asm_fasta_on_osf = 1
-           AND (a.sylph_species LIKE 'Escherichia coli%'
-                OR a.sylph_species LIKE 'Klebsiella pneumoniae%')
         """,
         connection,
     )
-    assembly["normalised_species"] = assembly["species"].map(normalise_species)
-    assembly = assembly[assembly["normalised_species"].isin(SPECIES_SCHEMES)].copy()
-    assembly["mlst_scheme"] = assembly["normalised_species"].map(SPECIES_SCHEMES)
+    assembly["species"] = assembly["species"].fillna("").map(normalise_species)
 
     ena_table = latest_ena_table(connection)
     connection.execute("CREATE TEMP TABLE wanted (sample_accession TEXT PRIMARY KEY)")
@@ -103,16 +95,14 @@ def build_snapshot(sqlite_path: Path, mlst_path: Path) -> tuple[pd.DataFrame, st
         mlst_path,
         columns=["sample", "mlst_scheme", "mlst_st", "mlst_status"],
     ).rename(columns={"sample": "sample_id"})
-    mlst = mlst[mlst["mlst_scheme"].isin(SPECIES_SCHEMES.values())].copy()
     mlst = mlst[mlst["mlst_status"] == "PERFECT"]
     mlst["mlst_st"] = mlst["mlst_st"].astype(str)
     mlst = mlst[mlst["mlst_st"] != "-"]
     mlst = mlst.drop_duplicates(["sample_id", "mlst_scheme"], keep="first")
     mlst = mlst.drop(columns="mlst_status")
 
-    result = assembly.merge(mlst, on=["sample_id", "mlst_scheme"], how="inner")
+    result = assembly.merge(mlst, on="sample_id", how="inner")
     result = result.merge(metadata, on="sample_id", how="left")
-    result["species"] = result.pop("normalised_species")
     columns = [
         "sample_id",
         "species",
@@ -166,7 +156,9 @@ def main() -> None:
         "name": "beyondMLST AllTheBacteria context metadata",
         "atb_release": ATB_RELEASE,
         "ena_table": ena_table,
-        "species_schemes": SPECIES_SCHEMES,
+        "species": int(result["species"].nunique()),
+        "mlst_schemes": sorted(result["mlst_scheme"].unique().tolist()),
+        "mlst_scheme_count": int(result["mlst_scheme"].nunique()),
         "rows": len(result),
         "usable_collection_date_rows": int(
             result["collection_date"]
@@ -187,8 +179,7 @@ def main() -> None:
         },
         "licence": "MIT",
         "selection": (
-            "HQ downloadable Escherichia coli/ecoli_achtman_4 and "
-            "Klebsiella pneumoniae/klebsiella records with assigned STs"
+            "All HQ downloadable ATB bacterial assemblies with a perfect assigned MLST ST"
         ),
     }
     args.manifest.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")

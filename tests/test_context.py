@@ -136,7 +136,7 @@ def test_bundled_snapshot_contains_expected_st131_records() -> None:
 
     assert len(accessions) == 13_579
     assert len(candidates) == 8_953
-    assert DEFAULT_CONTEXT_METADATA.stat().st_size < 10 * 1024 * 1024
+    assert DEFAULT_CONTEXT_METADATA.stat().st_size < 50 * 1024 * 1024
     assert "mlst_status" not in pq.ParquetFile(DEFAULT_CONTEXT_METADATA).schema.names
 
 
@@ -151,6 +151,28 @@ def test_bundled_snapshot_contains_expected_klebsiella_st258_records() -> None:
 
     assert len(accessions) == 3_036
     assert len(candidates) == 2_644
+
+
+def test_bundled_snapshot_supports_salmonella() -> None:
+    accessions, candidates = load_same_st_candidates(
+        DEFAULT_CONTEXT_METADATA,
+        species="Salmonella enterica",
+        lineage="ST19",
+        scheme="salmonella",
+        st="19",
+    )
+
+    assert len(accessions) == 68_070
+    assert len(candidates) == 58_714
+
+
+def test_bundled_snapshot_records_full_atb_scope() -> None:
+    provenance = context_metadata_provenance(DEFAULT_CONTEXT_METADATA)
+
+    assert provenance["rows"] == 2_047_053
+    assert provenance["species"] == 942
+    assert provenance["mlst_scheme_count"] == 146
+    assert provenance["usable_collection_date_rows"] == 1_480_597
 
 
 def test_stratified_pool_is_reproducible_and_spans_strata() -> None:

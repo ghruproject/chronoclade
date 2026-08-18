@@ -41,8 +41,8 @@ The pipeline performs:
 
 ## Contextual-genome acquisition
 
-The repository includes a compact, species-scoped AllTheBacteria metadata
-snapshot for discovery and filtering. `atbfetcher` remains the assembly
+The repository includes a compact, all-species AllTheBacteria metadata snapshot
+for discovery and filtering. `atbfetcher` remains the assembly
 acquisition layer. This avoids making every user install the full ATB metadata
 database. For an analysis of a focal ST, beyondMLST will:
 
@@ -62,11 +62,12 @@ precision, quality fields and the reason each genome was retained. A user may
 provide an updated compact table with `--metadata-table` or provide the final
 context manifest manually.
 
-The bundled 2025-05 snapshot contains only high-quality, downloadable
-*E. coli* (`ecoli_achtman_4`) and *K. pneumoniae* (`klebsiella`) records with an
-assigned ST. Its generator, source URLs, row counts, licence and SHA-256 digest
-are versioned beside it. The full 27 GB SQLite database is needed only by a
-maintainer when generating a new snapshot, not by analysts running beyondMLST.
+The bundled 2025-05 snapshot contains all high-quality, downloadable ATB
+bacterial assemblies with a perfect assigned ST, across every represented
+species and MLST scheme. Its generator, source URLs, row counts, licence and
+SHA-256 digest are versioned beside it. The full 27 GB SQLite database is needed
+only by a maintainer when generating a new snapshot, not by analysts running
+beyondMLST.
 
 The bounded pool does not guarantee retrieval of the globally nearest public
 genomes when an ST contains thousands of records. Reports state this

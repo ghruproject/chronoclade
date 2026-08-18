@@ -129,9 +129,13 @@ pixi run beyondmlst run metadata.csv \
 ### Prepare public context genomes
 
 [`atbfetcher`](https://github.com/happykhan/atbfetcher) is installed in the
-same Pixi environment. beyondMLST includes a compact 7 MB AllTheBacteria
-2025-05 metadata snapshot for high-quality, downloadable *E. coli* and
-*K. pneumoniae* genomes. Prepare a bounded same-ST context set directly:
+same Pixi environment. beyondMLST includes a compact AllTheBacteria 2025-05
+metadata snapshot covering every bacterial species and MLST scheme with a
+high-quality, downloadable genome and a perfect ST assignment. Prepare a
+bounded same-ST context set directly:
+
+The current snapshot is 32 MiB and contains 2,047,053 genomes across 942
+species and 146 MLST schemes.
 
 ```bash
 pixi run beyondmlst prepare-context focal_metadata.csv \

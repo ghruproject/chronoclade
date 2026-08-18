@@ -145,6 +145,9 @@ def context_metadata_provenance(path: Path) -> dict[str, object]:
         "sha256": digest,
         "rows": rows,
         "release": manifest.get("atb_release", "unknown"),
+        "species": manifest.get("species", "unknown"),
+        "mlst_scheme_count": manifest.get("mlst_scheme_count", "unknown"),
+        "usable_collection_date_rows": manifest.get("usable_collection_date_rows", "unknown"),
         "source_manifest": str(manifest_path) if manifest_path.is_file() else None,
     }
 

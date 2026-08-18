@@ -8,8 +8,9 @@ The current MVP now provides the reproducible analytical foundation:
 - species/ST-separated SKA2, IQ-TREE and ClonalFrameML analysis;
 - root-to-tip graphics, date randomisation and a TreeTime dated tree only when
   the temporal-signal gate passes;
-- same-ST discovery from a bundled compact AllTheBacteria snapshot and assembly
-  fetching through `atbfetcher`;
+- same-ST discovery for all represented bacterial species and schemes from a
+  bundled compact AllTheBacteria snapshot, with assembly fetching through
+  `atbfetcher`;
 - deterministic country/year-balanced context pooling, SKA screening and a
   frozen context manifest;
 - HTML and JSON reports with temporal diagnostics, contextual-genome evidence
