@@ -41,13 +41,15 @@ The pipeline performs:
 
 ## Contextual-genome acquisition
 
-`atbfetcher` is the acquisition layer for AllTheBacteria and RefSeq assemblies.
-For an analysis of a focal ST, beyondMLST will:
+The repository includes a compact, species-scoped AllTheBacteria metadata
+snapshot for discovery and filtering. `atbfetcher` remains the assembly
+acquisition layer. This avoids making every user install the full ATB metadata
+database. For an analysis of a focal ST, beyondMLST will:
 
-1. Obtain the complete high-quality same-ST candidate list with
-   `atbfetcher mlst-query`.
+1. Obtain the complete high-quality same-ST candidate list from the versioned
+   compact Parquet snapshot.
 2. Intersect it with reviewable geography, collection-period, host and source
-   strata from the same ATB SQLite snapshot used by `atbfetcher query`.
+   strata stored in that snapshot.
 3. Fetch the candidate assemblies by accession.
 4. Use a fast SKA distance screen to retain close neighbours of every focal
    isolate within the bounded downloaded pool, plus a reproducible stratified
@@ -57,14 +59,14 @@ For an analysis of a focal ST, beyondMLST will:
 The manifest records the `atbfetcher` version, ATB metadata snapshot, MLST
 scheme and ST, filters, random seed, accession, provenance, collection-date
 precision, quality fields and the reason each genome was retained. A user may
-provide the same manifest manually, so downloading the large ATB SQLite
-database is optional rather than a requirement for every beyondMLST run.
+provide an updated compact table with `--metadata-table` or provide the final
+context manifest manually.
 
-The pinned `atbfetcher` release currently has a retired R2 URL for its MLST
-table. beyondMLST first uses the normal command; if that cache is absent and the
-query fails, it obtains the current official ATB `mlst.parquet` from OSF at the
-cache path expected by `atbfetcher`, retries the command, and records the
-fallback in the audit JSON.
+The bundled 2025-05 snapshot contains only high-quality, downloadable
+*E. coli* (`ecoli_achtman_4`) and *K. pneumoniae* (`klebsiella`) records with an
+assigned ST. Its generator, source URLs, row counts, licence and SHA-256 digest
+are versioned beside it. The full 27 GB SQLite database is needed only by a
+maintainer when generating a new snapshot, not by analysts running beyondMLST.
 
 The bounded pool does not guarantee retrieval of the globally nearest public
 genomes when an ST contains thousands of records. Reports state this

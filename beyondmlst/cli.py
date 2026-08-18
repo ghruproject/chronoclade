@@ -102,7 +102,10 @@ def _print_plan(items: list[dict[str, object]]) -> None:
 @app.command("prepare-context")
 def prepare_context_command(
     metadata: Annotated[Path, typer.Argument(help="Focal-isolate metadata CSV")],
-    scheme: Annotated[str, typer.Option("--scheme", help="PubMLST scheme used by atbfetcher")],
+    scheme: Annotated[
+        str,
+        typer.Option("--scheme", help="MLST scheme in the context metadata snapshot"),
+    ],
     output: Annotated[
         Path, typer.Option("--output", "-o", help="Context preparation directory")
     ] = Path("beyondmlst_context"),
@@ -118,12 +121,15 @@ def prepare_context_command(
         str | None,
         typer.Option("--st", help="MLST sequence type; inferred from an ST-prefixed lineage"),
     ] = None,
-    db_path: Annotated[
+    metadata_table: Annotated[
         Path | None,
-        typer.Option("--db-path", help="ATB SQLite metadata snapshot"),
+        typer.Option(
+            "--metadata-table",
+            help="Override the bundled compact ATB context metadata Parquet",
+        ),
     ] = None,
     cache_dir: Annotated[
-        Path, typer.Option("--cache-dir", help="atbfetcher metadata and download cache")
+        Path, typer.Option("--cache-dir", help="atbfetcher assembly download cache")
     ] = Path("~/.atbfetcher"),
     country: Annotated[
         list[str] | None,
@@ -203,7 +209,7 @@ def prepare_context_command(
             st=selected_st,
             output=output,
             cache_dir=cache_dir,
-            db_path=db_path,
+            metadata_table=metadata_table,
             countries=country,
             year_from=year_from,
             year_to=year_to,

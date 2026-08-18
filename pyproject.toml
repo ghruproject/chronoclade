@@ -14,6 +14,7 @@ authors = [
 ]
 keywords = ["bacterial-genomics", "phylogenetics", "temporal-signal", "clonalframeml", "treetime"]
 dependencies = [
+  "pyarrow>=14,<26",
   "rich>=14,<15",
   "typer>=0.19,<1",
 ]

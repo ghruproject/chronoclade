@@ -1,17 +1,16 @@
 import csv
-import sqlite3
-import subprocess
 from pathlib import Path
 
-import beyondmlst.context as context_module
+import pyarrow as pa
+import pyarrow.parquet as pq
+
 from beyondmlst.context import (
+    DEFAULT_CONTEXT_METADATA,
     ContextCandidate,
     attach_downloaded_assemblies,
-    cache_official_atb_mlst,
-    discover_same_st,
-    discover_same_st_resilient,
+    context_metadata_provenance,
     filter_candidates,
-    lookup_atb_metadata,
+    load_same_st_candidates,
     normalise_collection_date,
     parse_ska_distances,
     select_context,
@@ -43,71 +42,115 @@ def test_normalises_only_supported_collection_dates() -> None:
     assert normalise_collection_date("not collected") == ""
 
 
-def test_caches_official_mlst_parquet_atomically(tmp_path: Path, monkeypatch) -> None:
-    source = tmp_path / "source.parquet"
-    source.write_bytes(b"PAR1mock-parquet-content")
-    monkeypatch.setattr(context_module, "OFFICIAL_ATB_MLST_URL", source.as_uri())
+def write_test_snapshot(path: Path) -> Path:
+    rows = [
+        {
+            "sample_id": "SAMN1",
+            "species": "Escherichia coli",
+            "mlst_scheme": "ecoli_achtman_4",
+            "mlst_st": "131",
+            "mlst_status": "PERFECT",
+            "collection_date": "2023-04",
+            "country": "United Kingdom",
+            "host": "Homo sapiens",
+            "isolation_source": "blood",
+            "hq_filter": "PASS",
+            "completeness": 99.0,
+            "contamination": 0.2,
+            "genome_size": 5_000_000,
+            "contig_n50": 100_000,
+            "aws_url": "https://example/SAMN1.fa.gz",
+        },
+        {
+            "sample_id": "SAMN2",
+            "species": "Escherichia coli",
+            "mlst_scheme": "ecoli_achtman_4",
+            "mlst_st": "131",
+            "mlst_status": "PERFECT",
+            "collection_date": "",
+            "country": "Philippines",
+            "host": "Homo sapiens",
+            "isolation_source": "urine",
+            "hq_filter": "PASS",
+            "completeness": 99.0,
+            "contamination": 0.2,
+            "genome_size": 5_000_000,
+            "contig_n50": 100_000,
+            "aws_url": "https://example/SAMN2.fa.gz",
+        },
+    ]
+    pq.write_table(pa.Table.from_pylist(rows), path)
+    return path
 
-    result = cache_official_atb_mlst(tmp_path / "cache")
 
-    assert result.read_bytes() == source.read_bytes()
-    assert not result.with_suffix(".parquet.part").exists()
-    provenance = result.with_suffix(".parquet.provenance.json")
-    assert provenance.is_file()
-    assert "official_allthebacteria_osf" in provenance.read_text(encoding="utf-8")
+def test_compact_snapshot_returns_all_and_dated_same_st_candidates(tmp_path: Path) -> None:
+    snapshot = write_test_snapshot(tmp_path / "context.parquet")
 
-
-def test_resilient_discovery_repairs_missing_atbfetcher_cache(tmp_path: Path, monkeypatch) -> None:
-    calls = 0
-
-    def fake_discovery(**_kwargs) -> list[str]:
-        nonlocal calls
-        calls += 1
-        if calls == 1:
-            raise context_module.ContextError("upstream returned 401")
-        return ["SAMN2", "SAMN1"]
-
-    cached = tmp_path / "mlst.parquet"
-
-    def fake_cache(_cache_dir: Path) -> Path:
-        cached.write_bytes(b"PAR1fallback")
-        return cached
-
-    monkeypatch.setattr(context_module, "discover_same_st", fake_discovery)
-    monkeypatch.setattr(context_module, "cache_official_atb_mlst", fake_cache)
-
-    accessions, audit = discover_same_st_resilient(
+    accessions, candidates = load_same_st_candidates(
+        snapshot,
         species="Escherichia coli",
+        lineage="ST131",
         scheme="ecoli_achtman_4",
         st="131",
-        cache_dir=tmp_path,
     )
 
-    assert accessions == ["SAMN2", "SAMN1"]
-    assert calls == 2
-    assert audit["method"] == "atbfetcher_with_official_atb_mlst_fallback"
+    assert accessions == ["SAMN1", "SAMN2"]
+    assert [candidate.sample_id for candidate in candidates] == ["SAMN1"]
+    assert candidates[0].collection_date == "2023-04"
+    assert candidates[0].completeness == "99.0"
 
 
-def test_discovery_ignores_atbfetcher_logging_before_tsv_header(
-    tmp_path: Path, monkeypatch
-) -> None:
-    output = (
-        "[20:01:05] INFO Loading cached MLST data\n"
-        "sample\tmlst_scheme\tmlst_st\n"
-        "SAMN2\tecoli_achtman_4\t131\n"
-        "SAMN1\tecoli_achtman_4\t131\n"
-    )
-    completed = subprocess.CompletedProcess(["atbfetcher"], 0, output, "")
-    monkeypatch.setattr(context_module, "_run_capture", lambda *_args, **_kwargs: completed)
+def test_compact_snapshot_matches_underscore_separated_species(tmp_path: Path) -> None:
+    snapshot = write_test_snapshot(tmp_path / "context.parquet")
 
-    result = discover_same_st(
-        species="Escherichia coli",
+    accessions, _ = load_same_st_candidates(
+        snapshot,
+        species="Escherichia_coli",
+        lineage="ST131",
         scheme="ecoli_achtman_4",
         st="131",
-        cache_dir=tmp_path,
     )
 
-    assert result == ["SAMN1", "SAMN2"]
+    assert accessions == ["SAMN1", "SAMN2"]
+
+
+def test_snapshot_provenance_includes_checksum_and_manifest(tmp_path: Path) -> None:
+    snapshot = write_test_snapshot(tmp_path / "context.parquet")
+    snapshot.with_suffix(".json").write_text('{"atb_release": "test-release"}\n', encoding="utf-8")
+
+    provenance = context_metadata_provenance(snapshot)
+
+    assert provenance["release"] == "test-release"
+    assert provenance["rows"] == 2
+    assert len(str(provenance["sha256"])) == 64
+
+
+def test_bundled_snapshot_contains_expected_st131_records() -> None:
+    accessions, candidates = load_same_st_candidates(
+        DEFAULT_CONTEXT_METADATA,
+        species="Escherichia coli",
+        lineage="ST131",
+        scheme="ecoli_achtman_4",
+        st="131",
+    )
+
+    assert len(accessions) == 13_579
+    assert len(candidates) == 8_953
+    assert DEFAULT_CONTEXT_METADATA.stat().st_size < 10 * 1024 * 1024
+    assert "mlst_status" not in pq.ParquetFile(DEFAULT_CONTEXT_METADATA).schema.names
+
+
+def test_bundled_snapshot_contains_expected_klebsiella_st258_records() -> None:
+    accessions, candidates = load_same_st_candidates(
+        DEFAULT_CONTEXT_METADATA,
+        species="Klebsiella pneumoniae",
+        lineage="ST258",
+        scheme="klebsiella",
+        st="258",
+    )
+
+    assert len(accessions) == 3_036
+    assert len(candidates) == 2_644
 
 
 def test_stratified_pool_is_reproducible_and_spans_strata() -> None:
@@ -144,51 +187,6 @@ def test_filter_candidates_applies_metadata_constraints() -> None:
     )
 
     assert [item.sample_id for item in result] == ["A"]
-
-
-def test_lookup_atb_metadata_uses_dated_hq_assemblies(tmp_path: Path) -> None:
-    database = tmp_path / "atb.metadata.test.sqlite"
-    connection = sqlite3.connect(database)
-    connection.executescript(
-        """
-        CREATE TABLE assembly (
-          sample_accession TEXT, sylph_species TEXT, hq_filter TEXT,
-          aws_url TEXT, asm_fasta_on_osf INTEGER
-        );
-        CREATE TABLE run (sample_accession TEXT, run_accession TEXT);
-        CREATE TABLE ena_202505_used (
-          run_accession TEXT, country TEXT, collection_date TEXT,
-          host TEXT, isolation_source TEXT
-        );
-        CREATE TABLE checkm2 (
-          sample_accession TEXT, Completeness_Specific REAL,
-          Contamination REAL, Genome_Size INTEGER, Contig_N50 INTEGER
-        );
-        INSERT INTO assembly VALUES ('SAMN1','Escherichia coli','PASS','https://a',1);
-        INSERT INTO assembly VALUES ('SAMN2','Escherichia coli','PASS','https://b',1);
-        INSERT INTO run VALUES ('SAMN1','ERR1');
-        INSERT INTO run VALUES ('SAMN2','ERR2');
-        INSERT INTO ena_202505_used VALUES ('ERR1','United Kingdom','2023-04','Homo sapiens','blood');
-        INSERT INTO ena_202505_used VALUES ('ERR2','Philippines','','Homo sapiens','blood');
-        INSERT INTO checkm2 VALUES ('SAMN1',99.0,0.2,5000000,100000);
-        INSERT INTO checkm2 VALUES ('SAMN2',99.0,0.2,5000000,100000);
-        """
-    )
-    connection.commit()
-    connection.close()
-
-    result = lookup_atb_metadata(
-        database,
-        ["SAMN1", "SAMN2"],
-        species="Escherichia coli",
-        lineage="ST131",
-        scheme="ecoli_achtman_4",
-        st="131",
-    )
-
-    assert [item.sample_id for item in result] == ["SAMN1"]
-    assert result[0].collection_date == "2023-04"
-    assert result[0].completeness == "99.0"
 
 
 def test_parse_and_select_context_prioritises_focal_neighbours(tmp_path: Path) -> None:

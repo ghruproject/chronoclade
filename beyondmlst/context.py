@@ -7,21 +7,18 @@ import hashlib
 import json
 import random
 import re
-import shutil
-import sqlite3
 import subprocess
-import urllib.error
-import urllib.request
 from collections import defaultdict
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable
+
+import pyarrow.parquet as pq
 
 from beyondmlst.metadata import Sample
 
 
-OFFICIAL_ATB_MLST_URL = "https://osf.io/download/69c66d33fa3d973d94254f46/"
+DEFAULT_CONTEXT_METADATA = Path(__file__).parent / "data" / "atb_context_202505.parquet"
 
 
 class ContextError(RuntimeError):
@@ -114,170 +111,42 @@ def atbfetcher_version(executable: str = "atbfetcher") -> str:
     return completed.stdout.strip() or completed.stderr.strip() or "unknown"
 
 
-def discover_same_st(
-    *,
-    species: str,
-    scheme: str,
-    st: str,
-    cache_dir: Path,
-    executable: str = "atbfetcher",
-    log: Path | None = None,
-) -> list[str]:
-    """Use atbfetcher to return all high-quality samples assigned to one ST."""
+def resolve_context_metadata(requested: Path | None = None) -> Path:
+    """Resolve the bundled or explicitly supplied compact ATB metadata table."""
 
-    command = [
-        executable,
-        "mlst-query",
-        "--species",
-        species,
-        "--scheme",
-        scheme,
-        "--st",
-        st,
-        "--format",
-        "tsv",
-        "--cache-dir",
-        str(cache_dir),
-    ]
-    completed = _run_capture(command, log=log)
-    lines = completed.stdout.splitlines()
-    header_index = next(
-        (
-            index
-            for index, line in enumerate(lines)
-            if "sample" in {field.strip() for field in line.split("\t")}
-        ),
-        None,
-    )
-    if header_index is None:
-        raise ContextError("atbfetcher MLST output did not contain a 'sample' column")
-    reader = csv.DictReader(lines[header_index:], delimiter="\t")
-    if reader.fieldnames is None or "sample" not in reader.fieldnames:
-        raise ContextError("atbfetcher MLST output did not contain a 'sample' column")
-    accessions = sorted({(row.get("sample") or "").strip() for row in reader})
-    accessions = [accession for accession in accessions if accession]
-    if not accessions:
-        raise ContextError(f"No high-quality {species} ST{st} candidates were found")
-    return accessions
+    result = (requested or DEFAULT_CONTEXT_METADATA).expanduser().resolve()
+    if not result.is_file():
+        raise ContextError(f"Context metadata table not found: {result}")
+    return result
 
 
-def cache_official_atb_mlst(cache_dir: Path) -> Path:
-    """Cache the current official ATB MLST Parquet used by atbfetcher.
+def context_metadata_provenance(path: Path) -> dict[str, object]:
+    """Return an auditable description of one compact context snapshot."""
 
-    atbfetcher's pinned release still points to a retired R2 object. The current
-    ATB CLI publishes the same MLST schema from OSF, so placing that file at the
-    cache location expected by atbfetcher lets its normal query path continue.
-    """
-
-    cache_dir = cache_dir.expanduser().resolve()
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    destination = cache_dir / "mlst.parquet"
-    provenance = cache_dir / "mlst.parquet.provenance.json"
-    if destination.is_file() and destination.stat().st_size > 8:
-        with destination.open("rb") as handle:
-            if handle.read(4) == b"PAR1":
-                if not provenance.is_file():
-                    _write_mlst_provenance(destination, provenance)
-                return destination
-
-    temporary = cache_dir / "mlst.parquet.part"
-    request = urllib.request.Request(
-        OFFICIAL_ATB_MLST_URL,
-        headers={"User-Agent": "beyondmlst/0.1 (+https://github.com/ghruproject/beyondmlst)"},
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=120) as response:  # noqa: S310
-            with temporary.open("wb") as handle:
-                shutil.copyfileobj(response, handle)
-        if temporary.stat().st_size <= 8:
-            raise ContextError("The official ATB MLST download was unexpectedly empty")
-        with temporary.open("rb") as handle:
-            if handle.read(4) != b"PAR1":
-                raise ContextError("The official ATB MLST download was not a Parquet file")
-        temporary.replace(destination)
-        _write_mlst_provenance(destination, provenance)
-    except (OSError, urllib.error.URLError) as error:
-        temporary.unlink(missing_ok=True)
-        if isinstance(error, ContextError):
-            raise
-        raise ContextError(f"Could not download the official ATB MLST table: {error}") from error
-    return destination
-
-
-def _write_mlst_provenance(table: Path, destination: Path) -> None:
-    with table.open("rb") as handle:
+    manifest_path = path.with_suffix(".json")
+    manifest: dict[str, object] = {}
+    if manifest_path.is_file():
+        try:
+            loaded = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                manifest = loaded
+        except (OSError, json.JSONDecodeError):
+            manifest = {}
+    with path.open("rb") as handle:
         digest = hashlib.file_digest(handle, "sha256").hexdigest()
-    destination.write_text(
-        json.dumps(
-            {
-                "source": "official_allthebacteria_osf",
-                "url": OFFICIAL_ATB_MLST_URL,
-                "path": str(table),
-                "size_bytes": table.stat().st_size,
-                "sha256": digest,
-                "cached_at": datetime.now().astimezone().isoformat(),
-            },
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-
-
-def discover_same_st_resilient(
-    *,
-    species: str,
-    scheme: str,
-    st: str,
-    cache_dir: Path,
-    executable: str = "atbfetcher",
-    logs: Path | None = None,
-) -> tuple[list[str], dict[str, str]]:
-    """Query atbfetcher, repairing only its known missing MLST cache path."""
-
-    initial_log = logs / "atbfetcher_mlst_query_initial.log" if logs else None
     try:
-        accessions = discover_same_st(
-            species=species,
-            scheme=scheme,
-            st=st,
-            cache_dir=cache_dir,
-            executable=executable,
-            log=initial_log,
-        )
-        provenance = cache_dir.expanduser().resolve() / "mlst.parquet.provenance.json"
-        if provenance.is_file():
-            try:
-                details = json.loads(provenance.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                details = {}
-            return accessions, {
-                "method": "atbfetcher_with_cached_official_atb_mlst",
-                "mlst_table": str(cache_dir.expanduser().resolve() / "mlst.parquet"),
-                "mlst_table_url": str(details.get("url", OFFICIAL_ATB_MLST_URL)),
-                "mlst_table_sha256": str(details.get("sha256", "")),
-            }
-        return accessions, {"method": "atbfetcher", "mlst_table": "atbfetcher cache"}
-    except ContextError as initial_error:
-        cached_table = cache_dir.expanduser().resolve() / "mlst.parquet"
-        if cached_table.is_file():
-            raise
-        cached_table = cache_official_atb_mlst(cache_dir)
-        retry_log = logs / "atbfetcher_mlst_query_retry.log" if logs else None
-        accessions = discover_same_st(
-            species=species,
-            scheme=scheme,
-            st=st,
-            cache_dir=cache_dir,
-            executable=executable,
-            log=retry_log,
-        )
-        return accessions, {
-            "method": "atbfetcher_with_official_atb_mlst_fallback",
-            "mlst_table": str(cached_table),
-            "mlst_table_url": OFFICIAL_ATB_MLST_URL,
-            "fallback_reason": str(initial_error),
-        }
+        rows = pq.ParquetFile(path).metadata.num_rows
+    except (OSError, ValueError) as error:
+        raise ContextError(f"Could not read context metadata table {path}: {error}") from error
+    return {
+        "path": str(path),
+        "name": path.name,
+        "size_bytes": path.stat().st_size,
+        "sha256": digest,
+        "rows": rows,
+        "release": manifest.get("atb_release", "unknown"),
+        "source_manifest": str(manifest_path) if manifest_path.is_file() else None,
+    }
 
 
 def normalise_collection_date(value: str) -> str:
@@ -305,162 +174,98 @@ def normalise_collection_date(value: str) -> str:
 
 
 def _normalise_species(value: str) -> str:
-    """Normalise GTDB letter suffixes for cross-table species matching."""
+    """Normalise GTDB suffixes and underscore-separated user metadata."""
 
-    return re.sub(r"_[A-Z]\b", "", value).casefold().strip()
-
-
-def _chunks(values: list[str], size: int = 400) -> Iterable[list[str]]:
-    for start in range(0, len(values), size):
-        yield values[start : start + size]
+    without_gtdb_suffix = re.sub(r"_[A-Z]\b", "", value)
+    return " ".join(without_gtdb_suffix.replace("_", " ").casefold().split())
 
 
-def lookup_atb_metadata(
-    db_path: Path,
-    accessions: list[str],
+def _text(value: object) -> str:
+    return "" if value is None else str(value)
+
+
+def load_same_st_candidates(
+    metadata_table: Path,
     *,
     species: str,
     lineage: str,
     scheme: str,
     st: str,
-) -> list[ContextCandidate]:
-    """Look up ATB/ENA metadata for accessions discovered by atbfetcher.
+) -> tuple[list[str], list[ContextCandidate]]:
+    """Load all and dated same-ST candidates from the compact ATB snapshot."""
 
-    The current atbfetcher CLI intentionally prints only accessions for metadata
-    queries, so this adapter reads the same downloaded ATB SQLite snapshot to
-    preserve the metadata needed for reproducible selection and reporting.
-    """
-
-    db_path = db_path.expanduser().resolve()
-    if not db_path.is_file():
-        raise ContextError(
-            f"ATB metadata database not found: {db_path}. Run `atbfetcher download-db`."
-        )
-    accession_set = set(accessions)
-    assembly_by_sample: dict[str, sqlite3.Row] = {}
-    ena_by_sample: dict[str, list[dict[str, str]]] = defaultdict(list)
-    connection = sqlite3.connect(str(db_path))
-    connection.row_factory = sqlite3.Row
     try:
-        for chunk in _chunks(accessions):
-            placeholders = ",".join("?" for _ in chunk)
-            sql = f"""
-                SELECT a.sample_accession AS sample, a.sylph_species AS species,
-                       a.hq_filter, a.aws_url, a.asm_fasta_on_osf,
-                       c.Completeness_Specific AS completeness,
-                       c.Contamination AS contamination,
-                       c.Genome_Size AS genome_size,
-                       c.Contig_N50 AS contig_n50
-                  FROM assembly a
-             LEFT JOIN checkm2 c ON a.sample_accession = c.sample_accession
-                 WHERE a.sample_accession IN ({placeholders})
-            """
-            for row in connection.execute(sql, chunk):
-                assembly_by_sample[str(row["sample"])] = row
-
-        ena_tables = sorted(
-            (
-                str(row["name"])
-                for row in connection.execute(
-                    "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'ena_%'"
-                )
-                if re.fullmatch(r"ena_\d{8}", str(row["name"]))
-            ),
-            reverse=True,
+        table = pq.read_table(
+            metadata_table,
+            filters=[
+                ("mlst_scheme", "=", scheme),
+                ("mlst_st", "=", str(st)),
+            ],
         )
-        if not ena_tables:
-            ena_tables = ["ena_202505_used"]
-        ena_table = ena_tables[0]
-        ena_columns = {
-            str(row["name"]) for row in connection.execute(f"PRAGMA table_info({ena_table})")
-        }
-        run_to_sample: dict[str, str] = {}
-        if "sample_accession" not in ena_columns:
-            for row in connection.execute("SELECT run_accession, sample_accession FROM run"):
-                sample_id = str(row["sample_accession"] or "")
-                if sample_id in accession_set:
-                    run_to_sample[str(row["run_accession"])] = sample_id
+    except (OSError, ValueError) as error:
+        raise ContextError(
+            f"Could not query context metadata table {metadata_table}: {error}"
+        ) from error
 
-        ena_sql = "SELECT e.run_accession, e.country, e.collection_date, e.host, e.isolation_source"
-        if "sample_accession" in ena_columns:
-            connection.execute(
-                "CREATE TEMP TABLE requested_accession (sample_accession TEXT PRIMARY KEY)"
-            )
-            connection.executemany(
-                "INSERT INTO requested_accession VALUES (?)",
-                ((accession,) for accession in accessions),
-            )
-            ena_sql += (
-                f", e.sample_accession FROM {ena_table} e "
-                "JOIN requested_accession q ON e.sample_accession = q.sample_accession"
-            )
-        else:
-            ena_sql += f" FROM {ena_table} e"
-        for row in connection.execute(ena_sql):
-            if "sample_accession" in ena_columns:
-                sample_id = str(row["sample_accession"] or "")
-            else:
-                sample_id = run_to_sample.get(str(row["run_accession"]), "")
-            if sample_id not in accession_set:
-                continue
-            ena_by_sample[sample_id].append(
-                {
-                    "run_accession": str(row["run_accession"] or ""),
-                    "country": str(row["country"] or ""),
-                    "collection_date": str(row["collection_date"] or ""),
-                    "host": str(row["host"] or ""),
-                    "isolation_source": str(row["isolation_source"] or ""),
-                }
-            )
-    except sqlite3.Error as error:
-        raise ContextError(f"Could not query the ATB metadata snapshot: {error}") from error
-    finally:
-        connection.close()
+    required = {
+        "sample_id",
+        "species",
+        "mlst_scheme",
+        "mlst_st",
+        "collection_date",
+        "country",
+        "host",
+        "isolation_source",
+        "hq_filter",
+        "completeness",
+        "contamination",
+        "genome_size",
+        "contig_n50",
+        "aws_url",
+    }
+    missing = required - set(table.column_names)
+    if missing:
+        raise ContextError(
+            "Context metadata table is missing required columns: " + ", ".join(sorted(missing))
+        )
 
+    rows = [
+        row
+        for row in table.to_pylist()
+        if _normalise_species(_text(row.get("species"))) == _normalise_species(species)
+        and _text(row.get("hq_filter")) == "PASS"
+    ]
+    accessions = sorted({_text(row.get("sample_id")) for row in rows if row.get("sample_id")})
+    if not accessions:
+        raise ContextError(
+            f"No high-quality {species} ST{st} records were found in {metadata_table.name}"
+        )
     candidates: list[ContextCandidate] = []
-    for accession in accessions:
-        assembly_row = assembly_by_sample.get(accession)
-        if assembly_row is None:
-            continue
-        metadata_rows = ena_by_sample.get(accession, [])
-        metadata_rows.sort(
-            key=lambda row: (
-                not bool(normalise_collection_date(str(row["collection_date"] or ""))),
-                str(row["run_accession"] or ""),
-            )
-        )
-        if not metadata_rows:
-            continue
-        metadata_row = metadata_rows[0]
-        if str(assembly_row["hq_filter"] or "") != "PASS" or not bool(
-            assembly_row["asm_fasta_on_osf"]
-        ):
-            continue
-        if _normalise_species(str(assembly_row["species"] or "")) != _normalise_species(species):
-            continue
-        collection_date = normalise_collection_date(str(metadata_row["collection_date"] or ""))
+    for row in rows:
+        collection_date = normalise_collection_date(_text(row.get("collection_date")))
         if not collection_date:
             continue
         candidates.append(
             ContextCandidate(
-                sample_id=accession,
+                sample_id=_text(row.get("sample_id")),
                 species=species,
                 lineage=lineage,
                 mlst_scheme=scheme,
-                mlst_st=st,
+                mlst_st=str(st),
                 collection_date=collection_date,
-                country=metadata_row["country"],
-                host=metadata_row["host"],
-                isolation_source=metadata_row["isolation_source"],
-                hq_filter=str(assembly_row["hq_filter"] or ""),
-                aws_url=str(assembly_row["aws_url"] or ""),
-                completeness=str(assembly_row["completeness"] or ""),
-                contamination=str(assembly_row["contamination"] or ""),
-                genome_size=str(assembly_row["genome_size"] or ""),
-                contig_n50=str(assembly_row["contig_n50"] or ""),
+                country=_text(row.get("country")),
+                host=_text(row.get("host")),
+                isolation_source=_text(row.get("isolation_source")),
+                hq_filter=_text(row.get("hq_filter")),
+                aws_url=_text(row.get("aws_url")),
+                completeness=_text(row.get("completeness")),
+                contamination=_text(row.get("contamination")),
+                genome_size=_text(row.get("genome_size")),
+                contig_n50=_text(row.get("contig_n50")),
             )
         )
-    return candidates
+    candidates.sort(key=lambda candidate: candidate.sample_id)
+    return accessions, candidates
 
 
 def filter_candidates(
@@ -861,23 +666,6 @@ def write_audit(path: Path, audit: dict[str, object]) -> Path:
     return path
 
 
-def find_atb_database(cache_dir: Path, requested: Path | None = None) -> Path:
-    """Resolve an explicit or cached ATB SQLite metadata snapshot."""
-
-    if requested is not None:
-        result = requested.expanduser().resolve()
-        if result.is_file():
-            return result
-        raise ContextError(f"ATB metadata database not found: {result}")
-    cache_dir = cache_dir.expanduser().resolve()
-    candidates = sorted(cache_dir.glob("atb.metadata.*.sqlite"), reverse=True)
-    if not candidates:
-        raise ContextError(
-            "ATB metadata database not found. Run `atbfetcher download-db` or pass --db-path."
-        )
-    return candidates[0]
-
-
 def prepare_context(
     focal: list[Sample],
     *,
@@ -887,7 +675,7 @@ def prepare_context(
     st: str,
     output: Path,
     cache_dir: Path,
-    db_path: Path | None,
+    metadata_table: Path | None,
     countries: list[str] | None,
     year_from: int | None,
     year_to: int | None,
@@ -911,31 +699,25 @@ def prepare_context(
     output.mkdir(parents=True, exist_ok=True)
     logs = output / "logs"
     cache_dir = cache_dir.expanduser().resolve()
-    resolved_db = find_atb_database(cache_dir, db_path)
+    resolved_metadata = resolve_context_metadata(metadata_table)
     tool_version = atbfetcher_version(atbfetcher_executable)
 
-    raw_accessions, discovery = discover_same_st_resilient(
-        species=species,
-        scheme=scheme,
-        st=st,
-        cache_dir=cache_dir,
-        executable=atbfetcher_executable,
-        logs=logs,
-    )
-    focal_ids = {sample.sample_id for sample in focal}
-    raw_accessions = [accession for accession in raw_accessions if accession not in focal_ids]
-    (output / "same_st_accessions.txt").write_text(
-        "".join(f"{accession}\n" for accession in raw_accessions), encoding="utf-8"
-    )
-
-    metadata_candidates = lookup_atb_metadata(
-        resolved_db,
-        raw_accessions,
+    raw_accessions, metadata_candidates = load_same_st_candidates(
+        resolved_metadata,
         species=species,
         lineage=lineage,
         scheme=scheme,
         st=st,
     )
+    focal_ids = {sample.sample_id for sample in focal}
+    raw_accessions = [accession for accession in raw_accessions if accession not in focal_ids]
+    metadata_candidates = [
+        candidate for candidate in metadata_candidates if candidate.sample_id not in focal_ids
+    ]
+    (output / "same_st_accessions.txt").write_text(
+        "".join(f"{accession}\n" for accession in raw_accessions), encoding="utf-8"
+    )
+
     filtered = filter_candidates(
         metadata_candidates,
         countries=countries,
@@ -956,13 +738,8 @@ def prepare_context(
         "mlst_scheme": scheme,
         "mlst_st": st,
         "atbfetcher_version": tool_version,
-        "mlst_discovery": discovery,
-        "atb_metadata_snapshot": {
-            "path": str(resolved_db),
-            "name": resolved_db.name,
-            "size_bytes": resolved_db.stat().st_size,
-            "modified": datetime.fromtimestamp(resolved_db.stat().st_mtime).isoformat(),
-        },
+        "metadata_discovery": "bundled_or_supplied_parquet",
+        "context_metadata_snapshot": context_metadata_provenance(resolved_metadata),
         "filters": {
             "countries": countries or [],
             "year_from": year_from,

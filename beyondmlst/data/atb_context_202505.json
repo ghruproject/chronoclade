@@ -1,0 +1,39 @@
+{
+  "name": "beyondMLST AllTheBacteria context metadata",
+  "atb_release": "2025-05",
+  "ena_table": "ena_20250506",
+  "species_schemes": {
+    "Escherichia coli": "ecoli_achtman_4",
+    "Klebsiella pneumoniae": "klebsiella"
+  },
+  "rows": 401253,
+  "usable_collection_date_rows": 294468,
+  "columns": [
+    "sample_id",
+    "species",
+    "mlst_scheme",
+    "mlst_st",
+    "collection_date",
+    "country",
+    "host",
+    "isolation_source",
+    "hq_filter",
+    "completeness",
+    "contamination",
+    "genome_size",
+    "contig_n50",
+    "aws_url"
+  ],
+  "file": "atb_context_202505.parquet",
+  "size_bytes": 7398609,
+  "sha256": "46edb85f8f02d77bae818b9df453ac0d0faaf5d373b341e7ebdf4e911b57322d",
+  "generated_at": "2026-08-18T19:35:59.404649+00:00",
+  "sources": {
+    "sqlite": "https://osf.io/download/my56u/",
+    "mlst": "https://osf.io/download/69c66d33fa3d973d94254f46/",
+    "documentation": "https://allthebacteria.org/docs/sample_metadata/",
+    "citation": "https://doi.org/10.1101/2024.03.08.584059"
+  },
+  "licence": "MIT",
+  "selection": "HQ downloadable Escherichia coli/ecoli_achtman_4 and Klebsiella pneumoniae/klebsiella records with assigned STs"
+}

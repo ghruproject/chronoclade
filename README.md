@@ -129,12 +129,11 @@ pixi run beyondmlst run metadata.csv \
 ### Prepare public context genomes
 
 [`atbfetcher`](https://github.com/happykhan/atbfetcher) is installed in the
-same Pixi environment. Download its ATB metadata snapshot once, then prepare a
-bounded same-ST context set for one focal lineage:
+same Pixi environment. beyondMLST includes a compact 7 MB AllTheBacteria
+2025-05 metadata snapshot for high-quality, downloadable *E. coli* and
+*K. pneumoniae* genomes. Prepare a bounded same-ST context set directly:
 
 ```bash
-pixi run atbfetcher download-db
-
 pixi run beyondmlst prepare-context focal_metadata.csv \
   --scheme ecoli_achtman_4 \
   --st 131 \
@@ -145,16 +144,11 @@ pixi run beyondmlst prepare-context focal_metadata.csv \
   --threads 8
 ```
 
-The ATB SQLite snapshot is a large one-off download. Use `--dry-run` to freeze
-and review the accession pool before downloading assemblies. Geography, year,
-host and isolation-source filters are optional; repeat `--country` to retain
-several country prefixes.
-
-The pinned `atbfetcher` release currently refers to a retired MLST download
-endpoint. If its normal query cannot populate `mlst.parquet`, beyondMLST caches
-the current official ATB MLST Parquet from OSF in the same cache and retries
-`atbfetcher`. The fallback source and original error are recorded in
-`context_selection.json` rather than hidden.
+No 27 GB SQLite database is required. Use `--dry-run` to freeze and review the
+accession pool before downloading assemblies. Geography, year, host and
+isolation-source filters are optional; repeat `--country` to retain several
+country prefixes. `--metadata-table` can supply a newer or locally generated
+snapshot without changing the workflow.
 
 The command balances the same-ST candidate pool across country and year before
 download, screens candidates against all focal isolates with `ska distance`,
@@ -218,7 +212,11 @@ every lineage, skipped analysis, command and output.
 - `screened_candidates.tsv`: all successfully screened candidates
 - `context_manifest.tsv`: the frozen selected context set and inclusion reasons
 - `combined_metadata.csv`: focal plus selected context samples, ready for `run`
-- `context_selection.json`: database snapshot, filters, versions and attrition
+- `context_selection.json`: metadata snapshot, filters, versions and attrition
+
+The bundled table and its source manifest are in `beyondmlst/data/`. Maintainers
+can regenerate it with `scripts/build_atb_context_snapshot.py` when a new ATB
+release is adopted.
 
 ## Demonstration dataset
 
