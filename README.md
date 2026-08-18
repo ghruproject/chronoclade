@@ -69,13 +69,18 @@ build can install through Rosetta on Apple silicon but its compiled
 recombination step is not reliable there.
 
 ```bash
-docker pull ghcr.io/ghruproject/beyondmlst:main
+git clone https://github.com/ghruproject/beyondmlst.git
+cd beyondmlst
+docker build -t beyondmlst .
 docker run --rm -v "$PWD:/data" -w /data \
-  ghcr.io/ghruproject/beyondmlst:main \
+  beyondmlst \
   run metadata.csv --output beyondmlst_results --threads 8
 ```
 
 All paths in `metadata.csv` must resolve inside the mounted `/data` directory.
+The CI-built `ghcr.io/ghruproject/beyondmlst:main` image is also available to
+authenticated organisation members. The organisation currently disables
+public package visibility, so anonymous pulls are not available.
 
 ## Input metadata
 
