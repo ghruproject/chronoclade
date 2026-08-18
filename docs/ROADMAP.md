@@ -25,6 +25,13 @@ This is sufficient to run and audit a provisional public-health scenario. Its
 confidence is deliberately capped until branch support, exhaustive neighbour
 retrieval and GHRU validation are complete.
 
+The report uses progressive disclosure: the initial page contains only the
+working interpretation, reasons, recommended follow-up and four headline
+facts. Trees, distance tables, temporal tests, provenance and downloads are in
+a collapsed technical evidence section. Four controlled synthetic scenario
+reports provide regression fixtures while suitable real validation datasets
+are being identified; they do not constitute biological validation.
+
 ## Next release: decision evidence
 
 ### 1. Clonal distance calibration

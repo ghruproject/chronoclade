@@ -690,12 +690,13 @@ def synthesise_scenario(
         },
     ]
     reasons = [
-        f"The corrected topology contains {len(groups)} candidate local "
-        f"{_plural(len(groups), 'group')}.",
-        f"{len(spanning)} candidate {_plural(len(spanning), 'group')} "
-        f"{'spans' if len(spanning) == 1 else 'span'} more than one sampling date.",
-        f"{len(contexts)} contextual {_plural(len(contexts), 'genome')} "
-        f"{'was' if len(contexts) == 1 else 'were'} included in final clonal comparisons.",
+        f"The local isolates form {len(groups)} separate {_plural(len(groups), 'group')} in "
+        "the recombination-corrected tree.",
+        f"{len(spanning)} local {_plural(len(spanning), 'group')} "
+        f"{'contains' if len(spanning) == 1 else 'contain'} isolates collected on more than "
+        "one date.",
+        f"The comparison includes {len(contexts)} public context "
+        f"{_plural(len(contexts), 'genome')}.",
     ]
     categories = distance_summary.get("categories", {})
     if isinstance(categories, dict):
@@ -713,7 +714,7 @@ def synthesise_scenario(
             )
     actions: dict[str, list[str]] = {
         "persistent_local_lineage": [
-            "Review whether members of the persistent candidate group overlap by patient, ward, facility or exposure.",
+            "Review whether isolates in the persistent group overlap by patient, ward, facility or exposure.",
             "Continue targeted sampling to determine whether the lineage remains locally detectable.",
         ],
         "multiple_introductions": [

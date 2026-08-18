@@ -9,8 +9,8 @@ species/lineage separately, removes recombination, tests whether the data have
 temporal signal, and only creates a dated phylogeny when that test is passed.
 Local, retrospective, and public contextual genomes can be supplied in the
 same run. A decision-first HTML report presents a provisional public-health
-scenario, recommended follow-up, the evidence supporting or limiting it, and
-the complete temporal diagnostics.
+scenario and recommended follow-up first. Detailed distances, trees, temporal
+diagnostics and audit files remain available in a collapsed technical section.
 
 > [!IMPORTANT]
 > A phylogeny is not a transmission tree. Location-state reconstruction is
@@ -266,6 +266,22 @@ pixi run beyondmlst run demo_run/input/metadata.csv \
 
 Twenty permutations keep the demonstration quick; use at least 100 for real
 analyses. Open `demo_run/results/index.html` for the combined report.
+
+### Controlled public-health scenarios
+
+Generate four lightweight reports that exercise the intended public-health
+interpretations without running the external phylogenetic tools:
+
+```bash
+pixi run python examples/scenarios/generate_scenarios.py \
+  --output scenario_reports
+```
+
+Open `scenario_reports/index.html` to compare persistent local lineage,
+multiple introductions, mixed and indeterminate outputs. These fixtures have
+supplied synthetic trees and alignments. They test scenario logic and report
+presentation; they are not biological validation datasets and must not be
+presented as real outbreaks.
 
 ## Scientific guardrails
 

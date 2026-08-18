@@ -219,7 +219,8 @@ def _display_summary(value: object) -> str:
     )
 
 
-def _public_health_visual(report: dict[str, object], directory: Path) -> str:
+def _public_health_visual(report: dict[str, object], directory: Path) -> tuple[str, str]:
+    """Return the reader summary and the detailed public-health evidence separately."""
     raw_public_health = report.get("public_health", {})
     public_health = raw_public_health if isinstance(raw_public_health, dict) else {}
     raw_scenario = public_health.get("scenario", {})
@@ -349,19 +350,28 @@ def _public_health_visual(report: dict[str, object], directory: Path) -> str:
         if evidence_rows
         else "<p>No structured evidence ledger was available.</p>"
     )
-    return f"""
+    summary = f"""
   <section class="scenario {escape(code)}">
-    <span class="eyebrow">Working public-health interpretation</span>
+    <span class="eyebrow">What does the genomic evidence support?</span>
     <strong>{escape(label)}</strong>
-    <p><b>Confidence: {escape(confidence)}.</b> This automated summary is provisional and requires epidemiological review.</p>
-    <p><b>Rule applied:</b> {escape(str(scenario.get("decision_rule", "No scenario rule was available.")))}</p>
+    <p><span class="confidence">{escape(confidence)} confidence</span></p>
+    <h2>Why?</h2>
     <ul>{"".join(f"<li>{escape(str(reason))}</li>" for reason in reasons)}</ul>
     <p class="guardrail">{escape(str(scenario.get("guardrail", "This analysis does not establish direct transmission.")))}</p>
   </section>
 
   <section class="card action">
+    <span class="eyebrow">What should happen next?</span>
     <h2>Recommended follow-up</h2>
     <ul>{"".join(f"<li>{escape(str(action))}</li>" for action in actions)}</ul>
+  </section>
+"""
+
+    technical = f"""
+  <section class="card rule">
+    <h2>Interpretation rule</h2>
+    <p>{escape(str(scenario.get("decision_rule", "No scenario rule was available.")))}</p>
+    <p>This automated summary is provisional and requires epidemiological review.</p>
   </section>
 
   <section class="card">
@@ -390,6 +400,7 @@ def _public_health_visual(report: dict[str, object], directory: Path) -> str:
     <p>{escape(exclusion_text)}</p>
   </section>
 """
+    return summary, technical
 
 
 def write_lineage_report(
@@ -409,7 +420,7 @@ def write_lineage_report(
     context_locations = context.get("context_locations", [])
     if not isinstance(context_locations, list):
         context_locations = []
-    public_health_visual = _public_health_visual(report, directory)
+    public_health_summary, public_health_evidence = _public_health_visual(report, directory)
     observed_rate = _metric(temporal, "rate")
     observed_r_squared = _metric(temporal, "r_squared")
     p_value = float(temporal["p_value_r_squared"])
@@ -539,8 +550,10 @@ def write_lineage_report(
     .scenario.persistent_local_lineage {{ border-left-color:var(--good); }}
     .scenario.multiple_introductions {{ border-left-color:#7b4bb7; }}
     .scenario.mixed {{ border-left-color:#c46b19; }}
-    .scenario strong {{ display:block; margin-top:3px; font-size:25px; }}
+    .scenario strong {{ display:block; margin-top:3px; font-size:clamp(25px,3vw,34px); line-height:1.2; }}
+    .scenario h2 {{ margin-top:18px; font-size:18px; }}
     .eyebrow {{ color:var(--muted); font-size:12px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; }}
+    .confidence {{ display:inline-block; border-radius:999px; padding:4px 10px; background:#e8edf0; color:#43515b; font-size:13px; font-weight:800; text-transform:capitalize; }}
     .guardrail {{ border-top:1px solid var(--line); margin-top:16px; padding-top:13px; color:var(--muted); }}
     .action {{ border-left:7px solid var(--accent); }}
     .evidence {{ display:inline-block; border-radius:999px; padding:3px 8px; font-size:12px; font-weight:800; }}
@@ -554,6 +567,15 @@ def write_lineage_report(
     .metric span {{ display:block; color:var(--muted); font-size:13px; text-transform:uppercase; letter-spacing:.04em; }}
     .metric strong {{ display:block; margin-top:4px; font-size:19px; }}
     .card {{ margin-top:18px; padding:24px; overflow:auto; }}
+    .at-a-glance {{ grid-template-columns:repeat(4,minmax(150px,1fr)); }}
+    details.technical {{ margin-top:22px; border:1px solid var(--line); border-radius:14px; background:var(--paper); box-shadow:0 4px 14px #17394d0a; }}
+    details.technical > summary {{ display:flex; align-items:center; justify-content:space-between; gap:20px; cursor:pointer; padding:22px 24px; font-weight:800; list-style:none; }}
+    details.technical > summary::-webkit-details-marker {{ display:none; }}
+    details.technical > summary::after {{ content:"Show"; color:var(--accent); font-size:14px; }}
+    details.technical[open] > summary::after {{ content:"Hide"; }}
+    details.technical > summary small {{ display:block; color:var(--muted); font-weight:500; }}
+    .technical-body {{ padding:0 22px 24px; border-top:1px solid var(--line); }}
+    .technical-body > .card:first-child {{ margin-top:22px; }}
     .grid {{ display:grid; grid-template-columns:1fr; gap:18px; }}
     .grid .card {{ margin-top:0; }}
     img {{ display:block; width:100%; height:auto; margin-top:14px; border:1px solid var(--line); border-radius:9px; background:white; }}
@@ -565,7 +587,7 @@ def write_lineage_report(
     .caveat {{ background:#fff8df; border-color:#e8d185; }}
     .missing {{ color:var(--muted); font-style:italic; padding:30px 0; }}
     footer {{ color:var(--muted); margin-top:22px; font-size:14px; }}
-    @media (max-width:600px) {{ main {{ width:min(100% - 20px,1120px); margin-top:10px; }} header,.card {{ padding:20px; }} .grid {{ grid-template-columns:1fr; }} }}
+    @media (max-width:700px) {{ main {{ width:min(100% - 20px,1120px); margin-top:10px; }} header,.card {{ padding:20px; }} .grid,.at-a-glance {{ grid-template-columns:1fr 1fr; }} details.technical > summary {{ align-items:flex-start; }} }}
   </style>
 </head>
 <body>
@@ -575,7 +597,20 @@ def write_lineage_report(
     <p>beyondMLST public-health evidence report</p>
   </header>
 
-  {public_health_visual}
+  {public_health_summary}
+
+  <section class="metrics at-a-glance" aria-label="At a glance">
+    <div class="metric"><span>Focal genomes</span><strong>{local_count or "—"}</strong></div>
+    <div class="metric"><span>Collection dates</span><strong>{int(report["distinct_dates"])}</strong></div>
+    <div class="metric"><span>Context genomes</span><strong>{context_count}</strong></div>
+    <div class="metric"><span>Temporal signal</span><strong>{"Supported" if bool(assessment["supported"]) else "Not supported"}</strong></div>
+  </section>
+
+  <details class="technical">
+    <summary><span>Technical evidence and audit<small>Trees, distances, temporal tests, provenance and downloads</small></span></summary>
+    <div class="technical-body">
+
+  {public_health_evidence}
 
   <section class="verdict {escape(status)}">
     <span class="eyebrow">Temporal analysis</span>
@@ -625,6 +660,9 @@ def write_lineage_report(
     <h2>Download and audit</h2>
     <ul>{"".join(f"<li>{link}</li>" for link in outputs)}</ul>
   </section>
+
+    </div>
+  </details>
 
   <footer>Generated by beyondMLST. Review the complete diagnostics before using dated estimates.</footer>
 </main>

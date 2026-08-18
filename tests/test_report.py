@@ -124,8 +124,14 @@ def test_lineage_report_contains_visuals_verdict_and_guardrail(tmp_path: Path) -
 
     assert "Temporal signal supported" in text
     assert "Consistent with local persistence plus additional introductions" in text
-    assert "Rule applied" in text
-    assert text.index("Working public-health interpretation") < text.index("Temporal analysis")
+    assert "What does the genomic evidence support?" in text
+    assert "What should happen next?" in text
+    assert "Technical evidence and audit" in text
+    assert '<details class="technical">' in text
+    assert text.index("What does the genomic evidence support?") < text.index(
+        "Technical evidence and audit"
+    )
+    assert text.index("Technical evidence and audit") < text.index("Temporal analysis")
     assert "Recombination-filtered genomic distances" in text
     assert "Candidate local groups" in text
     assert "Patient-level sensitivity" in text
