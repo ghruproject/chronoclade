@@ -12,6 +12,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
 
+from beyondmlst.evidence import EvidenceError, build_public_health_evidence
 from beyondmlst.metadata import (
     Sample,
     group_samples,
@@ -500,6 +501,14 @@ def _run_lineage(
         p_value_threshold=temporal_p_value,
     )
     temporal_supported = bool(assessment["supported"])
+    rooted_tree = clock_dir / "rerooted.newick"
+    public_health = build_public_health_evidence(
+        filtered_alignment=filtered_alignment,
+        rooted_tree=rooted_tree if rooted_tree.is_file() else tree,
+        samples=members,
+        output=lineage_dir,
+        temporal_assessment=assessment,
+    )
 
     time_tree = lineage_dir / "timetree" / "timetree.nexus"
     if temporal_supported:
@@ -574,6 +583,10 @@ def _run_lineage(
         "temporal_signal_supported": temporal_supported,
         "temporal_signal": temporal,
         "context": context_summary,
+        "public_health_status": public_health["scenario"]["code"],
+        "public_health_label": public_health["scenario"]["label"],
+        "public_health_confidence": public_health["scenario"]["confidence"],
+        "public_health": public_health,
         "outputs": {
             "alignment": str(alignment),
             "starting_tree": str(starting_tree),
@@ -587,6 +600,11 @@ def _run_lineage(
                 str(lineage_dir / "timetree" / "timetree.svg") if time_tree_available else None
             ),
             "location_tree": str(location_output),
+            "public_health_evidence": str(lineage_dir / "public_health_evidence.json"),
+            "clonal_pairwise_distances": str(lineage_dir / "clonal_pairwise_distances.tsv"),
+            "clonal_snp_matrix": str(lineage_dir / "clonal_snp_matrix.tsv"),
+            "pairwise_callable_sites": str(lineage_dir / "pairwise_callable_sites.tsv"),
+            "clonal_snp_heatmap": str(lineage_dir / "clonal_snp_heatmap.svg"),
             "html_report": str(lineage_dir / "report.html"),
         },
     }
@@ -641,7 +659,7 @@ def run_workflow(
                 force=force,
                 context_manifest_rows=manifest_rows,
             )
-        except (OSError, WorkflowError) as error:
+        except (EvidenceError, OSError, WorkflowError) as error:
             raise WorkflowError(f"Lineage {key[0]} / {key[1]} failed: {error}") from error
 
     completed_by_slug: dict[str, dict[str, object]] = {}

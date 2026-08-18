@@ -33,11 +33,14 @@ The pipeline performs:
 4. Reference-ordered whole-genome alignment using SKA2 directly.
 5. An initial maximum-likelihood tree using IQ-TREE.
 6. Recombination inference and corrected branch lengths using ClonalFrameML.
-7. Root-to-tip analysis and date randomisation using TreeTime.
-8. Time-tree estimation only if the temporal-signal gate passes.
-9. Exploratory discrete location-state reconstruction.
-10. A reader-facing HTML report with TreeTime and date-randomisation visuals,
-   explicit verdicts and links to the underlying evidence.
+7. Pairwise clonal SNP and callable-site evidence from the filtered alignment.
+8. Topology-defined candidate local groups, longitudinal summaries and a
+   one-isolate-per-patient distance sensitivity view.
+9. Root-to-tip analysis and date randomisation using TreeTime.
+10. Time-tree estimation only if the temporal-signal gate passes.
+11. Exploratory discrete location-state reconstruction.
+12. A decision-first HTML report with a transparent scenario ledger,
+    recommended follow-up, exact distance outputs and temporal diagnostics.
 
 ## Contextual-genome acquisition
 
@@ -72,7 +75,9 @@ beyondMLST.
 The bounded pool does not guarantee retrieval of the globally nearest public
 genomes when an ST contains thousands of records. Reports state this
 explicitly. A whole-database sketch search seeded by each focal isolate is the
-preferred extension before introduction-oriented conclusions are automated.
+preferred extension before provisional introduction-oriented conclusions are
+promoted beyond moderate confidence. The current automated scenario is
+therefore explicitly provisional.
 
 ## Planned extensions
 
@@ -81,8 +86,8 @@ preferred extension before introduction-oriented conclusions are automated.
 2. Validate the `atbfetcher` acquisition and down-selection defaults against
    large public *K. pneumoniae* and *E. coli* ST collections.
 3. Export a combined Microreact project with metadata, tree and timeline.
-4. Add sensitivity analyses for same-patient longitudinal isolates, contextual
-   subsampling and alternative references.
+4. Extend the current one-isolate-per-patient distance view to full topology
+   reruns, contextual subsampling and alternative-reference sensitivity.
 
 ## Import-detection models
 

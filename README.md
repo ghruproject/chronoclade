@@ -8,8 +8,9 @@ The command-line tool takes assemblies and sample metadata, analyses each
 species/lineage separately, removes recombination, tests whether the data have
 temporal signal, and only creates a dated phylogeny when that test is passed.
 Local, retrospective, and public contextual genomes can be supplied in the
-same run. A reader-facing HTML report explains the temporal-signal result for
-each lineage and links the underlying evidence.
+same run. A decision-first HTML report presents a provisional public-health
+scenario, recommended follow-up, the evidence supporting or limiting it, and
+the complete temporal diagnostics.
 
 > [!IMPORTANT]
 > A phylogeny is not a transmission tree. Location-state reconstruction is
@@ -36,6 +37,14 @@ IQ-TREE starting maximum-likelihood phylogeny
         |
         v
 ClonalFrameML recombination inference and corrected tree
+        |
+        +--> clonal SNP + pairwise callable-site matrices
+        |         |
+        |         +--> longitudinal/patient summaries + heatmap
+        |
+        +--> topology-defined candidate local groups
+        |         |
+        |         +--> transparent scenario evidence ledger
         |
         +--> TreeTime root-to-tip analysis + date randomisation
         |         |
@@ -95,8 +104,9 @@ Optional columns:
 
 - `is_reference`: mark exactly one preferred reference per lineage with
   `true`; otherwise the assembly with the highest N50 is selected
-- `patient_id`: coded identifier retained in copied metadata for downstream
-  interpretation; it is not used to infer transmission
+- `patient_id`: coded identifier used for within/between-patient summaries and
+  a deterministic one-isolate-per-patient sensitivity view; it is never used
+  to infer direct transmission
 
 Use de-identified metadata only. Do not commit patient-level metadata or
 sequence data to this repository.
@@ -184,6 +194,15 @@ configured threshold (default `0.05`). Automatic clock-outlier filtering is
 disabled during this gate so that genomes are not silently removed based on
 their temporal fit.
 
+The public-health summary is separate from the temporal-signal gate. It uses
+the recombination-filtered distances, corrected rooted topology, longitudinal
+span, patient sensitivity and contextual placement to assign one cautious
+working interpretation: persistent local lineage, multiple introductions,
+mixed, or indeterminate. The evidence ledger exposes every input to that
+interpretation. No universal SNP threshold is applied, and confidence is
+capped at moderate until branch support is propagated through the corrected
+tree and public-neighbour retrieval is exhaustive.
+
 ## Main outputs
 
 Each lineage directory contains:
@@ -194,6 +213,13 @@ Each lineage directory contains:
 - `clonalframeml.labelled_tree.newick`: recombination-corrected phylogeny
 - `clonalframeml.importation_status.txt`: inferred recombination intervals by branch
 - `clonalframeml.filtered.fasta`: alignment containing non-recombinant sites
+- `clonal_pairwise_distances.tsv`: pairwise clonal SNPs, callable sites and
+  longitudinal/patient comparison classes
+- `clonal_snp_matrix.tsv` and `pairwise_callable_sites.tsv`: exact square
+  matrices for audit and reuse
+- `clonal_snp_heatmap.svg`: report-ready corrected-distance heatmap
+- `public_health_evidence.json`: scenario, evidence ledger, candidate local
+  groups, final contextual neighbours and patient sensitivity
 - `clock/`: observed root-to-tip analysis
 - `clock/root_to_tip_regression.svg`: TreeTime root-to-tip visual
 - `temporal_signal.json`: observed and randomised temporal-signal statistics
@@ -203,7 +229,8 @@ Each lineage directory contains:
 - `context_manifest.tsv`: selected public genomes and their acquisition and
   screening provenance, when supplied
 - `report.json`: machine-readable lineage report
-- `report.html`: reader-facing verdict, graphics, diagnostics and caveats
+- `report.html`: decision-first working interpretation, recommended follow-up,
+  evidence tables, graphics, temporal diagnostics and caveats
 
 The top-level `index.html` links all lineage reports. `summary.json` records
 every lineage, skipped analysis, command and output.

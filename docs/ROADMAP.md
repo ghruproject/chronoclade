@@ -13,35 +13,39 @@ The current MVP now provides the reproducible analytical foundation:
   `atbfetcher`;
 - deterministic country/year-balanced context pooling, SKA screening and a
   frozen context manifest;
-- HTML and JSON reports with temporal diagnostics, contextual-genome evidence
-  and explicit interpretation limits; and
+- recombination-filtered pairwise SNP and callable-site matrices, longitudinal
+  distance summaries and an SVG heatmap;
+- topology-defined candidate local groups, final clonal contextual neighbours
+  and one-isolate-per-patient distance sensitivity;
+- decision-first HTML and JSON reports with a transparent four-scenario evidence
+  ledger, recommended follow-up and explicit interpretation limits; and
 - Linux/macOS CI that executes the native time-tree and location-tree paths.
 
-This is sufficient to run and audit the method. It is not yet sufficient to
-automatically assign a public-health scenario.
+This is sufficient to run and audit a provisional public-health scenario. Its
+confidence is deliberately capped until branch support, exhaustive neighbour
+retrieval and GHRU validation are complete.
 
 ## Next release: decision evidence
 
-### 1. Clonal distance evidence
+### 1. Clonal distance calibration
 
-Calculate pairwise SNP differences from the recombination-filtered alignment,
-with callable sites for every comparison. Report:
+The workflow now calculates pairwise SNP differences from the
+recombination-filtered alignment, with callable sites for every comparison. The
+next step is to calibrate these outputs on real datasets and add:
 
-- a downloadable matrix and heatmap;
-- within-month, within-year and between-year distributions;
-- within-patient and between-patient comparisons; and
-- within-cluster and between-cluster distributions.
+- within-candidate-group and between-candidate-group distributions; and
+- an optional, externally justified analysis-specific threshold.
 
 No universal SNP threshold should be built in. An externally justified,
 analysis-specific threshold may be supplied and must be shown in the report.
 
 ### 2. Supported topology and cluster summaries
 
-Add branch support to the starting phylogeny and define reviewable local groups
-from topology plus distance evidence. For each group, report its isolates,
-patients, date span, locations, within-group diversity and closest screened
-context genomes. Explicitly distinguish monophyletic local structure from
-local groups interspersed among contextual genomes.
+Add branch support to the starting phylogeny and propagate it onto the corrected
+topology-defined groups. The existing groups and scenario must remain
+provisional until this support is available. Add a metadata-coloured tree that
+explicitly distinguishes monophyletic local structure from local groups
+interspersed among contextual genomes.
 
 ### 3. Better public neighbour retrieval
 
@@ -54,14 +58,14 @@ query database version, score, rank and attrition in the manifest.
 ### 4. Longitudinal epidemiology
 
 Extend the optional metadata contract with coded facility, ward or sampling
-site fields. Produce a patient/location timeline and a sensitivity analysis
-using one representative isolate per patient. The full and deduplicated
-analyses should be compared so that repeated sampling of one patient cannot
-silently dominate the conclusion.
+site fields. Produce a patient/location timeline and rerun topology inference
+using one representative isolate per patient. Compare the full and deduplicated
+topologies; the current report already compares their corrected-distance
+summaries.
 
 ### 5. Scenario synthesis
 
-Build a transparent evidence table for four summaries:
+Calibrate the implemented transparent evidence table for four summaries:
 
 1. consistent with a persistent local lineage;
 2. consistent with multiple introductions;

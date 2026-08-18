@@ -210,6 +210,188 @@ def _file_link(relative_path: str, label: str) -> str:
     return f'<a href="{escape(relative_path, quote=True)}">{escape(label)}</a>'
 
 
+def _display_summary(value: object) -> str:
+    if not isinstance(value, dict) or not value.get("comparisons"):
+        return "No comparisons"
+    return (
+        f"n={int(value['comparisons'])}; median {float(value['median']):.3g}; "
+        f"range {int(value['minimum'])}–{int(value['maximum'])} SNPs"
+    )
+
+
+def _public_health_visual(report: dict[str, object], directory: Path) -> str:
+    raw_public_health = report.get("public_health", {})
+    public_health = raw_public_health if isinstance(raw_public_health, dict) else {}
+    raw_scenario = public_health.get("scenario", {})
+    scenario = raw_scenario if isinstance(raw_scenario, dict) else {}
+    code = str(scenario.get("code", "indeterminate"))
+    label = str(scenario.get("label", "Indeterminate"))
+    confidence = str(scenario.get("confidence", "low"))
+    reasons = scenario.get("reasons", [])
+    actions = scenario.get("recommended_follow_up", [])
+    evidence = scenario.get("evidence", [])
+    if not isinstance(reasons, list):
+        reasons = []
+    if not isinstance(actions, list):
+        actions = []
+    if not isinstance(evidence, list):
+        evidence = []
+    evidence_rows = []
+    for item in evidence:
+        if not isinstance(item, dict):
+            continue
+        evidence_rows.append(
+            "<tr>"
+            f"<td>{escape(str(item.get('id', '')).replace('_', ' ').title())}</td>"
+            f'<td><span class="evidence {escape(str(item.get("status", "unavailable")))}">'
+            f"{escape(str(item.get('status', 'unavailable')).title())}</span></td>"
+            f"<td>{escape(str(item.get('finding', '')))}</td>"
+            "</tr>"
+        )
+
+    raw_distances = public_health.get("distance_summary", {})
+    distances = raw_distances if isinstance(raw_distances, dict) else {}
+    raw_categories = distances.get("categories", {})
+    categories = raw_categories if isinstance(raw_categories, dict) else {}
+    category_labels = (
+        ("focal_focal", "Focal–focal"),
+        ("focal_context", "Focal–context"),
+        ("same_month", "Focal pairs in the same month"),
+        ("same_year", "Focal pairs in the same year"),
+        ("between_years", "Focal pairs between years"),
+        ("within_candidate_groups", "Within candidate local groups"),
+        ("between_candidate_groups", "Between candidate local groups"),
+        ("same_patient", "Within-patient focal pairs"),
+        ("different_patients", "Between-patient focal pairs"),
+    )
+    distance_rows = "".join(
+        f"<tr><td>{escape(label_text)}</td><td>{escape(_display_summary(categories.get(key)))}</td></tr>"
+        for key, label_text in category_labels
+    )
+
+    raw_topology = public_health.get("topology", {})
+    topology = raw_topology if isinstance(raw_topology, dict) else {}
+    raw_groups = topology.get("groups", [])
+    groups = raw_groups if isinstance(raw_groups, list) else []
+    group_rows = []
+    for group in groups:
+        if not isinstance(group, dict):
+            continue
+        sample_ids = group.get("sample_ids", [])
+        if not isinstance(sample_ids, list):
+            sample_ids = []
+        locations = group.get("locations", [])
+        if not isinstance(locations, list):
+            locations = []
+        nearest = group.get("nearest_context")
+        nearest_text = "—"
+        if isinstance(nearest, dict):
+            nearest_text = (
+                f"{nearest.get('sample_id', '')} ({nearest.get('clonal_snps', '—')} SNPs)"
+            )
+        group_rows.append(
+            "<tr>"
+            f"<td>{escape(str(group.get('group_id', '')))}</td>"
+            f"<td>{int(group.get('sample_count', 0))}</td>"
+            f"<td>{int(group.get('patient_count', 0)) or '—'}</td>"
+            f"<td>{escape(str(group.get('first_collection_date', '') or '—'))} – "
+            f"{escape(str(group.get('last_collection_date', '') or '—'))}</td>"
+            f"<td>{escape(', '.join(str(value) for value in locations) or '—')}</td>"
+            f"<td>{escape(_display_summary(group.get('within_group_clonal_snps')))}</td>"
+            f"<td>{escape(nearest_text)}</td>"
+            f"<td><details><summary>View IDs</summary>{escape(', '.join(str(value) for value in sample_ids))}</details></td>"
+            "</tr>"
+        )
+    group_table = (
+        "<table><thead><tr><th>Candidate group</th><th>Focal genomes</th><th>Patients</th>"
+        "<th>Date span</th><th>Locations</th><th>Within-group clonal distance</th>"
+        "<th>Nearest final context</th><th>Samples</th></tr></thead>"
+        f"<tbody>{''.join(group_rows)}</tbody></table>"
+        if group_rows
+        else "<p>No topology-defined focal groups were available.</p>"
+    )
+
+    raw_sensitivity = public_health.get("patient_sensitivity", {})
+    sensitivity = raw_sensitivity if isinstance(raw_sensitivity, dict) else {}
+    excluded = sensitivity.get("excluded_repeated_patient_samples", [])
+    if not isinstance(excluded, list):
+        excluded = []
+    sensitivity_text = str(
+        sensitivity.get("interpretation", "Patient-level sensitivity was not available.")
+    )
+    if not bool(sensitivity.get("patient_metadata_complete")):
+        sensitivity_text += " Patient identifiers are incomplete for the focal samples."
+    if not excluded:
+        exclusion_text = (
+            "No repeated-patient samples would be excluded in the deterministic "
+            "one-isolate-per-patient view."
+        )
+    elif len(excluded) == 1:
+        exclusion_text = (
+            "One repeated-patient sample would be excluded in the deterministic "
+            "one-isolate-per-patient view."
+        )
+    else:
+        exclusion_text = (
+            f"{len(excluded)} repeated-patient samples would be excluded in the deterministic "
+            "one-isolate-per-patient view."
+        )
+
+    heatmap = directory / "clonal_snp_heatmap.svg"
+    heatmap_visual = (
+        '<img src="clonal_snp_heatmap.svg" alt="Heatmap of recombination-filtered pairwise SNP counts">'
+        if heatmap.is_file()
+        else '<p class="missing">The clonal SNP heatmap was not available.</p>'
+    )
+    evidence_table = (
+        "<table><thead><tr><th>Evidence</th><th>Status</th><th>Finding</th></tr></thead>"
+        f"<tbody>{''.join(evidence_rows)}</tbody></table>"
+        if evidence_rows
+        else "<p>No structured evidence ledger was available.</p>"
+    )
+    return f"""
+  <section class="scenario {escape(code)}">
+    <span class="eyebrow">Working public-health interpretation</span>
+    <strong>{escape(label)}</strong>
+    <p><b>Confidence: {escape(confidence)}.</b> This automated summary is provisional and requires epidemiological review.</p>
+    <p><b>Rule applied:</b> {escape(str(scenario.get("decision_rule", "No scenario rule was available.")))}</p>
+    <ul>{"".join(f"<li>{escape(str(reason))}</li>" for reason in reasons)}</ul>
+    <p class="guardrail">{escape(str(scenario.get("guardrail", "This analysis does not establish direct transmission.")))}</p>
+  </section>
+
+  <section class="card action">
+    <h2>Recommended follow-up</h2>
+    <ul>{"".join(f"<li>{escape(str(action))}</li>" for action in actions)}</ul>
+  </section>
+
+  <section class="card">
+    <h2>Evidence ledger</h2>
+    <p>Every part of the working interpretation is exposed here rather than combined into an opaque score.</p>
+    {evidence_table}
+  </section>
+
+  <section class="card">
+    <h2>Candidate local groups</h2>
+    <p>{escape(str(topology.get("interpretation", "No topology summary was available.")))}</p>
+    {group_table}
+  </section>
+
+  <section class="card">
+    <h2>Recombination-filtered genomic distances</h2>
+    <p>Counts use only pair-specific A/C/G/T sites after ClonalFrameML recombination filtering. No universal SNP threshold has been applied.</p>
+    {heatmap_visual}
+    <table><thead><tr><th>Comparison</th><th>Clonal SNP summary</th></tr></thead><tbody>{distance_rows}</tbody></table>
+    <p>{_file_link("clonal_pairwise_distances.tsv", "Download pairwise SNPs and callable sites")} · {_file_link("clonal_snp_matrix.tsv", "Download SNP matrix")} · {_file_link("pairwise_callable_sites.tsv", "Download callable-site matrix")}</p>
+  </section>
+
+  <section class="card">
+    <h2>Patient-level sensitivity</h2>
+    <p>{escape(sensitivity_text)}</p>
+    <p>{escape(exclusion_text)}</p>
+  </section>
+"""
+
+
 def write_lineage_report(
     report: dict[str, object], *, directory: Path, p_value_threshold: float
 ) -> Path:
@@ -227,6 +409,7 @@ def write_lineage_report(
     context_locations = context.get("context_locations", [])
     if not isinstance(context_locations, list):
         context_locations = []
+    public_health_visual = _public_health_visual(report, directory)
     observed_rate = _metric(temporal, "rate")
     observed_r_squared = _metric(temporal, "r_squared")
     p_value = float(temporal["p_value_r_squared"])
@@ -272,6 +455,8 @@ def write_lineage_report(
         _file_link("temporal_signal.json", "Date-randomisation results"),
         _file_link("clonalframeml.labelled_tree.newick", "Recombination-corrected tree"),
         _file_link("clonalframeml.importation_status.txt", "Inferred recombination events"),
+        _file_link("public_health_evidence.json", "Machine-readable public-health evidence"),
+        _file_link("clonal_pairwise_distances.tsv", "Clonal SNPs and callable sites"),
         _file_link("report.json", "Machine-readable lineage report"),
     ]
     if outliers.is_file():
@@ -350,12 +535,25 @@ def write_lineage_report(
     .verdict.not_supported {{ border-color:var(--bad); }}
     .verdict.not_assessed {{ border-color:var(--unknown); }}
     .verdict strong {{ display:block; font-size:23px; }}
+    .scenario {{ margin-top:18px; border:2px solid var(--line); border-left:9px solid var(--unknown); padding:22px 26px; border-radius:13px; background:var(--paper); }}
+    .scenario.persistent_local_lineage {{ border-left-color:var(--good); }}
+    .scenario.multiple_introductions {{ border-left-color:#7b4bb7; }}
+    .scenario.mixed {{ border-left-color:#c46b19; }}
+    .scenario strong {{ display:block; margin-top:3px; font-size:25px; }}
+    .eyebrow {{ color:var(--muted); font-size:12px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; }}
+    .guardrail {{ border-top:1px solid var(--line); margin-top:16px; padding-top:13px; color:var(--muted); }}
+    .action {{ border-left:7px solid var(--accent); }}
+    .evidence {{ display:inline-block; border-radius:999px; padding:3px 8px; font-size:12px; font-weight:800; }}
+    .evidence.supported {{ color:#0d623d; background:#dff4e9; }}
+    .evidence.suggestive {{ color:#76510d; background:#fff0c8; }}
+    .evidence.contradicted {{ color:#8a2e2b; background:#fde3e2; }}
+    .evidence.unavailable {{ color:#53616b; background:#e8edf0; }}
     .metrics {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(175px,1fr)); gap:12px; margin:18px 0; }}
     .metric, .card {{ background:var(--paper); border:1px solid var(--line); border-radius:13px; box-shadow:0 4px 14px #17394d0a; }}
     .metric {{ padding:15px 17px; }}
     .metric span {{ display:block; color:var(--muted); font-size:13px; text-transform:uppercase; letter-spacing:.04em; }}
     .metric strong {{ display:block; margin-top:4px; font-size:19px; }}
-    .card {{ margin-top:18px; padding:24px; }}
+    .card {{ margin-top:18px; padding:24px; overflow:auto; }}
     .grid {{ display:grid; grid-template-columns:1fr; gap:18px; }}
     .grid .card {{ margin-top:0; }}
     img {{ display:block; width:100%; height:auto; margin-top:14px; border:1px solid var(--line); border-radius:9px; background:white; }}
@@ -377,7 +575,10 @@ def write_lineage_report(
     <p>beyondMLST public-health evidence report</p>
   </header>
 
+  {public_health_visual}
+
   <section class="verdict {escape(status)}">
+    <span class="eyebrow">Temporal analysis</span>
     <strong>{escape(str(assessment["label"]))}</strong>
     <p>{escape(str(assessment["reason"]))}</p>
   </section>
@@ -462,6 +663,12 @@ def write_summary_report(summary: dict[str, object], *, output: Path) -> Path:
             if isinstance(lineage_context, dict)
             else 0
         )
+        lineage_public_health = lineage.get("public_health", {})
+        public_health = lineage_public_health if isinstance(lineage_public_health, dict) else {}
+        lineage_scenario = public_health.get("scenario", {})
+        scenario = lineage_scenario if isinstance(lineage_scenario, dict) else {}
+        scenario_label = str(scenario.get("label", "Not assessed"))
+        scenario_code = str(scenario.get("code", "indeterminate"))
         report_link = (
             f'<a href="{escape(slug, quote=True)}/report.html">Open report</a>'
             if "temporal_signal" in lineage
@@ -469,7 +676,9 @@ def write_summary_report(summary: dict[str, object], *, output: Path) -> Path:
         )
         rows.append(
             f"<tr><td>{escape(str(lineage['species']))}</td><td>{escape(str(lineage['lineage']))}</td>"
-            f'<td>{int(lineage["sample_count"])}</td><td>{context_count}</td><td><span class="status {escape(status)}">{escape(label)}</span></td>'
+            f"<td>{int(lineage['sample_count'])}</td><td>{context_count}</td>"
+            f'<td><span class="status {escape(scenario_code)}">{escape(scenario_label)}</span></td>'
+            f'<td><span class="status {escape(status)}">{escape(label)}</span></td>'
             f"<td>{escape(rate)}</td><td>{escape(r_squared)}</td><td>{escape(p_value)}</td><td>{report_link}</td></tr>"
         )
 
@@ -481,8 +690,8 @@ def write_summary_report(summary: dict[str, object], *, output: Path) -> Path:
 <style>
 body{{margin:0;background:#f2f6f8;color:#1d2b34;font:16px/1.5 Inter,ui-sans-serif,system-ui,sans-serif}}main{{width:min(1200px,calc(100% - 32px));margin:32px auto}}header{{background:#17394d;color:white;padding:30px;border-radius:16px}}h1{{margin:0}}header p{{color:#d5e5ed}}section{{background:white;border:1px solid #d8e1e7;border-radius:13px;margin-top:18px;padding:22px;overflow:auto}}table{{width:100%;border-collapse:collapse;min-width:900px}}th,td{{padding:12px;text-align:left;border-bottom:1px solid #e4eaee}}th{{font-size:13px;text-transform:uppercase;color:#5b6b76}}a{{color:#265f7d;font-weight:700}}.status{{font-weight:700}}.supported{{color:#157347}}.not_supported{{color:#a33a36}}.not_assessed{{color:#8a6420}}footer{{margin-top:20px;color:#5b6b76}}
 </style></head><body><main><header><h1>beyondMLST analysis report</h1><p>Recombination-aware temporal and contextual bacterial phylogenetics</p></header>
-<section><h2>Lineage results</h2><table><thead><tr><th>Species</th><th>Lineage</th><th>Genomes</th><th>Context</th><th>Temporal result</th><th>Rate</th><th>R²</th><th>p</th><th></th></tr></thead><tbody>{"".join(rows)}</tbody></table></section>
-<section><h2>How to interpret this report</h2><p>A supported temporal signal permits time scaling under the fitted model. It does not by itself establish transmission, local circulation or introduction events. Open each lineage report to inspect the root-to-tip regression, randomisation test and diagnostics.</p></section>
+<section><h2>Lineage results</h2><table><thead><tr><th>Species</th><th>Lineage</th><th>Genomes</th><th>Context</th><th>Working interpretation</th><th>Temporal result</th><th>Rate</th><th>R²</th><th>p</th><th></th></tr></thead><tbody>{"".join(rows)}</tbody></table></section>
+<section><h2>How to interpret this report</h2><p>The working interpretation combines recombination-filtered distances, corrected topology, longitudinal sampling and public context. It is provisional and must be reviewed with epidemiological information. A supported temporal signal permits time scaling under the fitted model but is not required for the genomic scenario assessment.</p></section>
 <footer>Generated by beyondMLST.</footer></main></body></html>
 """,
         encoding="utf-8",

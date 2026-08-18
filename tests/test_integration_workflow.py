@@ -66,3 +66,15 @@ def test_small_workflow_reaches_time_scaled_and_location_trees(tmp_path: Path) -
     assert (output / "E_coli__ST_test" / "timetree" / "timetree.nexus").is_file()
     assert (output / "E_coli__ST_test" / "timetree" / "timetree.svg").is_file()
     assert (output / "E_coli__ST_test" / "location" / "annotated_tree.nexus").is_file()
+    assert (output / "E_coli__ST_test" / "clonal_pairwise_distances.tsv").is_file()
+    assert (output / "E_coli__ST_test" / "clonal_snp_matrix.tsv").is_file()
+    assert (output / "E_coli__ST_test" / "pairwise_callable_sites.tsv").is_file()
+    assert (output / "E_coli__ST_test" / "clonal_snp_heatmap.svg").is_file()
+    assert (output / "E_coli__ST_test" / "public_health_evidence.json").is_file()
+    scenario = summary["lineages"][0]["public_health"]["scenario"]
+    assert scenario["code"] in {
+        "persistent_local_lineage",
+        "multiple_introductions",
+        "mixed",
+        "indeterminate",
+    }

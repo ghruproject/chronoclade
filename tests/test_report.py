@@ -41,6 +41,9 @@ def test_lineage_report_contains_visuals_verdict_and_guardrail(tmp_path: Path) -
     (tmp_path / "timetree" / "timetree.svg").write_text(
         "<svg xmlns='http://www.w3.org/2000/svg'/>", encoding="utf-8"
     )
+    (tmp_path / "clonal_snp_heatmap.svg").write_text(
+        "<svg xmlns='http://www.w3.org/2000/svg'/>", encoding="utf-8"
+    )
     report = {
         "species": "E_coli",
         "lineage": "ST131",
@@ -63,12 +66,69 @@ def test_lineage_report_contains_visuals_verdict_and_guardrail(tmp_path: Path) -
                 }
             ],
         },
+        "public_health": {
+            "scenario": {
+                "code": "mixed",
+                "label": "Consistent with local persistence plus additional introductions",
+                "confidence": "moderate",
+                "decision_rule": "At least two separated focal-only groups are present.",
+                "reasons": ["Two candidate local groups were observed."],
+                "recommended_follow_up": ["Review the groups separately."],
+                "guardrail": "This does not establish direct transmission.",
+                "evidence": [
+                    {
+                        "id": "clonal_distances",
+                        "status": "supported",
+                        "finding": "Corrected distances were available.",
+                    }
+                ],
+            },
+            "distance_summary": {
+                "categories": {
+                    "focal_focal": {
+                        "comparisons": 3,
+                        "minimum": 1,
+                        "median": 4,
+                        "maximum": 20,
+                    }
+                }
+            },
+            "topology": {
+                "interpretation": "Candidate groups are review aids.",
+                "groups": [
+                    {
+                        "group_id": "LG1",
+                        "sample_count": 2,
+                        "first_collection_date": "2022",
+                        "last_collection_date": "2024",
+                        "within_group_clonal_snps": {
+                            "comparisons": 1,
+                            "minimum": 1,
+                            "median": 1,
+                            "maximum": 1,
+                        },
+                        "nearest_context": {"sample_id": "SAMN1", "clonal_snps": 4},
+                    }
+                ],
+            },
+            "patient_sensitivity": {
+                "patient_metadata_complete": True,
+                "excluded_repeated_patient_samples": ["F2"],
+                "interpretation": "The earliest isolate per patient was retained.",
+            },
+        },
     }
 
     output = write_lineage_report(report, directory=tmp_path, p_value_threshold=0.05)
     text = output.read_text(encoding="utf-8")
 
     assert "Temporal signal supported" in text
+    assert "Consistent with local persistence plus additional introductions" in text
+    assert "Rule applied" in text
+    assert text.index("Working public-health interpretation") < text.index("Temporal analysis")
+    assert "Recombination-filtered genomic distances" in text
+    assert "Candidate local groups" in text
+    assert "Patient-level sensitivity" in text
     assert "clock/root_to_tip_regression.svg" in text
     assert "date_randomisation.svg" in text
     assert "Time-scaled phylogeny" in text

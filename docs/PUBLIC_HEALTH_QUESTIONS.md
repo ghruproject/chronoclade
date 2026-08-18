@@ -137,21 +137,24 @@ No single row is decisive. Similar introductions can have small distances when
 the source population is poorly sampled, and an established local lineage can
 accumulate diversity over time.
 
-## Report additions required
+## Actionable report implementation
 
-The current temporal report needs the following public-health layer:
+The current report now provides:
 
 1. A recombination-filtered pairwise SNP matrix and heatmap, including callable
    sites.
 2. Distance distributions within years, between years and between inferred
    clusters.
-3. A metadata-coloured phylogeny showing collection month, location, origin and
-   patient.
-4. A cluster table listing samples, patients, date span, within-cluster distance
-   and nearest contextual genomes.
-5. A patient-level timeline and one-isolate-per-patient sensitivity analysis.
-6. A cautious scenario summary supported by topology, distances, contextual
-   placement and time estimates where available.
+3. A candidate local-group table listing samples, patients, date span,
+   within-group distance and nearest contextual genomes.
+4. A deterministic one-isolate-per-patient distance sensitivity view.
+5. A cautious scenario summary and explicit evidence ledger supported by
+   topology, distances, contextual placement and time estimates where
+   available.
+
+The next report iteration still needs a metadata-coloured phylogeny, propagated
+branch support, a patient/location timeline and a full topology sensitivity run
+with one isolate per patient.
 
 The temporal-signal result remains part of the report, but it is not the main
 public-health conclusion.

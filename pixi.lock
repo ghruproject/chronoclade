@@ -5469,6 +5469,7 @@ packages:
 - pypi: ./
   name: beyondmlst
   requires_dist:
+  - numpy>=1.26,<3
   - pyarrow>=14,<26
   - rich>=14,<15
   - typer>=0.19,<1
