@@ -66,14 +66,21 @@ population groups.[^duche]
 
 ## Fast screen
 
-Fast mode replaces ClonalFrameML with PhiPack's Profile program using Parsnp's
-100-site PHI window, 100-site step and p < 0.01 masking rule. Because SKA writes
-reference records consecutively, ChronoClade divides each record into bounded
-250 kb analysis blocks; a PHI calculation cannot cross a contig join. Ambiguous
-and missing calls remain inside their reference segment and are handled by
-PhiPack. The fixed blocks localise a screening call and bound runtime. They are
-not biological segments or Parsnp locally collinear blocks. Fast-mode output is
-suitable for triage, not final dating or public-health interpretation.
+Fast mode uses PhiPack's Profile program with Parsnp's 100-site PHI window,
+100-site step and p < 0.01 threshold. Because SKA writes reference records
+consecutively, ChronoClade divides each record into bounded 250 kb analysis
+blocks; a PHI calculation cannot cross a contig join. Ambiguous and missing
+calls remain inside their reference segment and are handled by PhiPack.
+
+A PHI-positive result means that incompatibility was detected somewhere within
+a computational block. It does not identify a tract, and ChronoClade does not
+mask sites from the fast alignment. The per-block p < 0.01 threshold is
+unadjusted: this favours sensitivity for triage, so a positive result is an
+escalation signal rather than a tract call or a final recombination inference.
+The fixed blocks bound runtime but are not biological segments or Parsnp locally
+collinear blocks. IQ-TREE therefore builds the fast screening tree from the
+uncorrected SKA alignment. Fast-mode output is suitable for triage, not final
+dating or public-health interpretation.
 
 ## Time scaling
 

@@ -20,7 +20,7 @@ from chronoclade.report import (
     write_lineage_report,
     write_supporting_bundle,
 )
-from chronoclade.recombination import run_phipack_filter
+from chronoclade.recombination import run_phipack_screen
 from chronoclade.temporal import file_sha256, run_date_randomisation, run_full_tree_date_randomisation
 
 
@@ -43,9 +43,8 @@ class LineageFiles:
     tree: Path
     importations: Path
     filtered_alignment: Path
-    phipack_filtered_alignment: Path
     phipack_profile: Path
-    phipack_regions: Path
+    phipack_significant_blocks: Path
     phipack_summary: Path
     fast_iqtree_prefix: Path
     fast_tree: Path
@@ -73,9 +72,8 @@ class LineageFiles:
             tree=directory / "clonalframeml.labelled_tree.newick",
             importations=directory / "clonalframeml.importation_status.txt",
             filtered_alignment=directory / "clonalframeml.filtered.fasta",
-            phipack_filtered_alignment=directory / "phipack.filtered.fasta",
             phipack_profile=directory / "phipack_profile.tsv",
-            phipack_regions=directory / "phipack_recombination_regions.tsv",
+            phipack_significant_blocks=directory / "phipack_significant_blocks.tsv",
             phipack_summary=directory / "phipack_summary.json",
             fast_iqtree_prefix=directory / "iqtree_fast",
             fast_tree=directory / "iqtree_fast.treefile",
@@ -415,12 +413,11 @@ def _run_core_phylogeny(
         )
 
     if mode == "fast":
-        phipack = run_phipack_filter(
+        phipack = run_phipack_screen(
             alignment=files.alignment,
             reference=reference.assembly,
-            output_alignment=files.phipack_filtered_alignment,
             profile_output=files.phipack_profile,
-            regions_output=files.phipack_regions,
+            significant_blocks_output=files.phipack_significant_blocks,
             summary_output=files.phipack_summary,
             threads=threads,
             force=force,
@@ -429,7 +426,7 @@ def _run_core_phylogeny(
             [
                 "iqtree",
                 "-s",
-                str(files.phipack_filtered_alignment),
+                str(files.alignment),
                 "-m",
                 "GTR+G",
                 "--fast",
@@ -443,9 +440,9 @@ def _run_core_phylogeny(
             expected=files.fast_tree,
             force=force,
             cwd=files.directory,
-            inputs=(files.phipack_filtered_alignment,),
+            inputs=(files.alignment,),
         )
-        return files.fast_tree, files.phipack_filtered_alignment, phipack
+        return files.fast_tree, files.alignment, phipack
 
     phylogeny_stages = [
         (
@@ -775,9 +772,8 @@ def _run_lineage(
             "outputs": {
                 "alignment": str(files.alignment),
                 "lineage_coherence": str(files.coherence_screen),
-                "phipack_filtered_alignment": str(files.phipack_filtered_alignment),
                 "phipack_profile": str(files.phipack_profile),
-                "phipack_regions": str(files.phipack_regions),
+                "phipack_significant_blocks": str(files.phipack_significant_blocks),
                 "screening_tree": str(files.fast_tree),
                 "root_to_tip_plot": str(files.clock_dir / "root_to_tip_regression.svg"),
                 "date_randomisation_csv": str(files.directory / "date_randomisation.csv"),

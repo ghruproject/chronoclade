@@ -107,6 +107,8 @@ def plan(samples: list[Sample], *, min_samples: int) -> list[dict[str, object]]:
                 "slug": slugify_lineage(species, lineage),
                 "sample_count": len(members),
                 "distinct_dates": len({sample.collection_date for sample in members}),
+                "first_collection_date": min(sample.collection_date for sample in members),
+                "last_collection_date": max(sample.collection_date for sample in members),
                 "locations": sorted({sample.location for sample in members}),
                 "reference": reference.sample_id,
                 "status": "ready" if len(members) >= min_samples else "too_few_samples",

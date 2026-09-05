@@ -1,3 +1,4 @@
+import zipfile
 from pathlib import Path
 
 from chronoclade.report import (
@@ -104,6 +105,9 @@ def test_lineage_report_contains_visuals_verdict_and_guardrail(tmp_path: Path) -
         "lineage": "ST131",
         "sample_count": 42,
         "distinct_dates": 12,
+        "first_collection_date": "2020-01",
+        "last_collection_date": "2024-06",
+        "complete_alignment_sites": 12345,
         "temporal_signal": temporal_result(),
         "context": {
             "local_samples": 30,
@@ -182,7 +186,12 @@ def test_lineage_report_contains_visuals_verdict_and_guardrail(tmp_path: Path) -
     assert "What does the genomic evidence support?" in text
     assert "What should happen next?" in text
     assert "Does divergence increase with sampling time?" in text
+    assert "Is this a coherent, dated lineage dataset?" in text
+    assert text.index("Is this a coherent, dated lineage dataset?") < text.index(
+        "Does divergence increase with sampling time?"
+    )
     assert "workflow's configured screening rule for time scaling" in text
+    assert "without preserving genetic or outbreak clusters" in text
     assert text.index("Does divergence increase with sampling time?") < text.index(
         "Is the observed fit stronger than shuffled dates?"
     )
@@ -229,6 +238,9 @@ def test_lineage_report_warns_when_root_interval_is_disproportionately_wide(
     tmp_path: Path,
 ) -> None:
     (tmp_path / "clock").mkdir()
+    (tmp_path / "clock" / "root_to_tip_regression.svg").write_text(
+        "<svg xmlns='http://www.w3.org/2000/svg'/>", encoding="utf-8"
+    )
     (tmp_path / "timetree").mkdir()
     (tmp_path / "timetree" / "timetree.svg").write_text("<svg/>", encoding="utf-8")
     (tmp_path / "timetree" / "molecular_clock.txt").write_text(
@@ -281,12 +293,17 @@ def test_unsupported_report_omits_dated_tree_visual(tmp_path: Path) -> None:
 
 def test_supporting_bundle_is_reproducible(tmp_path: Path) -> None:
     (tmp_path / "result.csv").write_text("sample,value\nS1,1\n", encoding="utf-8")
+    (tmp_path / "phipack_recombination_regions.tsv").write_text(
+        "obsolete\n", encoding="utf-8"
+    )
 
     first = write_supporting_bundle(tmp_path).read_bytes()
     (tmp_path / "result.csv").touch()
     second = write_supporting_bundle(tmp_path).read_bytes()
 
     assert first == second
+    with zipfile.ZipFile(tmp_path / "supporting_results.zip") as archive:
+        assert "phipack_recombination_regions.tsv" not in archive.namelist()
 
 
 def test_full_tree_report_explains_cr2_without_root_to_tip_p_value(tmp_path: Path) -> None:
@@ -310,8 +327,13 @@ def test_full_tree_report_explains_cr2_without_root_to_tip_p_value(tmp_path: Pat
     assert "Empirical p" not in text
 
 
-def test_fast_report_has_only_the_two_screening_stages(tmp_path: Path) -> None:
+def test_fast_report_separates_recombination_root_to_tip_and_permutation_stages(
+    tmp_path: Path,
+) -> None:
     (tmp_path / "clock").mkdir()
+    (tmp_path / "clock" / "root_to_tip_regression.svg").write_text(
+        "<svg xmlns='http://www.w3.org/2000/svg'/>", encoding="utf-8"
+    )
     report = {
         "species": "E_coli",
         "lineage": "ST131",
@@ -320,9 +342,13 @@ def test_fast_report_has_only_the_two_screening_stages(tmp_path: Path) -> None:
         "temporal_signal": temporal_result(),
         "recombination": {
             "tested_core_blocks": 3,
-            "recombination_regions": 1,
-            "masked_alignment_sites": 100,
+            "significant_blocks": 1,
+            "recombination_detected": True,
+            "minimum_p_value": 0.001,
             "boundary_rule": "No block crossed a reference-contig join.",
+            "localisation_limit": (
+                "A significant block does not localise a tract and no alignment sites were masked."
+            ),
         },
     }
 
@@ -330,12 +356,20 @@ def test_fast_report_has_only_the_two_screening_stages(tmp_path: Path) -> None:
         report, directory=tmp_path, p_value_threshold=0.05
     ).read_text(encoding="utf-8")
 
-    assert "fast temporal screen" in text
-    assert "not biological segments" in text
+    assert "FAST SCREEN" in text
+    assert "Is there a fast PHI signal that warrants recombination correction?" in text
+    assert "Does genetic divergence increase with sampling time?" in text
+    assert "Is the observed fit stronger than shuffled dates?" in text
+    assert "no alignment sites were masked" in text
+    assert "no biological meaning" in text
+    assert "RUN THE FULL ANALYSIS" in text
+    assert "clock/root_to_tip_regression.svg" in text
     assert "dated phylogeny" in text
     assert "Time-scaled phylogeny" not in text
     assert "Interpret" not in text
     assert "Not applicable" not in text
+    assert "phipack.filtered.fasta" not in text
+    assert "Masked regions" not in text
 
 
 def test_summary_report_links_lineage_reports(tmp_path: Path) -> None:

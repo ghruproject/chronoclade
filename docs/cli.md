@@ -41,10 +41,11 @@ pixi run chronoclade run metadata.csv [OPTIONS]
 | `--force` | false | Rerun completed stages |
 | `--dry-run` | false | Validate and print the plan only |
 
-`--mode fast` always uses `root-to-tip`. It runs PhiPack Profile on separate
-reference FASTA records, builds a screening tree from the masked alignment and
-reports the root-to-tip permutation result. It does not produce a time-scaled
-tree or circulation/introduction interpretation.
+`--mode fast` always uses `root-to-tip`. It runs PhiPack Profile in bounded
+blocks, builds an uncorrected screening tree from the SKA alignment and reports
+the root-to-tip permutation result. PhiPack is a detection screen in this mode;
+it does not localise tracts or create a filtered alignment. Fast mode does not
+produce a time-scaled tree or circulation/introduction interpretation.
 
 ## `chronoclade prepare-context`
 
