@@ -206,6 +206,12 @@ def test_lineage_report_contains_visuals_verdict_and_guardrail(tmp_path: Path) -
     text = output.read_text(encoding="utf-8")
 
     assert "Root-to-tip permutation screen passed" in text
+    assert '.decision.proceed { color:var(--green); }' in text
+    assert 'class="decision proceed">READY TO TEST' in text
+    assert 'class="decision proceed">CONTINUE TO TEST' in text
+    assert 'class="decision proceed">PROCEED' in text
+    assert 'class="overall supported"' in text
+    assert '.overall.supported { color:var(--green); }' in text
     assert "Consistent with local persistence plus additional introductions" in text
     assert "What does the genomic evidence support?" in text
     assert "What should happen next?" in text
@@ -319,6 +325,8 @@ def test_unsupported_report_omits_dated_tree_visual(tmp_path: Path) -> None:
     text = output.read_text(encoding="utf-8")
 
     assert "Root-to-tip permutation screen failed" in text
+    assert 'class="decision stop">DO NOT TIME-SCALE' in text
+    assert 'class="overall not_supported"' in text
     assert "Time-scaled phylogeny" not in text
     assert "cannot distinguish" in text
 
@@ -395,6 +403,8 @@ def test_fast_report_separates_recombination_root_to_tip_and_permutation_stages(
     assert "no alignment sites were masked" in text
     assert "no biological meaning" in text
     assert "RUN THE FULL ANALYSIS" in text
+    assert 'class="decision proceed">PHI SCREEN POSITIVE' in text
+    assert 'class="status proceed">RUN THE FULL ANALYSIS' in text
     assert "clock/root_to_tip_regression.svg" in text
     assert "dated phylogeny" in text
     assert "Time-scaled phylogeny" not in text

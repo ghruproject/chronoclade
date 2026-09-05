@@ -8,6 +8,7 @@ colors:
   paper: "#ffffff"
   outer-wash: "#eef0f4"
   evidence-cobalt: "#2855a6"
+  pass-green: "#14734f"
   decision-vermillion: "#d63c2f"
   interval-vermillion: "#e2aaa3"
   panel-wash: "#f4f5f7"
@@ -81,7 +82,7 @@ components:
     padding: "10px 12px"
   decision-proceed:
     backgroundColor: "transparent"
-    textColor: "{colors.decision-vermillion}"
+    textColor: "{colors.pass-green}"
     typography: "{typography.decision}"
     padding: "10px 12px"
   evidence-manifest:
@@ -119,7 +120,7 @@ components:
 
 ChronoClade reports feel like an expert case conference assembled on a white working wall: numbered sheets establish the order of review, large scientific figures carry the evidence, and hairline rules keep every claim attached to its source. The world is rigorous, direct, and deliberately more editorial than dashboard-like.
 
-Near-black ink supplies authority, cobalt marks evidence and continued investigation, and vermillion marks decisions that change the inferential path. Pale interval vermillion extends that decision family into dated-tree uncertainty without competing with the stronger root and gate marks. The report stays dense enough for expert scrutiny while preserving a clear reading sequence, explicit gates, and ready access to underlying files.
+Near-black ink supplies authority, cobalt marks evidence and continued investigation, green marks a passed gate, and vermillion marks a failed gate or stop decision. Pale interval vermillion carries dated-tree uncertainty without competing with the stronger status marks. The report stays dense enough for expert scrutiny while preserving a clear reading sequence, explicit gates, and ready access to underlying files.
 
 **Key Characteristics:**
 
@@ -139,7 +140,8 @@ The palette separates evidence, decisions, supporting structure, and caution wit
 
 ### Secondary
 
-- **Decision Vermillion** (`{colors.decision-vermillion}`): Marks proceed and stop decisions, observed values, and the overall temporal verdict.
+- **Pass Green** (`{colors.pass-green}`): Marks passed gates and explicit proceed decisions.
+- **Decision Vermillion** (`{colors.decision-vermillion}`): Marks failed gates, stop decisions, and observed values in statistical figures.
 - **Interval Vermillion** (`{colors.interval-vermillion}`): Shows 90% inferred node-date intervals behind the stronger vermillion root and decision marks.
 
 ### Tertiary
@@ -162,7 +164,7 @@ The palette separates evidence, decisions, supporting structure, and caution wit
 
 ### Named Rules
 
-**The Evidence/Decision Rule.** Use cobalt for evidence and review; reserve vermillion for explicit inferential decisions and observed marks.
+**The Evidence/Decision Rule.** Use green for pass/proceed, vermillion for fail/stop, and cobalt for review or unresolved evidence. Observed statistical marks may remain vermillion when they are not status indicators.
 
 **The Redundancy Rule.** Every colour-coded state also carries a readable label such as “PROCEED”, “CONTINUE TO TEST”, or “DO NOT TIME-SCALE”.
 
