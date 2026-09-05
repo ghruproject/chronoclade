@@ -11,7 +11,8 @@ from rich.console import Console
 from rich.table import Table
 
 from beyondmlst import __version__
-from beyondmlst.metadata import MetadataError, read_metadata
+from beyondmlst.context import ContextError, prepare_context
+from beyondmlst.metadata import MetadataError, group_samples, read_metadata
 from beyondmlst.workflow import (
     WorkflowError,
     native_platform_supported,
@@ -57,7 +58,7 @@ def preflight() -> None:
     if native_platform_supported():
         table.add_row("native platform", "[green]supported[/green]")
     else:
-        table.add_row("native platform", "[red]use Docker (Linux container)[/red]")
+        table.add_row("native platform", "[red]unsupported by the Pixi environment[/red]")
         ok = False
     console.print(table)
     if not ok:
@@ -98,13 +99,168 @@ def _print_plan(items: list[dict[str, object]]) -> None:
     console.print(table)
 
 
+@app.command("prepare-context")
+def prepare_context_command(
+    metadata: Annotated[Path, typer.Argument(help="Focal-isolate metadata CSV")],
+    scheme: Annotated[
+        str,
+        typer.Option("--scheme", help="MLST scheme in the context metadata snapshot"),
+    ],
+    output: Annotated[
+        Path, typer.Option("--output", "-o", help="Context preparation directory")
+    ] = Path("beyondmlst_context"),
+    species: Annotated[
+        str | None,
+        typer.Option("--species", help="Species to prepare when metadata contains several"),
+    ] = None,
+    lineage: Annotated[
+        str | None,
+        typer.Option("--lineage", help="Lineage to prepare when metadata contains several"),
+    ] = None,
+    st: Annotated[
+        str | None,
+        typer.Option("--st", help="MLST sequence type; inferred from an ST-prefixed lineage"),
+    ] = None,
+    metadata_table: Annotated[
+        Path | None,
+        typer.Option(
+            "--metadata-table",
+            help="Override the bundled compact ATB context metadata Parquet",
+        ),
+    ] = None,
+    cache_dir: Annotated[
+        Path, typer.Option("--cache-dir", help="atbfetcher assembly download cache")
+    ] = Path("~/.atbfetcher"),
+    country: Annotated[
+        list[str] | None,
+        typer.Option("--country", help="Country prefix to retain; repeat for several countries"),
+    ] = None,
+    year_from: Annotated[int | None, typer.Option("--year-from", min=1800, max=2200)] = None,
+    year_to: Annotated[int | None, typer.Option("--year-to", min=1800, max=2200)] = None,
+    host: Annotated[str | None, typer.Option("--host", help="Host substring filter")] = None,
+    isolation_source: Annotated[
+        str | None,
+        typer.Option("--isolation-source", help="Isolation-source substring filter"),
+    ] = None,
+    candidate_pool: Annotated[
+        int,
+        typer.Option(
+            "--candidate-pool",
+            min=1,
+            help="Maximum balanced same-ST pool downloaded before SKA screening",
+        ),
+    ] = 500,
+    max_context: Annotated[
+        int, typer.Option("--max-context", min=1, help="Maximum context genomes retained")
+    ] = 150,
+    nearest_per_focal: Annotated[
+        int,
+        typer.Option(
+            "--nearest-per-focal",
+            min=1,
+            help="Nearest candidate set considered for each focal isolate",
+        ),
+    ] = 3,
+    threads: Annotated[int, typer.Option("--threads", "-t", min=1)] = 4,
+    source: Annotated[
+        str,
+        typer.Option("--source", help="atbfetcher source: auto, aws or osf"),
+    ] = "auto",
+    seed: Annotated[int, typer.Option("--seed")] = 20260818,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run", help="Discover and freeze the candidate pool without downloading"
+        ),
+    ] = False,
+) -> None:
+    """Fetch and select reproducible public context for one species/ST."""
+
+    if source not in {"auto", "aws", "osf"}:
+        _fail(ValueError("--source must be auto, aws or osf"))
+    if year_from is not None and year_to is not None and year_from > year_to:
+        _fail(ValueError("--year-from cannot be later than --year-to"))
+    try:
+        samples = read_metadata(metadata)
+        groups = group_samples(samples)
+        if species is None and lineage is None and len(groups) == 1:
+            (selected_species, selected_lineage), focal = next(iter(groups.items()))
+        else:
+            if species is None or lineage is None:
+                raise ContextError(
+                    "Metadata contains several lineages; provide both --species and --lineage"
+                )
+            selected_species, selected_lineage = species, lineage
+            focal = groups.get((selected_species, selected_lineage), [])
+        if not focal:
+            raise ContextError(
+                f"No focal samples found for {selected_species} / {selected_lineage}"
+            )
+        selected_st = st
+        if selected_st is None and selected_lineage.upper().startswith("ST"):
+            selected_st = selected_lineage[2:]
+        if not selected_st:
+            raise ContextError("Could not infer the sequence type; provide --st")
+        audit = prepare_context(
+            focal,
+            species=selected_species,
+            lineage=selected_lineage,
+            scheme=scheme,
+            st=selected_st,
+            output=output,
+            cache_dir=cache_dir,
+            metadata_table=metadata_table,
+            countries=country,
+            year_from=year_from,
+            year_to=year_to,
+            host=host,
+            isolation_source=isolation_source,
+            candidate_pool=candidate_pool,
+            max_context=max_context,
+            nearest_per_focal=nearest_per_focal,
+            seed=seed,
+            threads=threads,
+            source=source,
+            dry_run=dry_run,
+        )
+    except (ContextError, MetadataError, OSError) as error:
+        _fail(error)
+    if dry_run:
+        console.print(
+            f"[green]Prepared a dry-run pool of {audit['candidate_pool']} same-ST candidates.[/green]"
+        )
+        console.print(f"Audit: {output.expanduser().resolve() / 'context_selection.json'}")
+        return
+    console.print(
+        f"[green]Selected {audit['selected_contexts']} context genomes; "
+        f"focal-neighbour coverage {float(audit['focal_neighbour_coverage']):.0%}.[/green]"
+    )
+    console.print(f"Combined metadata: {output.expanduser().resolve() / 'combined_metadata.csv'}")
+
+
 @app.command()
 def run(
     metadata: Annotated[Path, typer.Argument(help="Input metadata CSV")],
-    output: Annotated[
-        Path, typer.Option("--output", "-o", help="Output directory")
-    ] = Path("beyondmlst_results"),
+    output: Annotated[Path, typer.Option("--output", "-o", help="Output directory")] = Path(
+        "beyondmlst_results"
+    ),
     threads: Annotated[int, typer.Option("--threads", "-t", min=1)] = 4,
+    lineage_jobs: Annotated[
+        int,
+        typer.Option(
+            "--lineage-jobs",
+            min=1,
+            help="Maximum lineages to analyse concurrently",
+        ),
+    ] = 2,
+    randomisation_jobs: Annotated[
+        int,
+        typer.Option(
+            "--randomisation-jobs",
+            min=1,
+            help="Maximum concurrent TreeTime permutations per lineage",
+        ),
+    ] = 4,
     date_randomisations: Annotated[
         int,
         typer.Option(
@@ -113,11 +269,16 @@ def run(
             help="Number of tip-date permutations; use at least 100 for analysis",
         ),
     ] = 100,
-    temporal_p_value: Annotated[
-        float, typer.Option("--temporal-p-value", min=0.0, max=1.0)
-    ] = 0.05,
+    temporal_p_value: Annotated[float, typer.Option("--temporal-p-value", min=0.0, max=1.0)] = 0.05,
     min_samples: Annotated[int, typer.Option("--min-samples", min=3)] = 10,
     seed: Annotated[int, typer.Option("--seed")] = 20260818,
+    context_manifest: Annotated[
+        Path | None,
+        typer.Option(
+            "--context-manifest",
+            help="Frozen context_manifest.tsv produced by prepare-context",
+        ),
+    ] = None,
     force: Annotated[bool, typer.Option("--force", help="Rerun completed stages")] = False,
     dry_run: Annotated[
         bool, typer.Option("--dry-run", help="Validate and print the plan only")
@@ -136,17 +297,18 @@ def run(
             samples,
             output=output,
             threads=threads,
+            lineage_jobs=lineage_jobs,
+            randomisation_jobs=randomisation_jobs,
             randomisations=date_randomisations,
             temporal_p_value=temporal_p_value,
             min_samples=min_samples,
             seed=seed,
             force=force,
+            context_manifest=context_manifest,
         )
     except (MetadataError, WorkflowError, OSError) as error:
         _fail(error)
-    supported = sum(
-        bool(item.get("temporal_signal_supported")) for item in summary["lineages"]
-    )
+    supported = sum(bool(item.get("temporal_signal_supported")) for item in summary["lineages"])
     console.print(
         f"[green]Completed {len(summary['lineages'])} lineage records; "
         f"{supported} passed the temporal-signal gate.[/green]"

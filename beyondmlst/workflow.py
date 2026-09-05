@@ -4,27 +4,32 @@ from __future__ import annotations
 
 import csv
 import json
-import os
 import shutil
 import subprocess
 import sys
-from dataclasses import asdict
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
 
+from beyondmlst.evidence import EvidenceError, build_public_health_evidence
 from beyondmlst.metadata import (
     Sample,
-    assembly_length,
     group_samples,
     select_reference,
     slugify_lineage,
 )
+from beyondmlst.report import (
+    assess_temporal_signal,
+    write_lineage_report,
+    write_summary_report,
+)
 from beyondmlst.temporal import run_date_randomisation
 
 REQUIRED_TOOLS = (
-    "generate_ska_alignment.py",
-    "run_gubbins.py",
-    "mask_gubbins_aln.py",
+    "ska",
+    "iqtree",
+    "ClonalFrameML",
     "treetime",
 )
 
@@ -33,21 +38,58 @@ class WorkflowError(RuntimeError):
     """Raised when an external workflow stage fails."""
 
 
+@dataclass(frozen=True)
+class ResourcePlan:
+    """Bounded concurrency derived from the user's global CPU budget."""
+
+    total_threads: int
+    lineage_workers: int
+    threads_per_lineage: int
+    randomisation_workers_per_lineage: int
+
+
+def allocate_resources(
+    *,
+    total_threads: int,
+    lineage_jobs: int,
+    randomisation_jobs: int,
+    ready_lineages: int,
+) -> ResourcePlan:
+    """Allocate lineage and permutation workers without oversubscribing CPUs."""
+
+    if min(total_threads, lineage_jobs, randomisation_jobs) < 1:
+        raise ValueError("thread and job counts must be at least 1")
+    if ready_lineages < 0:
+        raise ValueError("ready_lineages cannot be negative")
+
+    lineage_workers = min(lineage_jobs, ready_lineages, total_threads)
+    if lineage_workers == 0:
+        return ResourcePlan(total_threads, 0, total_threads, min(randomisation_jobs, total_threads))
+
+    threads_per_lineage = max(1, total_threads // lineage_workers)
+    return ResourcePlan(
+        total_threads=total_threads,
+        lineage_workers=lineage_workers,
+        threads_per_lineage=threads_per_lineage,
+        randomisation_workers_per_lineage=min(randomisation_jobs, threads_per_lineage),
+    )
+
+
 def tool_status() -> dict[str, str | None]:
     return {tool: shutil.which(tool) for tool in REQUIRED_TOOLS}
 
 
 def native_platform_supported() -> bool:
-    """Gubbins' locked Bioconda build is validated natively on Linux."""
+    """Return whether the locked Pixi tools support this operating system."""
 
-    return sys.platform.startswith("linux")
+    return sys.platform.startswith(("linux", "darwin"))
 
 
 def check_tools() -> None:
-    if not native_platform_supported() and os.environ.get("BEYONDMLST_ALLOW_UNSUPPORTED") != "1":
+    if not native_platform_supported():
         raise WorkflowError(
-            "Native execution is currently supported on Linux. On macOS or Windows, use the "
-            "beyondMLST Docker image; set BEYONDMLST_ALLOW_UNSUPPORTED=1 only for development."
+            "Native execution is supported on macOS and Linux. This platform is not in the "
+            "locked Pixi environment."
         )
     missing = [tool for tool, path in tool_status().items() if path is None]
     if missing:
@@ -58,9 +100,15 @@ def check_tools() -> None:
         )
 
 
-def _write_csv(path: Path, fieldnames: list[str], rows: Iterable[dict[str, object]]) -> None:
+def _write_csv(
+    path: Path,
+    fieldnames: list[str],
+    rows: Iterable[dict[str, object]],
+    *,
+    delimiter: str = ",",
+) -> None:
     with path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer = csv.DictWriter(handle, fieldnames=fieldnames, delimiter=delimiter)
         writer.writeheader()
         writer.writerows(rows)
 
@@ -110,17 +158,90 @@ def _write_lineage_inputs(directory: Path, samples: list[Sample]) -> tuple[Path,
     return inputs, metadata, states
 
 
-def _run_command(command: list[str], *, log: Path, expected: Path, force: bool) -> None:
-    if expected.exists() and not force:
+def _run_command(
+    command: list[str],
+    *,
+    log: Path,
+    expected: Path | tuple[Path, ...],
+    force: bool,
+    cwd: Path | None = None,
+) -> None:
+    expected_paths = (expected,) if isinstance(expected, Path) else expected
+    if all(path.exists() for path in expected_paths) and not force:
         return
     log.parent.mkdir(parents=True, exist_ok=True)
     with log.open("w", encoding="utf-8") as handle:
         handle.write("COMMAND\n" + " ".join(command) + "\n\nOUTPUT\n")
-        completed = subprocess.run(command, stdout=handle, stderr=subprocess.STDOUT, check=False)
-    if completed.returncode != 0 or not expected.exists():
-        raise WorkflowError(
-            f"Command failed or did not create {expected}. See log: {log}"
+        completed = subprocess.run(
+            command,
+            stdout=handle,
+            stderr=subprocess.STDOUT,
+            check=False,
+            cwd=cwd,
         )
+    missing = [path for path in expected_paths if not path.exists()]
+    if completed.returncode != 0 or missing:
+        missing_text = ", ".join(str(path) for path in missing)
+        raise WorkflowError(
+            f"Command failed or did not create expected output(s): {missing_text}. See log: {log}"
+        )
+
+
+def alignment_length(path: Path) -> int:
+    """Return the number of columns in an equal-length FASTA alignment."""
+
+    lengths: list[int] = []
+    current = 0
+    with path.open(encoding="utf-8") as handle:
+        for raw_line in handle:
+            line = raw_line.strip()
+            if not line:
+                continue
+            if line.startswith(">"):
+                if current:
+                    lengths.append(current)
+                    current = 0
+            else:
+                current += len(line)
+    if current:
+        lengths.append(current)
+    if not lengths:
+        raise WorkflowError(f"Alignment contains no sequences: {path}")
+    if len(set(lengths)) != 1:
+        raise WorkflowError(f"Alignment sequences are not the same length: {path}")
+    return lengths[0]
+
+
+def complete_alignment_sites(path: Path) -> int:
+    """Count columns containing only unambiguous A/C/G/T bases."""
+
+    length = alignment_length(path)
+    incomplete = bytearray(length)
+    position = 0
+    seen_header = False
+    with path.open(encoding="utf-8") as handle:
+        for raw_line in handle:
+            line = raw_line.strip()
+            if not line:
+                continue
+            if line.startswith(">"):
+                if seen_header and position != length:
+                    raise WorkflowError(f"Alignment sequences are not the same length: {path}")
+                seen_header = True
+                position = 0
+                continue
+            if not seen_header:
+                raise WorkflowError(f"Alignment sequence appears before its FASTA header: {path}")
+            for base in line.upper():
+                if position >= length:
+                    raise WorkflowError(f"Alignment sequences are not the same length: {path}")
+                if base not in "ACGT":
+                    incomplete[position] = 1
+                position += 1
+    complete = length - sum(incomplete)
+    if complete == 0:
+        raise WorkflowError(f"Alignment contains no complete A/C/G/T sites: {path}")
+    return complete
 
 
 def plan(samples: list[Sample], *, min_samples: int) -> list[dict[str, object]]:
@@ -144,101 +265,256 @@ def plan(samples: list[Sample], *, min_samples: int) -> list[dict[str, object]]:
     return result
 
 
-def run_workflow(
-    samples: list[Sample],
+def read_context_manifest(path: Path | None) -> list[dict[str, str]]:
+    """Read a context-selection manifest for report provenance."""
+
+    if path is None:
+        return []
+    path = path.expanduser().resolve()
+    if not path.is_file():
+        raise WorkflowError(f"Context manifest does not exist: {path}")
+    with path.open(newline="", encoding="utf-8-sig") as handle:
+        reader = csv.DictReader(handle, delimiter="\t")
+        required = {"sample_id", "species", "lineage"}
+        if reader.fieldnames is None or not required.issubset(reader.fieldnames):
+            raise WorkflowError(
+                "Context manifest must be tab-separated and contain sample_id, species and lineage"
+            )
+        return [dict(row) for row in reader]
+
+
+def context_evidence(
+    members: list[Sample], manifest_rows: list[dict[str, str]], *, directory: Path
+) -> dict[str, object]:
+    """Summarise contextual sampling and preserve the lineage manifest subset."""
+
+    directory.mkdir(parents=True, exist_ok=True)
+    origins: dict[str, int] = {}
+    for member in members:
+        key = member.origin.strip().lower()
+        origins[key] = origins.get(key, 0) + 1
+    contexts = [member for member in members if member.origin.strip().lower() == "context"]
+    local = [member for member in members if member.origin.strip().lower() == "local"]
+    relevant_rows = [
+        row
+        for row in manifest_rows
+        if row.get("species") == members[0].species and row.get("lineage") == members[0].lineage
+    ]
+    nearest: list[dict[str, object]] = []
+    for row in relevant_rows:
+        raw_distance = row.get("min_ska_distance", "")
+        try:
+            distance: float | None = float(raw_distance) if raw_distance else None
+        except ValueError:
+            distance = None
+        nearest.append(
+            {
+                "sample_id": row.get("sample_id", ""),
+                "country": row.get("country", ""),
+                "collection_date": row.get("collection_date", ""),
+                "nearest_focal": row.get("nearest_focal", ""),
+                "min_ska_distance": distance,
+                "selection_reason": row.get("selection_reason", ""),
+            }
+        )
+    nearest.sort(
+        key=lambda row: (
+            row["min_ska_distance"] is None,
+            row["min_ska_distance"] if row["min_ska_distance"] is not None else float("inf"),
+            str(row["sample_id"]),
+        )
+    )
+
+    subset_path: Path | None = None
+    if relevant_rows:
+        subset_path = directory / "context_manifest.tsv"
+        fieldnames = list(relevant_rows[0])
+        _write_csv(subset_path, fieldnames, relevant_rows, delimiter="\t")
+    return {
+        "local_samples": len(local),
+        "context_samples": len(contexts),
+        "retrospective_samples": origins.get("retrospective", 0),
+        "origin_counts": origins,
+        "context_locations": sorted({member.location for member in contexts}),
+        "manifest_available": bool(relevant_rows),
+        "manifest_path": str(subset_path) if subset_path else None,
+        "nearest_screening_contexts": nearest[:10],
+        "interpretation": (
+            "Contextual genomes are available for topology and relatedness assessment."
+            if contexts
+            else "No contextual genomes were supplied; introductions cannot be distinguished "
+            "from local circulation."
+        ),
+    }
+
+
+def _run_lineage(
+    item: dict[str, object],
+    members: list[Sample],
     *,
     output: Path,
     threads: int,
+    randomisation_jobs: int,
     randomisations: int,
     temporal_p_value: float,
-    min_samples: int,
     seed: int,
     force: bool,
+    context_manifest_rows: list[dict[str, str]],
 ) -> dict[str, object]:
-    """Run every lineage through alignment, recombination and dating stages."""
+    """Run one ready lineage; independent lineages may call this concurrently."""
 
-    check_tools()
-    output = output.expanduser().resolve()
-    output.mkdir(parents=True, exist_ok=True)
-    reports: list[dict[str, object]] = []
+    lineage_dir = output / str(item["slug"])
+    lineage_dir.mkdir(parents=True, exist_ok=True)
+    reference = select_reference(members)
+    inputs, metadata, states = _write_lineage_inputs(lineage_dir, members)
+    alignment = lineage_dir / "core_alignment.fasta"
+    ska_prefix = lineage_dir / "ska"
+    ska_file = lineage_dir / "ska.skf"
+    iqtree_prefix = lineage_dir / "iqtree"
+    starting_tree = lineage_dir / "iqtree.treefile"
+    clonalframe_prefix = lineage_dir / "clonalframeml"
+    tree = lineage_dir / "clonalframeml.labelled_tree.newick"
+    importations = lineage_dir / "clonalframeml.importation_status.txt"
+    filtered_alignment = lineage_dir / "clonalframeml.filtered.fasta"
+    context_summary = context_evidence(members, context_manifest_rows, directory=lineage_dir)
 
-    for item in plan(samples, min_samples=min_samples):
-        species = str(item["species"])
-        lineage = str(item["lineage"])
-        members = group_samples(samples)[(species, lineage)]
-        lineage_dir = output / str(item["slug"])
-        lineage_dir.mkdir(parents=True, exist_ok=True)
-        if item["status"] != "ready":
-            reports.append(item)
-            continue
+    _run_command(
+        [
+            "ska",
+            "build",
+            "-f",
+            str(inputs),
+            "-o",
+            str(ska_prefix),
+            "--threads",
+            str(threads),
+        ],
+        log=lineage_dir / "logs" / "ska_build.log",
+        expected=ska_file,
+        force=force,
+        cwd=lineage_dir,
+    )
+    _run_command(
+        [
+            "ska",
+            "map",
+            str(reference.assembly),
+            str(ska_file),
+            "-o",
+            str(alignment),
+            "--ambig-mask",
+            "--repeat-mask",
+            "--threads",
+            str(threads),
+        ],
+        log=lineage_dir / "logs" / "ska_map.log",
+        expected=alignment,
+        force=force,
+        cwd=lineage_dir,
+    )
+    _run_command(
+        [
+            "iqtree",
+            "-s",
+            str(alignment),
+            "-m",
+            "GTR+G",
+            "-T",
+            str(threads),
+            "-pre",
+            str(iqtree_prefix),
+            "-redo",
+        ],
+        log=lineage_dir / "logs" / "iqtree.log",
+        expected=starting_tree,
+        force=force,
+        cwd=lineage_dir,
+    )
+    _run_command(
+        [
+            "ClonalFrameML",
+            str(starting_tree),
+            str(alignment),
+            str(clonalframe_prefix),
+            "-ignore_incomplete_sites",
+            "true",
+            "-output_filtered",
+            "true",
+            "-num_threads",
+            str(threads),
+        ],
+        log=lineage_dir / "logs" / "clonalframeml.log",
+        expected=(tree, importations, filtered_alignment),
+        force=force,
+        cwd=lineage_dir,
+    )
 
-        reference = select_reference(members)
-        inputs, metadata, states = _write_lineage_inputs(lineage_dir, members)
-        alignment = lineage_dir / "core_alignment.fasta"
-        gubbins_prefix = lineage_dir / "gubbins"
-        tree = lineage_dir / "gubbins.final_tree.tre"
-        gff = lineage_dir / "gubbins.recombination_predictions.gff"
-        masked = lineage_dir / "core_alignment.recombination_masked.fasta"
+    sequence_length = complete_alignment_sites(alignment)
+    clock_dir = lineage_dir / "clock"
+    clock_file = clock_dir / "molecular_clock.txt"
+    _run_command(
+        [
+            "treetime",
+            "clock",
+            "--tree",
+            str(tree),
+            "--dates",
+            str(metadata),
+            "--name-column",
+            "sample_id",
+            "--date-column",
+            "collection_date",
+            "--sequence-length",
+            str(sequence_length),
+            "--reroot",
+            "least-squares",
+            "--allow-negative-rate",
+            "--clock-filter",
+            "0",
+            "--plot-rtt",
+            "root_to_tip_regression.svg",
+            "--outdir",
+            str(clock_dir),
+        ],
+        log=lineage_dir / "logs" / "clock.log",
+        expected=clock_file,
+        force=force,
+    )
 
-        _run_command(
-            [
-                "generate_ska_alignment.py",
-                "--reference",
-                str(reference.assembly),
-                "--input",
-                str(inputs),
-                "--out",
-                str(alignment),
-                "--threads",
-                str(threads),
-            ],
-            log=lineage_dir / "logs" / "alignment.log",
-            expected=alignment,
-            force=force,
+    temporal_path = lineage_dir / "temporal_signal.json"
+    if force or not temporal_path.exists():
+        temporal = run_date_randomisation(
+            tree=tree,
+            sequence_length=sequence_length,
+            samples=members,
+            observed_clock=clock_file,
+            randomisations=randomisations,
+            randomisation_jobs=randomisation_jobs,
+            seed=seed,
+            output=temporal_path,
         )
-        _run_command(
-            [
-                "run_gubbins.py",
-                "--prefix",
-                str(gubbins_prefix),
-                "--threads",
-                str(threads),
-                "--tree-builder",
-                "iqtree-fast",
-                "--first-tree-builder",
-                "rapidnj",
-                "--first-model",
-                "JC",
-                "--model",
-                "GTR",
-                str(alignment),
-            ],
-            log=lineage_dir / "logs" / "gubbins.log",
-            expected=tree,
-            force=force,
-        )
-        _run_command(
-            [
-                "mask_gubbins_aln.py",
-                "--aln",
-                str(alignment),
-                "--gff",
-                str(gff),
-                "--out",
-                str(masked),
-            ],
-            log=lineage_dir / "logs" / "mask_recombination.log",
-            expected=masked,
-            force=force,
-        )
+    else:
+        temporal = json.loads(temporal_path.read_text(encoding="utf-8"))
 
-        sequence_length = assembly_length(reference.assembly)
-        clock_dir = lineage_dir / "clock"
-        clock_file = clock_dir / "molecular_clock.txt"
+    assessment = assess_temporal_signal(
+        temporal,
+        p_value_threshold=temporal_p_value,
+    )
+    temporal_supported = bool(assessment["supported"])
+    rooted_tree = clock_dir / "rerooted.newick"
+    public_health = build_public_health_evidence(
+        filtered_alignment=filtered_alignment,
+        rooted_tree=rooted_tree if rooted_tree.is_file() else tree,
+        samples=members,
+        output=lineage_dir,
+        temporal_assessment=assessment,
+    )
+
+    time_tree = lineage_dir / "timetree" / "timetree.nexus"
+    if temporal_supported:
         _run_command(
             [
                 "treetime",
-                "clock",
                 "--tree",
                 str(tree),
                 "--dates",
@@ -249,115 +525,167 @@ def run_workflow(
                 "collection_date",
                 "--sequence-length",
                 str(sequence_length),
+                "--confidence",
+                "--time-marginal",
+                "only-final",
                 "--reroot",
                 "least-squares",
+                "--covariation",
+                "--clock-filter",
+                "0",
+                "--plot-tree",
+                "timetree.svg",
+                "--plot-rtt",
+                "root_to_tip_regression.svg",
                 "--outdir",
-                str(clock_dir),
+                str(lineage_dir / "timetree"),
             ],
-            log=lineage_dir / "logs" / "clock.log",
-            expected=clock_file,
+            log=lineage_dir / "logs" / "timetree.log",
+            expected=time_tree,
             force=force,
         )
 
-        temporal_path = lineage_dir / "temporal_signal.json"
-        if force or not temporal_path.exists():
-            temporal = run_date_randomisation(
-                tree=tree,
-                sequence_length=sequence_length,
-                samples=members,
-                observed_clock=clock_file,
+    time_tree_available = temporal_supported and time_tree.exists()
+    location_tree = time_tree if time_tree_available else tree
+    location_output = lineage_dir / "location" / "annotated_tree.nexus"
+    _run_command(
+        [
+            "treetime",
+            "mugration",
+            "--tree",
+            str(location_tree),
+            "--states",
+            str(states),
+            "--name-column",
+            "sample_id",
+            "--attribute",
+            "location",
+            "--confidence",
+            "--outdir",
+            str(lineage_dir / "location"),
+        ],
+        log=lineage_dir / "logs" / "location.log",
+        expected=location_output,
+        force=force,
+    )
+
+    report = {
+        **item,
+        "reference_path": str(reference.assembly),
+        "alignment_length": alignment_length(alignment),
+        "complete_alignment_sites": sequence_length,
+        "resources": {
+            "threads": threads,
+            "date_randomisation_jobs": randomisation_jobs,
+        },
+        "temporal_status": assessment["code"],
+        "temporal_signal_reason": assessment["reason"],
+        "temporal_signal_supported": temporal_supported,
+        "temporal_signal": temporal,
+        "context": context_summary,
+        "public_health_status": public_health["scenario"]["code"],
+        "public_health_label": public_health["scenario"]["label"],
+        "public_health_confidence": public_health["scenario"]["confidence"],
+        "public_health": public_health,
+        "outputs": {
+            "alignment": str(alignment),
+            "starting_tree": str(starting_tree),
+            "tree": str(tree),
+            "recombination_importations": str(importations),
+            "filtered_alignment": str(filtered_alignment),
+            "root_to_tip_plot": str(clock_dir / "root_to_tip_regression.svg"),
+            "date_randomisation_plot": str(lineage_dir / "date_randomisation.svg"),
+            "timetree": str(time_tree) if time_tree_available else None,
+            "timetree_plot": (
+                str(lineage_dir / "timetree" / "timetree.svg") if time_tree_available else None
+            ),
+            "location_tree": str(location_output),
+            "public_health_evidence": str(lineage_dir / "public_health_evidence.json"),
+            "clonal_pairwise_distances": str(lineage_dir / "clonal_pairwise_distances.tsv"),
+            "clonal_snp_matrix": str(lineage_dir / "clonal_snp_matrix.tsv"),
+            "pairwise_callable_sites": str(lineage_dir / "pairwise_callable_sites.tsv"),
+            "clonal_snp_heatmap": str(lineage_dir / "clonal_snp_heatmap.svg"),
+            "html_report": str(lineage_dir / "report.html"),
+        },
+    }
+    write_lineage_report(report, directory=lineage_dir, p_value_threshold=temporal_p_value)
+    (lineage_dir / "report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    return report
+
+
+def run_workflow(
+    samples: list[Sample],
+    *,
+    output: Path,
+    threads: int,
+    lineage_jobs: int,
+    randomisation_jobs: int,
+    randomisations: int,
+    temporal_p_value: float,
+    min_samples: int,
+    seed: int,
+    force: bool,
+    context_manifest: Path | None = None,
+) -> dict[str, object]:
+    """Run every lineage through alignment, recombination and dating stages."""
+
+    check_tools()
+    output = output.expanduser().resolve()
+    output.mkdir(parents=True, exist_ok=True)
+    lineage_plan = plan(samples, min_samples=min_samples)
+    groups = group_samples(samples)
+    manifest_rows = read_context_manifest(context_manifest)
+    ready_items = [item for item in lineage_plan if item["status"] == "ready"]
+    resources = allocate_resources(
+        total_threads=threads,
+        lineage_jobs=lineage_jobs,
+        randomisation_jobs=randomisation_jobs,
+        ready_lineages=len(ready_items),
+    )
+
+    def run_ready_item(indexed_item: tuple[int, dict[str, object]]) -> dict[str, object]:
+        index, item = indexed_item
+        key = (str(item["species"]), str(item["lineage"]))
+        try:
+            return _run_lineage(
+                item,
+                groups[key],
+                output=output,
+                threads=resources.threads_per_lineage,
+                randomisation_jobs=resources.randomisation_workers_per_lineage,
                 randomisations=randomisations,
-                seed=seed,
-                output=temporal_path,
-            )
-        else:
-            temporal = json.loads(temporal_path.read_text(encoding="utf-8"))
-
-        observed = temporal["observed"]
-        temporal_supported = bool(
-            observed["rate"] > 0
-            and temporal["successful_randomisations"] == randomisations
-            and temporal["p_value_r_squared"] <= temporal_p_value
-        )
-
-        time_tree = lineage_dir / "timetree" / "timetree.nexus"
-        if temporal_supported:
-            _run_command(
-                [
-                    "treetime",
-                    "--tree",
-                    str(tree),
-                    "--dates",
-                    str(metadata),
-                    "--name-column",
-                    "sample_id",
-                    "--date-column",
-                    "collection_date",
-                    "--sequence-length",
-                    str(sequence_length),
-                    "--confidence",
-                    "--time-marginal",
-                    "only-final",
-                    "--reroot",
-                    "least-squares",
-                    "--outdir",
-                    str(lineage_dir / "timetree"),
-                ],
-                log=lineage_dir / "logs" / "timetree.log",
-                expected=time_tree,
+                temporal_p_value=temporal_p_value,
+                seed=seed + index,
                 force=force,
+                context_manifest_rows=manifest_rows,
             )
+        except (EvidenceError, OSError, WorkflowError) as error:
+            raise WorkflowError(f"Lineage {key[0]} / {key[1]} failed: {error}") from error
 
-        location_tree = time_tree if time_tree.exists() else tree
-        location_output = lineage_dir / "location" / "annotated_tree.nexus"
-        _run_command(
-            [
-                "treetime",
-                "mugration",
-                "--tree",
-                str(location_tree),
-                "--states",
-                str(states),
-                "--name-column",
-                "sample_id",
-                "--attribute",
-                "location",
-                "--confidence",
-                "--outdir",
-                str(lineage_dir / "location"),
-            ],
-            log=lineage_dir / "logs" / "location.log",
-            expected=location_output,
-            force=force,
-        )
+    completed_by_slug: dict[str, dict[str, object]] = {}
+    if ready_items:
+        indexed_items = list(enumerate(ready_items))
+        with ThreadPoolExecutor(max_workers=resources.lineage_workers) as executor:
+            for report in executor.map(run_ready_item, indexed_items):
+                completed_by_slug[str(report["slug"])] = report
 
-        report = {
-            **item,
-            "reference_path": str(reference.assembly),
-            "sequence_length": sequence_length,
-            "temporal_signal_supported": temporal_supported,
-            "temporal_signal": temporal,
-            "outputs": {
-                "alignment": str(alignment),
-                "tree": str(tree),
-                "recombination_gff": str(gff),
-                "masked_alignment": str(masked),
-                "timetree": str(time_tree) if time_tree.exists() else None,
-                "location_tree": str(location_output),
-            },
-        }
-        (lineage_dir / "report.json").write_text(
-            json.dumps(report, indent=2) + "\n", encoding="utf-8"
-        )
-        reports.append(report)
+    reports = [
+        completed_by_slug[str(item["slug"])] if item["status"] == "ready" else item
+        for item in lineage_plan
+    ]
 
     summary = {
         "workflow": "beyondmlst",
+        "resources": asdict(resources),
         "lineages": reports,
+        "context_manifest": str(context_manifest.expanduser().resolve())
+        if context_manifest
+        else None,
         "guardrail": (
             "Location-state reconstructions are exploratory and do not by themselves establish "
             "direct transmission or a definitive number of introductions."
         ),
     }
+    summary["report"] = str(write_summary_report(summary, output=output))
     (output / "summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     return summary

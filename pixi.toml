@@ -2,16 +2,19 @@
 authors = ["Nabil-Fareed Alikhan <nabil.alikhan@cgps.group>"]
 channels = ["conda-forge", "bioconda"]
 name = "beyondmlst"
-platforms = ["osx-64", "linux-64", "linux-aarch64"]
+platforms = ["osx-arm64", "osx-64", "linux-64", "linux-aarch64"]
 version = "0.1.0"
 
 [dependencies]
-python = "3.10.*"
-gubbins = ">=3.4.3,<3.5"
+python = "3.11.*"
+clonalframeml = ">=1.20,<1.21"
+iqtree = ">=2.4,<4"
+ska2 = ">=0.5.1,<0.6"
 treetime = ">=0.12.1,<0.13"
 
 [pypi-dependencies]
 beyondmlst = { path = ".", editable = true }
+atbfetcher = { git = "https://github.com/happykhan/atbfetcher.git", rev = "4c1b936137ba3dbe125ac7cf612d19a1a0d5a7df" }
 
 [tasks]
 beyondmlst = "beyondmlst"

@@ -7,6 +7,7 @@ import random
 import re
 import subprocess
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from beyondmlst.metadata import Sample
@@ -31,8 +32,49 @@ def parse_clock(path: Path) -> dict[str, float]:
 def _write_dates(path: Path, samples: list[Sample], dates: list[str] | None = None) -> None:
     values = dates if dates is not None else [sample.collection_date for sample in samples]
     rows = ["sample_id,collection_date"]
-    rows.extend(f"{sample.sample_id},{value}" for sample, value in zip(samples, values, strict=True))
+    rows.extend(
+        f"{sample.sample_id},{value}" for sample, value in zip(samples, values, strict=True)
+    )
     path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+
+def _run_randomised_clock(
+    *,
+    tree: Path,
+    sequence_length: int,
+    date_path: Path,
+    run_dir: Path,
+) -> dict[str, float] | None:
+    """Run one independent TreeTime clock permutation."""
+
+    command = [
+        "treetime",
+        "clock",
+        "--tree",
+        str(tree),
+        "--dates",
+        str(date_path),
+        "--name-column",
+        "sample_id",
+        "--date-column",
+        "collection_date",
+        "--sequence-length",
+        str(sequence_length),
+        "--reroot",
+        "least-squares",
+        "--allow-negative-rate",
+        "--clock-filter",
+        "0",
+        "--outdir",
+        str(run_dir),
+        "--verbose",
+        "0",
+    ]
+    completed = subprocess.run(command, capture_output=True, text=True, check=False)
+    clock_path = run_dir / "molecular_clock.txt"
+    if completed.returncode != 0 or not clock_path.is_file():
+        return None
+    return parse_clock(clock_path)
 
 
 def run_date_randomisation(
@@ -42,10 +84,14 @@ def run_date_randomisation(
     samples: list[Sample],
     observed_clock: Path,
     randomisations: int,
+    randomisation_jobs: int,
     seed: int,
     output: Path,
 ) -> dict[str, object]:
     """Compare observed root-to-tip fit with date-permuted TreeTime fits."""
+
+    if randomisation_jobs < 1:
+        raise ValueError("randomisation_jobs must be at least 1")
 
     observed = parse_clock(observed_clock)
     random_metrics: list[dict[str, float]] = []
@@ -55,40 +101,30 @@ def run_date_randomisation(
     if randomisations > 0:
         with tempfile.TemporaryDirectory(prefix="date-randomisation-", dir=output.parent) as tmp:
             temporary = Path(tmp)
+            jobs: list[tuple[Path, Path]] = []
             for index in range(randomisations):
                 shuffled = original_dates.copy()
                 rng.shuffle(shuffled)
                 date_path = temporary / f"dates_{index:04d}.csv"
                 run_dir = temporary / f"run_{index:04d}"
                 _write_dates(date_path, samples, shuffled)
-                command = [
-                    "treetime",
-                    "clock",
-                    "--tree",
-                    str(tree),
-                    "--dates",
-                    str(date_path),
-                    "--name-column",
-                    "sample_id",
-                    "--date-column",
-                    "collection_date",
-                    "--sequence-length",
-                    str(sequence_length),
-                    "--reroot",
-                    "least-squares",
-                    "--outdir",
-                    str(run_dir),
-                    "--verbose",
-                    "0",
-                ]
-                completed = subprocess.run(command, capture_output=True, text=True, check=False)
-                clock_path = run_dir / "molecular_clock.txt"
-                if completed.returncode == 0 and clock_path.is_file():
-                    random_metrics.append(parse_clock(clock_path))
+                jobs.append((date_path, run_dir))
 
-    exceedances = sum(
-        metric["r_squared"] >= observed["r_squared"] for metric in random_metrics
-    )
+            def run_job(job: tuple[Path, Path]) -> dict[str, float] | None:
+                date_path, run_dir = job
+                return _run_randomised_clock(
+                    tree=tree,
+                    sequence_length=sequence_length,
+                    date_path=date_path,
+                    run_dir=run_dir,
+                )
+
+            workers = min(randomisation_jobs, randomisations)
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                metrics = executor.map(run_job, jobs)
+                random_metrics.extend(metric for metric in metrics if metric is not None)
+
+    exceedances = sum(metric["r_squared"] >= observed["r_squared"] for metric in random_metrics)
     p_value = (exceedances + 1) / (len(random_metrics) + 1)
     result: dict[str, object] = {
         "observed": observed,
