@@ -14,4 +14,5 @@ tmp/
 validation/**/assemblies/
 validation/**/atb_assemblies/
 validation/**/results/
+validation/**/fast_results/
 validation/**/source/

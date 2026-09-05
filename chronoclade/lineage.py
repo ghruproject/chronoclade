@@ -16,10 +16,12 @@ from chronoclade.evidence import build_public_health_evidence
 from chronoclade.metadata import Sample, select_reference
 from chronoclade.report import (
     assess_temporal_signal,
+    write_fast_lineage_report,
     write_lineage_report,
     write_supporting_bundle,
 )
-from chronoclade.temporal import run_date_randomisation
+from chronoclade.recombination import run_phipack_filter
+from chronoclade.temporal import file_sha256, run_date_randomisation, run_full_tree_date_randomisation
 
 
 @dataclass(frozen=True)
@@ -41,6 +43,12 @@ class LineageFiles:
     tree: Path
     importations: Path
     filtered_alignment: Path
+    phipack_filtered_alignment: Path
+    phipack_profile: Path
+    phipack_regions: Path
+    phipack_summary: Path
+    fast_iqtree_prefix: Path
+    fast_tree: Path
     clock_dir: Path
     clock_file: Path
     temporal_signal: Path
@@ -65,6 +73,12 @@ class LineageFiles:
             tree=directory / "clonalframeml.labelled_tree.newick",
             importations=directory / "clonalframeml.importation_status.txt",
             filtered_alignment=directory / "clonalframeml.filtered.fasta",
+            phipack_filtered_alignment=directory / "phipack.filtered.fasta",
+            phipack_profile=directory / "phipack_profile.tsv",
+            phipack_regions=directory / "phipack_recombination_regions.tsv",
+            phipack_summary=directory / "phipack_summary.json",
+            fast_iqtree_prefix=directory / "iqtree_fast",
+            fast_tree=directory / "iqtree_fast.treefile",
             clock_dir=directory / "clock",
             clock_file=directory / "clock" / "molecular_clock.txt",
             temporal_signal=directory / "temporal_signal.json",
@@ -341,7 +355,8 @@ def _run_core_phylogeny(
     reference: Sample,
     threads: int,
     force: bool,
-) -> None:
+    mode: str,
+) -> tuple[Path, Path, dict[str, object] | None]:
     mapping_stages = [
         (
             [
@@ -398,6 +413,39 @@ def _run_core_phylogeny(
             f"{names}. Verify their accessions, species and lineage assignment, or split the "
             f"input lineage. Evidence: {files.coherence_screen}"
         )
+
+    if mode == "fast":
+        phipack = run_phipack_filter(
+            alignment=files.alignment,
+            reference=reference.assembly,
+            output_alignment=files.phipack_filtered_alignment,
+            profile_output=files.phipack_profile,
+            regions_output=files.phipack_regions,
+            summary_output=files.phipack_summary,
+            threads=threads,
+            force=force,
+        )
+        _run_command(
+            [
+                "iqtree",
+                "-s",
+                str(files.phipack_filtered_alignment),
+                "-m",
+                "GTR+G",
+                "--fast",
+                "-T",
+                str(threads),
+                "-pre",
+                str(files.fast_iqtree_prefix),
+                "-redo",
+            ],
+            log=files.directory / "logs" / "iqtree_fast.log",
+            expected=files.fast_tree,
+            force=force,
+            cwd=files.directory,
+            inputs=(files.phipack_filtered_alignment,),
+        )
+        return files.fast_tree, files.phipack_filtered_alignment, phipack
 
     phylogeny_stages = [
         (
@@ -457,15 +505,18 @@ def _run_core_phylogeny(
             f"outlier(s): {names}. Verify their accessions and lineage assignment before "
             f"temporal analysis. Evidence: {files.clonal_coherence_screen}"
         )
+    return files.tree, files.filtered_alignment, None
 
 
-def _run_observed_clock(files: LineageFiles, sequence_length: int, force: bool) -> None:
+def _run_observed_clock(
+    files: LineageFiles, tree: Path, sequence_length: int, force: bool
+) -> None:
     _run_command(
         [
             "treetime",
             "clock",
             "--tree",
-            str(files.tree),
+            str(tree),
             "--dates",
             str(files.metadata),
             "--name-column",
@@ -487,7 +538,7 @@ def _run_observed_clock(files: LineageFiles, sequence_length: int, force: bool) 
         log=files.directory / "logs" / "clock.log",
         expected=files.clock_file,
         force=force,
-        inputs=(files.tree, files.metadata),
+        inputs=(tree, files.metadata),
     )
 
 
@@ -499,14 +550,26 @@ def _temporal_signal(
     randomisation_jobs: int,
     seed: int,
     force: bool,
+    tree: Path,
+    method: str,
+    observed_clock: Path,
 ) -> dict[str, object]:
     if not force and files.temporal_signal.exists():
-        return json.loads(files.temporal_signal.read_text(encoding="utf-8"))
-    return run_date_randomisation(
-        tree=files.tree,
+        previous = json.loads(files.temporal_signal.read_text(encoding="utf-8"))
+        if (
+            previous.get("method", "root_to_tip") == method
+            and int(previous.get("requested_randomisations", -1)) == randomisations
+            and int(previous.get("seed", -1)) == seed
+            and int(previous.get("sequence_length", -1)) == sequence_length
+            and previous.get("tree_sha256") == file_sha256(tree)
+        ):
+            return previous
+    runner = run_full_tree_date_randomisation if method == "full_tree" else run_date_randomisation
+    return runner(
+        tree=tree,
         sequence_length=sequence_length,
         samples=members,
-        observed_clock=files.clock_file,
+        observed_clock=observed_clock,
         randomisations=randomisations,
         randomisation_jobs=randomisation_jobs,
         seed=seed,
@@ -514,13 +577,20 @@ def _temporal_signal(
     )
 
 
-def _run_dated_tree(files: LineageFiles, sequence_length: int, force: bool) -> None:
+def _run_dated_tree(
+    files: LineageFiles,
+    sequence_length: int,
+    force: bool,
+    tree: Path | None = None,
+    *,
+    reroot: bool = False,
+) -> None:
     rooted_tree = files.clock_dir / "rerooted.newick"
-    _run_command(
-        [
+    input_tree = tree if tree is not None else files.tree
+    command = [
             "treetime",
             "--tree",
-            str(rooted_tree),
+            str(input_tree if reroot else rooted_tree),
             "--dates",
             str(files.metadata),
             "--name-column",
@@ -532,7 +602,6 @@ def _run_dated_tree(files: LineageFiles, sequence_length: int, force: bool) -> N
             "--confidence",
             "--time-marginal",
             "only-final",
-            "--keep-root",
             "--covariation",
             "--clock-filter",
             "0",
@@ -542,11 +611,17 @@ def _run_dated_tree(files: LineageFiles, sequence_length: int, force: bool) -> N
             "root_to_tip_regression.svg",
             "--outdir",
             str(files.directory / "timetree"),
-        ],
+        ]
+    if reroot:
+        command.extend(["--reroot", "least-squares"])
+    else:
+        command.append("--keep-root")
+    _run_command(
+        command,
         log=files.directory / "logs" / "timetree.log",
         expected=files.time_tree,
         force=force,
-        inputs=(rooted_tree, files.metadata),
+        inputs=((input_tree if reroot else rooted_tree), files.metadata),
     )
 
 
@@ -592,6 +667,8 @@ def _report_record(
 
     return {
         **item,
+        "analysis_mode": "full",
+        "date_randomisation_method": temporal.get("method", "root_to_tip"),
         "reference_path": str(reference.assembly),
         "alignment_length": alignment_length(files.alignment),
         "complete_alignment_sites": sequence_length,
@@ -650,6 +727,8 @@ def _run_lineage(
     seed: int,
     force: bool,
     context_manifest_rows: list[dict[str, str]],
+    mode: str,
+    date_randomisation_method: str,
 ) -> dict[str, object]:
     """Run one ready lineage; independent lineages may call this concurrently."""
 
@@ -658,16 +737,64 @@ def _run_lineage(
     reference = select_reference(members)
     _write_lineage_inputs(files.directory, members)
     context_summary = context_evidence(members, context_manifest_rows, directory=files.directory)
-    _run_core_phylogeny(files, members, reference, threads, force)
-    sequence_length = complete_alignment_sites(files.alignment)
-    _run_observed_clock(files, sequence_length, force)
+    tree, filtered_alignment, recombination = _run_core_phylogeny(
+        files, members, reference, threads, force, mode
+    )
+    sequence_length = complete_alignment_sites(filtered_alignment)
+    _run_observed_clock(files, tree, sequence_length, force)
+    observed_clock = files.clock_file
+    if date_randomisation_method == "full_tree":
+        _run_dated_tree(files, sequence_length, force, tree, reroot=True)
+        observed_clock = files.directory / "timetree" / "molecular_clock.txt"
     temporal = _temporal_signal(
-        files, members, sequence_length, randomisations, randomisation_jobs, seed, force
+        files,
+        members,
+        sequence_length,
+        randomisations,
+        randomisation_jobs,
+        seed,
+        force,
+        tree,
+        date_randomisation_method,
+        observed_clock,
     )
     assessment = assess_temporal_signal(temporal, p_value_threshold=temporal_p_value)
+    if mode == "fast":
+        report = {
+            **item,
+            "analysis_mode": "fast",
+            "date_randomisation_method": "root_to_tip",
+            "reference_path": str(reference.assembly),
+            "alignment_length": alignment_length(files.alignment),
+            "complete_alignment_sites": sequence_length,
+            "temporal_status": assessment["code"],
+            "temporal_signal_reason": assessment["reason"],
+            "temporal_signal_supported": bool(assessment["supported"]),
+            "temporal_signal": temporal,
+            "recombination": recombination,
+            "outputs": {
+                "alignment": str(files.alignment),
+                "lineage_coherence": str(files.coherence_screen),
+                "phipack_filtered_alignment": str(files.phipack_filtered_alignment),
+                "phipack_profile": str(files.phipack_profile),
+                "phipack_regions": str(files.phipack_regions),
+                "screening_tree": str(files.fast_tree),
+                "root_to_tip_plot": str(files.clock_dir / "root_to_tip_regression.svg"),
+                "date_randomisation_csv": str(files.directory / "date_randomisation.csv"),
+                "html_report": str(files.directory / "report.html"),
+            },
+        }
+        (files.directory / "report.json").write_text(
+            json.dumps(report, indent=2) + "\n", encoding="utf-8"
+        )
+        write_fast_lineage_report(
+            report, directory=files.directory, p_value_threshold=temporal_p_value
+        )
+        write_supporting_bundle(files.directory)
+        return report
     rooted_tree = files.clock_dir / "rerooted.newick"
     public_health = build_public_health_evidence(
-        filtered_alignment=files.filtered_alignment,
+        filtered_alignment=filtered_alignment,
         rooted_tree=rooted_tree if rooted_tree.is_file() else files.tree,
         samples=members,
         output=files.directory,
@@ -675,7 +802,8 @@ def _run_lineage(
     )
     temporal_supported = bool(assessment["supported"])
     if temporal_supported:
-        _run_dated_tree(files, sequence_length, force)
+        if date_randomisation_method != "full_tree":
+            _run_dated_tree(files, sequence_length, force, tree)
     time_tree_available = temporal_supported and files.time_tree.exists()
     _run_location_tree(files, files.time_tree if time_tree_available else files.tree, force)
     report = _report_record(

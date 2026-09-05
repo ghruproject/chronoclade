@@ -6,6 +6,12 @@ accounts for recombination with ClonalFrameML, examines the root-to-tip
 relationship, and runs a date-randomisation test. TreeTime estimates a dated
 phylogeny only when the temporal-signal test passes.
 
+Two analysis modes are available. `full` uses ClonalFrameML and can use either
+the quick root-to-tip permutation screen or complete TreeTime refits. `fast`
+uses a Parsnp-style PhiPack Profile screen followed by root-to-tip permutations;
+it is triage and deliberately does not produce a dated tree or an epidemiological
+interpretation.
+
 The workflow is intended for longitudinal surveillance within a species and
 lineage, such as an MLST sequence type. Public context genomes can be added to
 help distinguish a sampled local lineage from separate introductions. The final
@@ -56,6 +62,22 @@ pixi run chronoclade run metadata.csv \
   --threads 8 \
   --lineage-jobs 2 \
   --randomisation-jobs 4 \
+  --date-randomisations 100
+```
+
+For a quick screen:
+
+```bash
+pixi run chronoclade run metadata.csv --mode fast --date-randomisations 100
+```
+
+For the more demanding date-randomisation test, refitting the full TreeTime
+model after every permutation:
+
+```bash
+pixi run chronoclade run metadata.csv \
+  --mode full \
+  --date-randomisation-method full-tree \
   --date-randomisations 100
 ```
 
@@ -133,8 +155,9 @@ ChronoClade uses SKA2 for reference-ordered whole-genome alignment, IQ-TREE for
 the starting maximum-likelihood phylogeny, ClonalFrameML to account for
 recombination, and TreeTime for clock analysis and time scaling. The observed
 root-to-tip fit is compared with fits obtained after permuting collection dates.
-The default gate requires a positive clock rate and an empirical p-value of
-0.05 or less.
+The default screen requires a positive clock rate and an empirical R²
+permutation p-value of 0.05 or less. The optional full-tree test reruns the
+complete TreeTime fit and applies the stricter CR2 rate-interval rule.
 
 Root-to-tip regression is a diagnostic rather than a formal test. Population
 structure, biased sampling, date uncertainty and residual recombination can all

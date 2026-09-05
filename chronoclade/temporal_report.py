@@ -30,7 +30,7 @@ def assess_temporal_signal(
     rate = float(observed["rate"])
     requested = int(temporal["requested_randomisations"])
     successful = int(temporal["successful_randomisations"])
-    p_value = float(temporal["p_value_r_squared"])
+    method = str(temporal.get("method", "root_to_tip"))
 
     if requested == 0:
         return {
@@ -52,17 +52,40 @@ def assess_temporal_signal(
     if rate <= 0:
         return {
             "code": "not_supported",
-            "label": "Temporal signal not supported",
+            "label": "Temporal-signal screen failed",
             "reason": (
                 "The estimated evolutionary rate was not positive. Sampling dates do not "
                 "support reliable time scaling for this lineage."
             ),
             "supported": False,
         }
+    if method == "full_tree":
+        if not bool(temporal.get("cr2_passed", False)):
+            overlaps = int(temporal.get("cr2_overlapping_randomisations", 0))
+            return {
+                "code": "not_supported",
+                "label": "Full TreeTime randomisation screen failed",
+                "reason": (
+                    "The observed approximate 95% rate interval overlapped "
+                    f"{overlaps} interval(s) from the date-randomised full model fits."
+                ),
+                "supported": False,
+            }
+        return {
+            "code": "supported",
+            "label": "Full TreeTime randomisation screen passed",
+            "reason": (
+                "The observed approximate 95% rate interval did not overlap any interval "
+                "from the date-randomised full TreeTime fits (strict CR2 rule)."
+            ),
+            "supported": True,
+        }
+
+    p_value = float(temporal["p_value_r_squared"])
     if p_value > p_value_threshold:
         return {
             "code": "not_supported",
-            "label": "Temporal signal not supported",
+            "label": "Root-to-tip permutation screen failed",
             "reason": (
                 f"The observed root-to-tip fit was not stronger than randomised dates at the "
                 f"predefined threshold (p={p_value:.3g}; threshold={p_value_threshold:.3g})."
@@ -71,7 +94,7 @@ def assess_temporal_signal(
         }
     return {
         "code": "supported",
-        "label": "Temporal signal supported",
+        "label": "Root-to-tip permutation screen passed",
         "reason": (
             "The lineage has a positive estimated rate and its observed root-to-tip fit was "
             "stronger than expected after randomly permuting sampling dates."
@@ -134,29 +157,63 @@ def write_randomisation_csv(temporal: dict[str, object], output: Path) -> Path:
     with output.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(
             handle,
-            fieldnames=["analysis", "permutation", "rate", "r_squared", "exceeds_observed"],
+            fieldnames=[
+                "method",
+                "analysis",
+                "permutation",
+                "rate",
+                "rate_std",
+                "rate_lower_95",
+                "rate_upper_95",
+                "r_squared",
+                "exceeds_observed",
+                "overlaps_observed_rate_interval",
+            ],
         )
         writer.writeheader()
         observed_rate = observed_metric(temporal, "rate")
         observed_r_squared = observed_metric(temporal, "r_squared")
         writer.writerow(
             {
+                "method": temporal.get("method", "root_to_tip"),
                 "analysis": "observed",
                 "permutation": "",
                 "rate": observed_rate,
                 "r_squared": observed_r_squared,
                 "exceeds_observed": "",
+                "rate_std": temporal["observed"].get("rate_std", ""),
+                "rate_lower_95": temporal["observed"].get("rate_lower_95", ""),
+                "rate_upper_95": temporal["observed"].get("rate_upper_95", ""),
+                "overlaps_observed_rate_interval": "",
             }
         )
         for index, value in enumerate(randomised, start=1):
             r_squared = float(value["r_squared"])
             writer.writerow(
                 {
+                    "method": temporal.get("method", "root_to_tip"),
                     "analysis": "date_randomisation",
                     "permutation": index,
                     "rate": float(value["rate"]),
                     "r_squared": r_squared,
                     "exceeds_observed": str(r_squared >= observed_r_squared).lower(),
+                    "rate_std": value.get("rate_std", ""),
+                    "rate_lower_95": value.get("rate_lower_95", ""),
+                    "rate_upper_95": value.get("rate_upper_95", ""),
+                    "overlaps_observed_rate_interval": (
+                        str(
+                            max(
+                                float(value.get("rate_lower_95", float("inf"))),
+                                float(temporal["observed"].get("rate_lower_95", float("-inf"))),
+                            )
+                            <= min(
+                                float(value.get("rate_upper_95", float("-inf"))),
+                                float(temporal["observed"].get("rate_upper_95", float("inf"))),
+                            )
+                        ).lower()
+                        if temporal.get("method") == "full_tree"
+                        else ""
+                    ),
                 }
             )
     return output
@@ -195,8 +252,40 @@ def write_randomisation_png(temporal: dict[str, object], output: Path) -> Path:
         axis.set_xlabel(label, color="#343842")
         axis.set_ylabel("Permutations", color="#343842")
         axis.legend(frameon=False, fontsize=9)
+    if temporal.get("method") == "full_tree":
+        interval_axis = axes[1]
+        interval_axis.clear()
+        _plot_style(interval_axis)
+        for index, value in enumerate(randomised, start=1):
+            lower = float(value["rate_lower_95"])
+            upper = float(value["rate_upper_95"])
+            interval_axis.hlines(index, lower, upper, color="#6285a3", linewidth=1.2, alpha=0.6)
+            interval_axis.plot(float(value["rate"]), index, ".", color="#2855a6", markersize=3)
+        observed = temporal["observed"]
+        observed_y = len(randomised) + 2
+        interval_axis.hlines(
+            observed_y,
+            float(observed["rate_lower_95"]),
+            float(observed["rate_upper_95"]),
+            color="#d63c2f",
+            linewidth=3,
+            label="Observed approximate 95% interval",
+        )
+        interval_axis.plot(float(observed["rate"]), observed_y, "o", color="#d63c2f", markersize=5)
+        interval_axis.set_title(
+            "Rate-interval separation", loc="left", fontsize=12, fontweight="bold", color="#17191f"
+        )
+        interval_axis.set_xlabel("Substitutions/site/year", color="#343842")
+        interval_axis.set_ylabel("Randomised full fit", color="#343842")
+        interval_axis.legend(frameon=False, fontsize=9)
+    title = (
+        "Full TreeTime tip-date randomisation · strict CR2 "
+        + ("passed" if bool(temporal.get("cr2_passed")) else "failed")
+        if temporal.get("method") == "full_tree"
+        else f"Root-to-tip date randomisation · empirical p={float(temporal['p_value_r_squared']):.3g}"
+    )
     figure.suptitle(
-        f"Date randomisation · empirical p={float(temporal['p_value_r_squared']):.3g}",
+        title,
         x=0.01,
         ha="left",
         fontsize=14,
@@ -607,7 +696,7 @@ def write_randomisation_plot(temporal: dict[str, object], output: Path) -> Path:
     rates = [float(value["rate"]) for value in randomised]
     observed_r_squared = observed_metric(temporal, "r_squared")
     observed_rate = observed_metric(temporal, "rate")
-    p_value = float(temporal["p_value_r_squared"])
+    method = str(temporal.get("method", "root_to_tip"))
     requested = int(temporal["requested_randomisations"])
     successful = int(temporal["successful_randomisations"])
 
@@ -619,13 +708,52 @@ def write_randomisation_plot(temporal: dict[str, object], output: Path) -> Path:
         x_label="R²",
         formatter=".3g",
     )
-    right = _histogram_panel(
-        rates,
-        observed=observed_rate,
-        x=470,
-        title="Clock rate under randomised dates",
-        x_label="Substitutions/site/year",
-        formatter=".2e",
+    if method == "full_tree":
+        observed = temporal["observed"]
+        all_bounds = [
+            bound
+            for value in [observed, *randomised]
+            for bound in (float(value["rate_lower_95"]), float(value["rate_upper_95"]))
+        ]
+        lower, upper = min(all_bounds), max(all_bounds)
+        span = upper - lower or 1.0
+
+        def x_position(value: float) -> float:
+            return 495 + (value - lower) / span * 370
+
+        interval_lines = []
+        count = max(1, len(randomised))
+        for index, value in enumerate(randomised):
+            y = 92 + index / count * 176
+            interval_lines.append(
+                f'<line x1="{x_position(float(value["rate_lower_95"])):.2f}" y1="{y:.2f}" '
+                f'x2="{x_position(float(value["rate_upper_95"])):.2f}" y2="{y:.2f}" '
+                'stroke="#6285a3" stroke-width="1.3" opacity=".6"/>'
+            )
+        observed_y = 286
+        right = f"""<g>
+          <text x="470" y="28" class="title">Rate-interval separation</text>
+          <rect x="485" y="52" width="390" height="252" class="plot-bg"/>
+          {''.join(interval_lines)}
+          <line x1="{x_position(float(observed['rate_lower_95'])):.2f}" y1="{observed_y}" x2="{x_position(float(observed['rate_upper_95'])):.2f}" y2="{observed_y}" class="observed"/>
+          <circle cx="{x_position(observed_rate):.2f}" cy="{observed_y}" r="4" fill="#c6403d"/>
+          <text x="485" y="326" class="tick">{lower:.2e}</text><text x="875" y="326" text-anchor="end" class="tick">{upper:.2e}</text>
+          <text x="680" y="350" text-anchor="middle" class="axis-label">Substitutions/site/year · observed interval in red</text>
+        </g>"""
+    else:
+        right = _histogram_panel(
+            rates,
+            observed=observed_rate,
+            x=470,
+            title="Clock rate under randomised dates",
+            x_label="Substitutions/site/year",
+            formatter=".2e",
+        )
+    footer = (
+        f"{successful} of {requested} full TreeTime refits completed · strict CR2 "
+        + ("passed" if bool(temporal.get("cr2_passed")) else "failed")
+        if method == "full_tree"
+        else f"{successful} of {requested} permutations completed · root-to-tip randomisation p={float(temporal['p_value_r_squared']):.3g}"
     )
     svg = f"""<svg xmlns="http://www.w3.org/2000/svg" width="920" height="390" viewBox="0 0 920 390" role="img" aria-labelledby="title description">
   <title id="title">Date-randomisation comparison</title>
@@ -644,7 +772,7 @@ def write_randomisation_plot(temporal: dict[str, object], output: Path) -> Path:
   </style>
   {left}
   {right}
-  <text x="460" y="372" text-anchor="middle" class="footer">{successful} of {requested} permutations completed · root-to-tip randomisation p={p_value:.3g}</text>
+  <text x="460" y="372" text-anchor="middle" class="footer">{escape(footer)}</text>
 </svg>
 """
     output.write_text(svg, encoding="utf-8")

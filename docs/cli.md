@@ -2,7 +2,7 @@
 
 ## `chronoclade preflight`
 
-Reports whether SKA2, IQ-TREE, ClonalFrameML and TreeTime are available in the
+Reports whether SKA2, IQ-TREE, ClonalFrameML, PhiPack Profile and TreeTime are available in the
 active environment.
 
 ```bash
@@ -32,12 +32,19 @@ pixi run chronoclade run metadata.csv [OPTIONS]
 | `--lineage-jobs` | `2` | Maximum concurrent lineages |
 | `--randomisation-jobs` | `4` | Maximum TreeTime permutations per lineage |
 | `--date-randomisations` | `100` | Number of tip-date permutations |
+| `--mode` | `full` | `full` analysis or `fast` triage screen |
+| `--date-randomisation-method` | `root-to-tip` | `root-to-tip` screen or `full-tree` TreeTime refits |
 | `--temporal-p-value` | `0.05` | Temporal gate threshold |
 | `--min-samples` | `10` | Minimum genomes per lineage |
 | `--seed` | `20260818` | Randomisation seed |
 | `--context-manifest` | none | Frozen manifest from `prepare-context` |
 | `--force` | false | Rerun completed stages |
 | `--dry-run` | false | Validate and print the plan only |
+
+`--mode fast` always uses `root-to-tip`. It runs PhiPack Profile on separate
+reference FASTA records, builds a screening tree from the masked alignment and
+reports the root-to-tip permutation result. It does not produce a time-scaled
+tree or circulation/introduction interpretation.
 
 ## `chronoclade prepare-context`
 

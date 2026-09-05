@@ -38,10 +38,20 @@ times reliably.[^murray]
 
 ## Date-randomisation test
 
-ChronoClade permutes sampling dates among tips while retaining the corrected
-tree and sequence length. TreeTime repeats the same least-squares clock analysis
-for each permutation. The empirical one-sided p-value compares observed R² with
-the permutation distribution and includes a one-count correction.
+The default `root-to-tip` method permutes sampling dates among tips while
+retaining the corrected tree and sequence length. TreeTime repeats the same
+least-squares clock analysis for each permutation. The empirical one-sided
+p-value compares observed R² with the permutation distribution and includes a
+one-count correction. R² drives this screen; the accompanying rate distribution
+is descriptive.
+
+The optional `full-tree` method reruns the complete TreeTime dating fit for every
+permutation and re-estimates the root each time. ChronoClade reports the weak CR1
+and strict CR2 criteria used in bacterial tip-date randomisation tests. Its
+configured decision uses CR2: the observed approximate 95% rate interval must
+overlap none of the corresponding intervals from randomised-date fits. These are
+normal approximations from TreeTime's reported rate standard error, not Bayesian
+credible intervals.
 
 A dataset passes when:
 
@@ -53,6 +63,17 @@ The default is 100 permutations and p <= 0.05. This is a pragmatic gate for the
 workflow, not a universal definition of temporal signal. Structured datasets
 may require clustered permutations or sensitivity analyses that preserve known
 population groups.[^duche]
+
+## Fast screen
+
+Fast mode replaces ClonalFrameML with PhiPack's Profile program using Parsnp's
+100-site PHI window, 100-site step and p < 0.01 masking rule. Because SKA writes
+reference records consecutively, ChronoClade divides each record into bounded
+250 kb analysis blocks; a PHI calculation cannot cross a contig join. Ambiguous
+and missing calls remain inside their reference segment and are handled by
+PhiPack. The fixed blocks localise a screening call and bound runtime. They are
+not biological segments or Parsnp locally collinear blocks. Fast-mode output is
+suitable for triage, not final dating or public-health interpretation.
 
 ## Time scaling
 
@@ -85,7 +106,8 @@ not nearest among all public bacterial genomes.
 - Sagulenko P, Puller V, Neher RA. 2018. [TreeTime: Maximum-likelihood phylodynamic analysis](https://doi.org/10.1093/ve/vex042). *Virus Evolution* 4:vex042.
 - Didelot X, Croucher NJ, Bentley SD, Harris SR, Wilson DJ. 2018. [Bayesian inference of ancestral dates on bacterial phylogenetic trees](https://doi.org/10.1093/nar/gky783). *Nucleic Acids Research* 46:e134.
 - Didelot X, Wilson DJ. 2015. [ClonalFrameML: efficient inference of recombination in whole bacterial genomes](https://doi.org/10.1371/journal.pcbi.1004041). *PLoS Computational Biology* 11:e1004041.
-- Murray GGR et al. 2016. [The effect of genetic structure on molecular dating and tests for temporal signal](https://doi.org/10.1111/2041-210X.12500). *Methods in Ecology and Evolution* 7:80-89.
+- Bruen TC, Philippe H, Bryant D. 2006. [A simple and robust statistical test for detecting the presence of recombination](https://doi.org/10.1534/genetics.105.048975). *Genetics* 172:2665-2681.
+- Murray GGR et al. 2016. [The effect of genetic structure on molecular dating and tests for temporal signal](https://doi.org/10.1111/2041-210X.12466). *Methods in Ecology and Evolution* 7:80-89.
 
 [^murray]: Murray et al. showed that temporal and genetic structure can inflate root-to-tip regressions and date-randomisation tests.
 [^duche]: A clustered permutation should be considered when collection date is confounded with a well-supported genetic group.
