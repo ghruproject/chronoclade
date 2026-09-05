@@ -100,6 +100,9 @@ def test_lineage_report_contains_visuals_verdict_and_guardrail(tmp_path: Path) -
     (tmp_path / "clonal_snp_heatmap.svg").write_text(
         "<svg xmlns='http://www.w3.org/2000/svg'/>", encoding="utf-8"
     )
+    (tmp_path / "recombination_map.svg").write_text(
+        "<svg xmlns='http://www.w3.org/2000/svg'/>", encoding="utf-8"
+    )
     report = {
         "species": "E_coli",
         "lineage": "ST131",
@@ -108,6 +111,27 @@ def test_lineage_report_contains_visuals_verdict_and_guardrail(tmp_path: Path) -
         "first_collection_date": "2020-01",
         "last_collection_date": "2024-06",
         "complete_alignment_sites": 12345,
+        "recombination_masking": {
+            "inferred_importation_intervals": 8,
+            "branches_with_inferred_importation": 3,
+            "recombination_removed_sites": 2400,
+            "recombination_removed_percent": 1.2,
+            "incomplete_only_removed_sites": 400,
+            "incomplete_only_removed_percent": 0.2,
+            "retained_clonal_sites": 197200,
+            "retained_clonal_percent": 98.6,
+            "boundary_crossing_intervals": 0,
+            "longest_inferred_intervals": [
+                {
+                    "node": "NODE_12",
+                    "alignment_start": 1200,
+                    "alignment_end": 3599,
+                    "length": 2400,
+                    "reference_segments": ["chromosome:1200-3599"],
+                    "crosses_reference_record_boundary": False,
+                }
+            ],
+        },
         "temporal_signal": temporal_result(),
         "context": {
             "local_samples": 30,
@@ -204,6 +228,14 @@ def test_lineage_report_contains_visuals_verdict_and_guardrail(tmp_path: Path) -
     assert "Recombination-filtered genomic distances" in text
     assert "Candidate focal groups" in text
     assert "Patient-level sensitivity" in text
+    assert "Which parts of the alignment were inferred as recombinant?" in text
+    assert "does not mean that every sampled genome acquired that segment" in text
+    assert "Recombination removed" in text
+    assert "Incomplete-data removed" in text
+    assert "recombination_map.svg" in text
+    assert "Longest inferred intervals" in text
+    assert "1,200–3,599" in text
+    assert "chromosome:1200-3599" in text
     assert "clock/root_to_tip_regression.svg" in text
     assert "date_randomisation.svg" in text
     assert "Time-scaled phylogeny" in text

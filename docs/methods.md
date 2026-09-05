@@ -17,12 +17,23 @@ threshold or a transmission definition.
 
 IQ-TREE estimates the starting maximum-likelihood phylogeny with a GTR+G model.
 
-ClonalFrameML estimates recombination on that tree and writes a corrected tree
-plus an alignment of sites not assigned to imported regions. Pairwise clonal SNP
-counts use A, C, G and T sites callable in both members of each pair. The report
-always gives the callable-site count beside the SNP count. These corrected
-distances provide a second opportunity to identify unusual genomes after
-recombination has been modelled.
+ClonalFrameML estimates recombination on that tree and reports 1-based, closed
+alignment intervals for each affected branch. With `-output_filtered true` and
+`-ignore_incomplete_sites true`, it constructs one shared clonal alignment by
+removing every column assigned to an import on any branch and every column with
+an ambiguous base in any sequence. ChronoClade verifies that these two masks
+exactly account for the filtered-alignment length. It exports the original calls,
+a normalised interval table, a binned genome profile and SVG/PNG figures.
+Reference-record coordinates are recovered from the ordered reference FASTA.
+Intervals that cross a record boundary are retained for audit but flagged because
+the adjacency was introduced by concatenation rather than by the chromosome.
+
+A branch-level interval is evidence that ClonalFrameML assigned an import to
+that lineage of the tree; it does not mean that every sampled genome acquired
+the segment. Pairwise clonal SNP counts use A, C, G and T sites callable in both
+members of each pair. The report always gives the callable-site count beside the
+SNP count. These corrected distances provide a second opportunity to identify
+unusual genomes after recombination has been modelled.
 
 ## Root-to-tip analysis
 
