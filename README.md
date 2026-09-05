@@ -8,9 +8,10 @@ phylogeny only when the temporal-signal test passes.
 
 Two analysis modes are available. `full` uses ClonalFrameML and can use either
 the quick root-to-tip permutation screen or complete TreeTime refits. `fast`
-uses a Parsnp-style PhiPack Profile screen followed by root-to-tip permutations;
-it is triage and deliberately does not produce a dated tree or an epidemiological
-interpretation.
+uses PhiPack Profile to screen for recombination, then builds an uncorrected fast
+tree for root-to-tip permutations. It is triage: PhiPack does not localise or
+remove recombinant tracts here, and fast mode does not produce a dated tree or
+an epidemiological interpretation.
 
 The workflow is intended for longitudinal surveillance within a species and
 lineage, such as an MLST sequence type. Public context genomes can be added to

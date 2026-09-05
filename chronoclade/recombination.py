@@ -1,4 +1,4 @@
-"""Fast Parsnp-style recombination profiling with PhiPack."""
+"""Fast recombination screening with PhiPack Profile."""
 
 from __future__ import annotations
 
@@ -30,16 +30,10 @@ class ProfileChunk:
     contig_offset: int
     window_start: int
     window_end: int
-    keep_start: int
-    keep_end: int
 
 
-def _profile_chunks(
-    contig_lengths: list[int], sequences: dict[str, str]
-) -> list[ProfileChunk]:
+def _profile_chunks(contig_lengths: list[int]) -> list[ProfileChunk]:
     """Return bounded analysis blocks that never cross a reference-record join."""
-
-    del sequences  # Missing calls remain within their reference segment; PhiPack handles them.
 
     chunks: list[ProfileChunk] = []
     offset = 0
@@ -55,8 +49,6 @@ def _profile_chunks(
                     contig_offset=offset,
                     window_start=block_start,
                     window_end=block_end,
-                    keep_start=block_start,
-                    keep_end=block_end,
                 )
             )
         offset += length
@@ -71,23 +63,11 @@ def _write_fasta(path: Path, sequences: dict[str, str]) -> None:
                 handle.write(sequence[start : start + 80] + "\n")
 
 
-def _mask_sequence(sequence: str, regions: list[dict[str, object]]) -> str:
-    parts: list[str] = []
-    cursor = 0
-    for region in regions:
-        start = int(region["alignment_start"])
-        end = int(region["alignment_end"])
-        parts.extend((sequence[cursor:start], "N" * (end - start)))
-        cursor = end
-    parts.append(sequence[cursor:])
-    return "".join(parts)
-
-
 def _run_profile_chunk(
     chunk: ProfileChunk,
     sequences: dict[str, str],
     temporary: Path,
-) -> list[tuple[int, int, float]]:
+) -> list[tuple[int, int, int, int, float]]:
     run_dir = temporary / f"chunk_{chunk.index:04d}"
     run_dir.mkdir()
     alignment = run_dir / "alignment.fasta"
@@ -128,7 +108,7 @@ def _run_profile_chunk(
             f"see {run_dir / 'Profile.log'}"
         )
 
-    rows: list[tuple[int, int, float]] = []
+    rows: list[tuple[int, int, int, int, float]] = []
     for raw_line in profile.read_text(encoding="utf-8").splitlines():
         try:
             position_text, p_value_text = raw_line.split(",", maxsplit=1)
@@ -137,68 +117,39 @@ def _run_profile_chunk(
         except ValueError:
             continue
         contig_position = chunk.window_start + local_position
-        if chunk.keep_start <= contig_position < chunk.keep_end:
-            rows.append((chunk.contig, contig_position, p_value))
+        if chunk.window_start <= contig_position < chunk.window_end:
+            rows.append(
+                (
+                    chunk.contig,
+                    chunk.window_start,
+                    chunk.window_end,
+                    contig_position,
+                    p_value,
+                )
+            )
     return rows
 
 
-def _merged_mask(profile: list[tuple[int, int, float]], contig_lengths: list[int]) -> list[dict[str, object]]:
-    intervals: list[tuple[int, int, int, float]] = []
-    for contig, position, p_value in profile:
-        if p_value < 0 or p_value >= PROFILE_THRESHOLD:
-            continue
-        start = max(0, position - PROFILE_WINDOW // 2)
-        end = min(contig_lengths[contig - 1], position + PROFILE_WINDOW // 2)
-        intervals.append((contig, start, end, p_value))
-    intervals.sort()
-
-    merged: list[dict[str, object]] = []
-    offsets = [0]
-    for length in contig_lengths[:-1]:
-        offsets.append(offsets[-1] + length)
-    for contig, start, end, p_value in intervals:
-        if merged and int(merged[-1]["contig"]) == contig and start <= int(merged[-1]["end"]):
-            merged[-1]["end"] = max(int(merged[-1]["end"]), end)
-            merged[-1]["minimum_p_value"] = min(float(merged[-1]["minimum_p_value"]), p_value)
-            merged[-1]["profile_hits"] = int(merged[-1]["profile_hits"]) + 1
-            merged[-1]["alignment_end"] = offsets[contig - 1] + int(merged[-1]["end"])
-            continue
-        merged.append(
-            {
-                "contig": contig,
-                "start": start,
-                "end": end,
-                "alignment_start": offsets[contig - 1] + start,
-                "alignment_end": offsets[contig - 1] + end,
-                "minimum_p_value": p_value,
-                "profile_hits": 1,
-            }
-        )
-    return merged
-
-
-def run_phipack_filter(
+def run_phipack_screen(
     *,
     alignment: Path,
     reference: Path,
-    output_alignment: Path,
     profile_output: Path,
-    regions_output: Path,
+    significant_blocks_output: Path,
     summary_output: Path,
     threads: int,
     force: bool,
 ) -> dict[str, object]:
-    """Mask Parsnp-style PhiPack Profile regions without crossing contig joins."""
+    """Detect PHI-positive analysis blocks without claiming tract localisation."""
 
     alignment = alignment.expanduser().resolve()
     reference = reference.expanduser().resolve()
-    output_alignment = output_alignment.expanduser().resolve()
     profile_output = profile_output.expanduser().resolve()
-    regions_output = regions_output.expanduser().resolve()
+    significant_blocks_output = significant_blocks_output.expanduser().resolve()
     summary_output = summary_output.expanduser().resolve()
 
     if not force and all(
-        path.is_file() for path in (output_alignment, profile_output, regions_output, summary_output)
+        path.is_file() for path in (profile_output, significant_blocks_output, summary_output)
     ):
         return json.loads(summary_output.read_text(encoding="utf-8"))
 
@@ -210,7 +161,7 @@ def run_phipack_filter(
             "SKA alignment length does not equal the concatenated reference-contig length; "
             "PhiPack windows cannot be mapped safely"
         )
-    chunks = _profile_chunks(contig_lengths, sequences)
+    chunks = _profile_chunks(contig_lengths)
     if not chunks:
         raise WorkflowError("Reference contains no contig of at least 1,000 bases for PhiPack")
 
@@ -226,35 +177,36 @@ def run_phipack_filter(
     profile.sort()
     with profile_output.open("w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle, delimiter="\t")
-        writer.writerow(["reference_contig", "position", "p_value"])
+        writer.writerow(
+            ["reference_contig", "block_start", "block_end", "profile_position", "p_value"]
+        )
         writer.writerows(profile)
 
-    regions = _merged_mask(profile, contig_lengths)
-    with regions_output.open("w", newline="", encoding="utf-8") as handle:
-        fieldnames = [
-            "contig",
-            "start",
-            "end",
-            "alignment_start",
-            "alignment_end",
-            "minimum_p_value",
-            "profile_hits",
-        ]
-        writer = csv.DictWriter(handle, fieldnames=fieldnames, delimiter="\t")
-        writer.writeheader()
-        writer.writerows(regions)
-
-    masked = bytearray(alignment_size)
-    for region in regions:
-        masked[int(region["alignment_start"]) : int(region["alignment_end"])] = b"\x01" * (
-            int(region["alignment_end"]) - int(region["alignment_start"])
+    significant_results = [row for row in profile if 0 <= row[4] < PROFILE_THRESHOLD]
+    block_hits: dict[tuple[int, int, int], list[float]] = {}
+    for contig, block_start, block_end, _position, p_value in significant_results:
+        block_hits.setdefault((contig, block_start, block_end), []).append(p_value)
+    significant_blocks = [
+        (*block, min(p_values), len(p_values))
+        for block, p_values in sorted(block_hits.items())
+    ]
+    with significant_blocks_output.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle, delimiter="\t")
+        writer.writerow(
+            [
+                "reference_contig",
+                "block_start",
+                "block_end",
+                "minimum_p_value",
+                "significant_profile_positions",
+            ]
         )
-    filtered = {name: _mask_sequence(sequence, regions) for name, sequence in sequences.items()}
-    _write_fasta(output_alignment, filtered)
+        writer.writerows(significant_blocks)
 
-    valid_p_values = [p_value for _, _, p_value in profile if p_value >= 0]
+    valid_p_values = [row[4] for row in profile if row[4] >= 0]
     summary: dict[str, object] = {
-        "method": "parsnp_style_phipack_profile",
+        "method": "phipack_profile_screen",
+        "profile_settings_source": "Parsnp PhiPack Profile settings",
         "window_size": PROFILE_WINDOW,
         "step_size": PROFILE_STEP,
         "maximum_profile_block_size": PROFILE_BLOCK_SIZE,
@@ -262,14 +214,30 @@ def run_phipack_filter(
         "reference_contigs": len(contig_lengths),
         "tested_core_blocks": len(chunks),
         "profile_positions": len(profile),
+        "significant_profile_positions": len(significant_results),
         "minimum_p_value": min(valid_p_values) if valid_p_values else None,
-        "recombination_regions": len(regions),
-        "masked_alignment_sites": sum(masked),
-        "recombination_detected": bool(regions),
+        "significant_blocks": len(significant_blocks),
+        "recombination_detected": bool(significant_blocks),
+        "interpretation": (
+            "One or more blocks were PHI-positive at the unadjusted screening threshold; "
+            "run the full ClonalFrameML workflow before interpreting topology or dates."
+            if significant_blocks
+            else "No block was PHI-positive at the configured screening threshold."
+        ),
+        "multiple_testing_limit": (
+            "The p < 0.01 threshold is applied to each computational block without a "
+            "multiple-testing correction. This favours sensitivity for triage; a positive "
+            "screen is an escalation signal, not a recombination tract call."
+        ),
         "boundary_rule": (
             "Reference FASTA records were divided into bounded analysis blocks; no block crossed "
             "a reference-contig join. Ambiguous and missing calls remained within their reference "
             "segment and were handled by PhiPack."
+        ),
+        "localisation_limit": (
+            "The fixed blocks are computational screening units. A significant block indicates "
+            "PHI evidence of incompatibility somewhere within it; it does not localise a "
+            "recombinant tract and no alignment sites were masked."
         ),
     }
     summary_output.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")

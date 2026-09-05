@@ -47,10 +47,10 @@ completed stage can be reused.
 | File | Content |
 | --- | --- |
 | `phipack_profile.tsv` | PhiPack Profile positions and p-values, with reference-record coordinates |
-| `phipack_recombination_regions.tsv` | Significant regions masked before the screening tree |
-| `phipack_summary.json` | Parameters, tested blocks, calls and boundary rule |
-| `phipack.filtered.fasta` | Alignment supplied to the fast-mode IQ-TREE run |
-| `iqtree_fast.treefile` | Screening phylogeny used for root-to-tip analysis |
+| `phipack_significant_blocks.tsv` | PHI-positive profile results and their computational block coordinates |
+| `phipack_summary.json` | Parameters, tested blocks, detection result and interpretation limits |
+| `core_alignment.fasta` | Uncorrected SKA alignment supplied to the fast-mode IQ-TREE run |
+| `iqtree_fast.treefile` | Uncorrected screening phylogeny used for root-to-tip analysis |
 
 ## Context preparation
 

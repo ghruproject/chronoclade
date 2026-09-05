@@ -4,7 +4,6 @@ from types import SimpleNamespace
 import pytest
 
 from chronoclade import recombination
-from chronoclade.evidence import read_alignment
 
 
 def test_phipack_profile_respects_reference_contig_boundaries(
@@ -24,12 +23,11 @@ def test_phipack_profile_respects_reference_contig_boundaries(
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(recombination.subprocess, "run", fake_run)
-    summary = recombination.run_phipack_filter(
+    summary = recombination.run_phipack_screen(
         alignment=alignment,
         reference=reference,
-        output_alignment=tmp_path / "filtered.fasta",
         profile_output=tmp_path / "profile.tsv",
-        regions_output=tmp_path / "regions.tsv",
+        significant_blocks_output=tmp_path / "significant_blocks.tsv",
         summary_output=tmp_path / "summary.json",
         threads=2,
         force=False,
@@ -37,15 +35,13 @@ def test_phipack_profile_respects_reference_contig_boundaries(
 
     assert sorted(observed_lengths) == [1_100, 1_200]
     assert summary["recombination_detected"] is True
-    assert summary["recombination_regions"] == 2
+    assert summary["significant_blocks"] == 2
     assert summary["tested_core_blocks"] == 2
-    assert summary["masked_alignment_sites"] == 200
-    filtered = read_alignment(tmp_path / "filtered.fasta")
-    assert filtered["A"][:100] == "N" * 100
-    assert filtered["A"][1_200:1_300] == "N" * 100
-    regions = (tmp_path / "regions.tsv").read_text(encoding="utf-8")
-    assert "1\t0\t100\t0\t100" in regions
-    assert "2\t0\t100\t1200\t1300" in regions
+    assert "no alignment sites were masked" in summary["localisation_limit"]
+    assert "without a multiple-testing correction" in summary["multiple_testing_limit"]
+    blocks = (tmp_path / "significant_blocks.tsv").read_text(encoding="utf-8")
+    assert "1\t0\t1200\t0.005\t1" in blocks
+    assert "2\t0\t1100\t0.005\t1" in blocks
 
 
 def test_phipack_profile_does_not_treat_missing_data_as_a_segment_join(
@@ -68,12 +64,11 @@ def test_phipack_profile_does_not_treat_missing_data_as_a_segment_join(
         return SimpleNamespace(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(recombination.subprocess, "run", fake_run)
-    summary = recombination.run_phipack_filter(
+    summary = recombination.run_phipack_screen(
         alignment=alignment,
         reference=reference,
-        output_alignment=tmp_path / "filtered.fasta",
         profile_output=tmp_path / "profile.tsv",
-        regions_output=tmp_path / "regions.tsv",
+        significant_blocks_output=tmp_path / "significant_blocks.tsv",
         summary_output=tmp_path / "summary.json",
         threads=2,
         force=False,
@@ -85,7 +80,7 @@ def test_phipack_profile_does_not_treat_missing_data_as_a_segment_join(
 
 
 def test_profile_blocks_are_bounded_without_crossing_contigs() -> None:
-    chunks = recombination._profile_chunks([600_000, 300_000], {"A": ""})
+    chunks = recombination._profile_chunks([600_000, 300_000])
 
     assert [(chunk.contig, chunk.window_start, chunk.window_end) for chunk in chunks] == [
         (1, 0, 250_000),
