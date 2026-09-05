@@ -59,6 +59,12 @@ pixi run chronoclade run metadata.csv \
   --date-randomisations 100
 ```
 
+After SKA mapping, ChronoClade checks whether any genome is an extreme
+raw-distance outlier within its declared lineage. A failed check stops before
+IQ-TREE and ClonalFrameML and records the per-genome evidence in
+`lineage_coherence.tsv`; verify the accession and lineage assignment before
+rerunning.
+
 Open `chronoclade_results/index.html` when the run completes. Each lineage has
 its own report and a ZIP archive containing the figures, tables, trees and
 machine-readable results used in that report.

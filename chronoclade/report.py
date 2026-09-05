@@ -474,6 +474,11 @@ def _report_downloads(directory: Path) -> tuple[str, str, str]:
     audit = _download_list(
         [
             (
+                "lineage_coherence.tsv",
+                "Lineage-coherence screen",
+                "Pre-phylogeny raw-distance outlier evidence",
+            ),
+            (
                 "clonalframeml.labelled_tree.newick",
                 "Corrected phylogeny",
                 "Recombination-corrected Newick tree",

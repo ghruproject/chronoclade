@@ -4,13 +4,23 @@
 
 ChronoClade analyses each `species` and `lineage` group independently. SKA2
 builds a split-k-mer index and maps samples to a selected reference to produce a
-reference-ordered alignment. IQ-TREE estimates the starting maximum-likelihood
-phylogeny with a GTR+G model.
+reference-ordered alignment. Before tree inference, ChronoClade compares each
+genome's median raw SNP proportion with the cohort distribution. A genome is
+flagged only when it is both at least five times the cohort median and an
+extreme robust outlier (robust z-score at least 10). The workflow stops and
+writes `lineage_coherence.tsv` when this screen fails, avoiding an expensive
+tree and recombination run on an obvious accession, species or lineage error.
+This relative check is an input safeguard, not a universal bacterial SNP
+threshold or a transmission definition.
+
+IQ-TREE estimates the starting maximum-likelihood phylogeny with a GTR+G model.
 
 ClonalFrameML estimates recombination on that tree and writes a corrected tree
 plus an alignment of sites not assigned to imported regions. Pairwise clonal SNP
 counts use A, C, G and T sites callable in both members of each pair. The report
-always gives the callable-site count beside the SNP count.
+always gives the callable-site count beside the SNP count. These corrected
+distances provide a second opportunity to identify unusual genomes after
+recombination has been modelled.
 
 ## Root-to-tip analysis
 
@@ -49,11 +59,10 @@ covariation and 90% confidence intervals. The output tree has branch positions
 on a calendar-time axis. ChronoClade exports the root estimate, clock-rate
 uncertainty and each internal node's date interval.
 
-TreeTime is a maximum-likelihood method, so MCMC effective sample size and chain
-convergence statistics are not defined. The node intervals quantify uncertainty
-within the TreeTime model. A second method such as BactDating may be useful for
-a confirmatory analysis when model choice or full posterior sampling is central
-to the question, but it is outside the automated ChronoClade workflow.
+The node intervals quantify uncertainty within the fitted TreeTime model. They
+do not account for uncertainty caused by incomplete sampling, metadata error or
+an inappropriate clock model, so those limitations must remain visible in the
+interpretation.
 
 ## Location states and public context
 
