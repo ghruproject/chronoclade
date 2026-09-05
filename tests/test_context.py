@@ -4,7 +4,7 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from beyondmlst.context import (
+from chronoclade.context import (
     DEFAULT_CONTEXT_METADATA,
     ContextCandidate,
     attach_downloaded_assemblies,
@@ -18,7 +18,7 @@ from beyondmlst.context import (
     write_candidate_table,
     write_combined_metadata,
 )
-from beyondmlst.metadata import Sample, read_metadata
+from chronoclade.metadata import Sample, read_metadata
 
 
 def candidate(sample_id: str, country: str, year: str) -> ContextCandidate:

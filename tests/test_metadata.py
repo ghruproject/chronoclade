@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from beyondmlst.metadata import (
+from chronoclade.metadata import (
     MetadataError,
     Sample,
     assembly_n50,

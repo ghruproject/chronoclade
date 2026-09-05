@@ -12,9 +12,9 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from beyondmlst.evidence import build_public_health_evidence
-from beyondmlst.metadata import Sample
-from beyondmlst.report import assess_temporal_signal, write_lineage_report, write_summary_report
+from chronoclade.evidence import build_public_health_evidence
+from chronoclade.metadata import Sample
+from chronoclade.report import assess_temporal_signal, write_lineage_report, write_summary_report
 
 ALIGNMENT_LENGTH = 2_000
 

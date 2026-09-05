@@ -1,0 +1,55 @@
+# Command line
+
+## `chronoclade preflight`
+
+Reports whether SKA2, IQ-TREE, ClonalFrameML and TreeTime are available in the
+active environment.
+
+```bash
+pixi run chronoclade preflight
+```
+
+## `chronoclade validate`
+
+Checks metadata, assembly paths, dates, lineage sizes and reference selection.
+
+```bash
+pixi run chronoclade validate metadata.csv --min-samples 10
+```
+
+## `chronoclade run`
+
+Runs all ready lineages and writes the combined index.
+
+```bash
+pixi run chronoclade run metadata.csv [OPTIONS]
+```
+
+| Option | Default | Meaning |
+| --- | ---: | --- |
+| `--output`, `-o` | `chronoclade_results` | Output directory |
+| `--threads`, `-t` | `4` | Total CPU budget |
+| `--lineage-jobs` | `2` | Maximum concurrent lineages |
+| `--randomisation-jobs` | `4` | Maximum TreeTime permutations per lineage |
+| `--date-randomisations` | `100` | Number of tip-date permutations |
+| `--temporal-p-value` | `0.05` | Temporal gate threshold |
+| `--min-samples` | `10` | Minimum genomes per lineage |
+| `--seed` | `20260818` | Randomisation seed |
+| `--context-manifest` | none | Frozen manifest from `prepare-context` |
+| `--force` | false | Rerun completed stages |
+| `--dry-run` | false | Validate and print the plan only |
+
+## `chronoclade prepare-context`
+
+Builds a reproducible public context set for one species and ST.
+
+```bash
+pixi run chronoclade prepare-context focal_metadata.csv \
+  --scheme SCHEME \
+  --st ST \
+  --output DIRECTORY [OPTIONS]
+```
+
+Use `pixi run chronoclade prepare-context --help` for metadata filters and
+screening controls. Start with `--dry-run` to inspect the candidate pool before
+downloading assemblies.

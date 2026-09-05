@@ -5,9 +5,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from beyondmlst.metadata import Sample
-from beyondmlst import temporal
-from beyondmlst.temporal import TemporalError, parse_clock
+from chronoclade.metadata import Sample
+from chronoclade import temporal
+from chronoclade.temporal import TemporalError, parse_clock
 
 
 def test_parse_treetime_clock(tmp_path: Path) -> None:

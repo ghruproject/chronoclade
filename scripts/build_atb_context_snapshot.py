@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the small AllTheBacteria metadata snapshot bundled with beyondMLST."""
+"""Build the small AllTheBacteria metadata snapshot bundled with ChronoClade."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from beyondmlst.context import normalise_collection_date
+from chronoclade.context import normalise_collection_date
 
 
 ATB_RELEASE = "2025-05"
@@ -153,7 +153,7 @@ def main() -> None:
     temporary.replace(args.output)
 
     manifest = {
-        "name": "beyondMLST AllTheBacteria context metadata",
+        "name": "ChronoClade AllTheBacteria context metadata",
         "atb_release": ATB_RELEASE,
         "ena_table": ena_table,
         "species": int(result["species"].nunique()),

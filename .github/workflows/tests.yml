@@ -14,3 +14,4 @@ jobs:
           cache: true
       - run: pixi run lint
       - run: pixi run test
+      - run: pixi run docs

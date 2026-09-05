@@ -1,0 +1,176 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-05T13:04:50Z",
+  "title": "Design System: ChronoClade Lineage Reports",
+  "extensions": {
+    "colorMeta": {
+      "ink": { "role": "neutral", "displayName": "Case Ink", "canonical": "#17191f", "tonalRamp": ["oklch(15% 0.012 270.8)", "oklch(26% 0.012 270.8)", "oklch(38% 0.012 270.8)", "oklch(50% 0.012 270.8)", "oklch(62% 0.012 270.8)", "oklch(74% 0.012 270.8)", "oklch(86% 0.012 270.8)", "oklch(95% 0.012 270.8)"] },
+      "muted-ink": { "role": "neutral", "displayName": "Muted Ink", "canonical": "#5f6470", "tonalRamp": ["oklch(15% 0.020 267.6)", "oklch(26% 0.020 267.6)", "oklch(38% 0.020 267.6)", "oklch(50% 0.020 267.6)", "oklch(62% 0.020 267.6)", "oklch(74% 0.020 267.6)", "oklch(86% 0.020 267.6)", "oklch(95% 0.020 267.6)"] },
+      "hairline": { "role": "neutral", "displayName": "Hairline Grey", "canonical": "#c9ccd4", "tonalRamp": ["oklch(15% 0.012 269.5)", "oklch(26% 0.012 269.5)", "oklch(38% 0.012 269.5)", "oklch(50% 0.012 269.5)", "oklch(62% 0.012 269.5)", "oklch(74% 0.012 269.5)", "oklch(86% 0.012 269.5)", "oklch(95% 0.012 269.5)"] },
+      "paper": { "role": "neutral", "displayName": "Paper White", "canonical": "#ffffff", "tonalRamp": ["oklch(15% 0.000 0)", "oklch(26% 0.000 0)", "oklch(38% 0.000 0)", "oklch(50% 0.000 0)", "oklch(62% 0.000 0)", "oklch(74% 0.000 0)", "oklch(86% 0.000 0)", "oklch(95% 0.000 0)"] },
+      "outer-wash": { "role": "neutral", "displayName": "Outer Wash", "canonical": "#eef0f4", "tonalRamp": ["oklch(15% 0.006 264.5)", "oklch(26% 0.006 264.5)", "oklch(38% 0.006 264.5)", "oklch(50% 0.006 264.5)", "oklch(62% 0.006 264.5)", "oklch(74% 0.006 264.5)", "oklch(86% 0.006 264.5)", "oklch(95% 0.006 264.5)"] },
+      "evidence-cobalt": { "role": "primary", "displayName": "Evidence Cobalt", "canonical": "#2855a6", "tonalRamp": ["oklch(15% 0.140 261.0)", "oklch(26% 0.140 261.0)", "oklch(38% 0.140 261.0)", "oklch(50% 0.140 261.0)", "oklch(62% 0.140 261.0)", "oklch(74% 0.140 261.0)", "oklch(86% 0.140 261.0)", "oklch(95% 0.140 261.0)"] },
+      "decision-vermillion": { "role": "secondary", "displayName": "Decision Vermillion", "canonical": "#d63c2f", "tonalRamp": ["oklch(15% 0.193 29.1)", "oklch(26% 0.193 29.1)", "oklch(38% 0.193 29.1)", "oklch(50% 0.193 29.1)", "oklch(62% 0.193 29.1)", "oklch(74% 0.193 29.1)", "oklch(86% 0.193 29.1)", "oklch(95% 0.193 29.1)"] },
+      "interval-vermillion": { "role": "secondary", "displayName": "Interval Vermillion", "canonical": "#e2aaa3", "tonalRamp": ["oklch(15% 0.067 26.8)", "oklch(26% 0.067 26.8)", "oklch(38% 0.067 26.8)", "oklch(50% 0.067 26.8)", "oklch(62% 0.067 26.8)", "oklch(74% 0.067 26.8)", "oklch(86% 0.067 26.8)", "oklch(95% 0.067 26.8)"] },
+      "panel-wash": { "role": "neutral", "displayName": "Panel Wash", "canonical": "#f4f5f7", "tonalRamp": ["oklch(15% 0.003 264.5)", "oklch(26% 0.003 264.5)", "oklch(38% 0.003 264.5)", "oklch(50% 0.003 264.5)", "oklch(62% 0.003 264.5)", "oklch(74% 0.003 264.5)", "oklch(86% 0.003 264.5)", "oklch(95% 0.003 264.5)"] },
+      "evidence-hover": { "role": "primary", "displayName": "Evidence Hover", "canonical": "#edf3ff", "tonalRamp": ["oklch(15% 0.017 264.5)", "oklch(26% 0.017 264.5)", "oklch(38% 0.017 264.5)", "oklch(50% 0.017 264.5)", "oklch(62% 0.017 264.5)", "oklch(74% 0.017 264.5)", "oklch(86% 0.017 264.5)", "oklch(95% 0.017 264.5)"] },
+      "caution-wash": { "role": "tertiary", "displayName": "Caution Wash", "canonical": "#fff8dc", "tonalRamp": ["oklch(15% 0.037 95.4)", "oklch(26% 0.037 95.4)", "oklch(38% 0.037 95.4)", "oklch(50% 0.037 95.4)", "oklch(62% 0.037 95.4)", "oklch(74% 0.037 95.4)", "oklch(86% 0.037 95.4)", "oklch(95% 0.037 95.4)"] },
+      "focus-gold": { "role": "tertiary", "displayName": "Focus Gold", "canonical": "#ffb800", "tonalRamp": ["oklch(15% 0.171 80.5)", "oklch(26% 0.171 80.5)", "oklch(38% 0.171 80.5)", "oklch(50% 0.171 80.5)", "oklch(62% 0.171 80.5)", "oklch(74% 0.171 80.5)", "oklch(86% 0.171 80.5)", "oklch(95% 0.171 80.5)"] },
+      "selection-yellow": { "role": "tertiary", "displayName": "Selection Yellow", "canonical": "#ffdf78", "tonalRamp": ["oklch(15% 0.128 92.5)", "oklch(26% 0.128 92.5)", "oklch(38% 0.128 92.5)", "oklch(50% 0.128 92.5)", "oklch(62% 0.128 92.5)", "oklch(74% 0.128 92.5)", "oklch(86% 0.128 92.5)", "oklch(95% 0.128 92.5)"] },
+      "scroll-track": { "role": "neutral", "displayName": "Scroll Track", "canonical": "#e5e7ec", "tonalRamp": ["oklch(15% 0.007 268.5)", "oklch(26% 0.007 268.5)", "oklch(38% 0.007 268.5)", "oklch(50% 0.007 268.5)", "oklch(62% 0.007 268.5)", "oklch(74% 0.007 268.5)", "oklch(86% 0.007 268.5)", "oklch(95% 0.007 268.5)"] },
+      "footer-rule": { "role": "neutral", "displayName": "Footer Rule", "canonical": "#555b67", "tonalRamp": ["oklch(15% 0.021 264.4)", "oklch(26% 0.021 264.4)", "oklch(38% 0.021 264.4)", "oklch(50% 0.021 264.4)", "oklch(62% 0.021 264.4)", "oklch(74% 0.021 264.4)", "oklch(86% 0.021 264.4)", "oklch(95% 0.021 264.4)"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Analysis Identity", "purpose": "Species and lineage identity at the top of each report." },
+      "headline": { "displayName": "Stage Question", "purpose": "The scientific question opening each analytical stage." },
+      "title": { "displayName": "Evidence Title", "purpose": "Section headings and prominent measured values." },
+      "body": { "displayName": "Report Body", "purpose": "Explanations, findings, limitations, and table content." },
+      "label": { "displayName": "Evidence Label", "purpose": "Uppercase measure names, table headings, and file formats." },
+      "decision": { "displayName": "Decision Label", "purpose": "Uppercase proceed, stop, and continue marks." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "stage-scroll", "value": "scroll-behavior: smooth", "purpose": "Move between the four anchored analysis stages without losing the reading sequence." },
+      { "name": "reduced-motion", "value": "@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }", "purpose": "Switch anchored navigation to immediate movement when the reader requests reduced motion." },
+      { "name": "active-stage-observer", "value": "rootMargin: -18% 0px -58% 0px; threshold: 0, 0.1, 0.35, 0.6", "purpose": "Reverse the stage sheet that occupies the current review zone." }
+    ],
+    "breakpoints": [
+      { "name": "evidence-stack", "value": "1100px" },
+      { "name": "narrow-report", "value": "800px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Report Identity",
+      "kind": "custom",
+      "refersTo": "report-identity",
+      "description": "Institutional identity block with an italic reader-facing taxon name, lineage, metadata, and overall temporal decision.",
+      "html": "<header class=\"ds-identity\"><div class=\"ds-identity-mark\">ChronoClade<br>ANALYSIS</div><div class=\"ds-identity-copy\"><h1><i>Staphylococcus aureus</i><span>ST239</span></h1><p>72 genomes · 17 collection dates</p><div class=\"ds-overall\"><small>TEMPORAL DECISION</small><b>Temporal signal supported</b></div></div></header>",
+      "css": ".ds-identity{display:grid;grid-template-columns:248px minmax(0,1fr);border-bottom:2px solid var(--ink);font-family:Archivo,\"Helvetica Neue\",sans-serif;color:var(--ink);background:var(--paper)}.ds-identity-mark{background:var(--ink);color:var(--paper);padding:30px 24px;font-weight:800;letter-spacing:.06em}.ds-identity-copy{padding:24px 42px 26px;display:flex;flex-direction:column;gap:14px;align-items:flex-start;min-width:0}.ds-identity h1{margin:0;font-size:clamp(32px,5vw,68px);line-height:1.12;letter-spacing:-.035em;overflow-wrap:anywhere}.ds-identity h1 i{font-style:italic}.ds-identity h1 span{display:block}.ds-identity p{margin:0;color:var(--muted);max-width:70ch}.ds-overall{border:1px solid var(--red);padding:9px 12px;color:var(--red)}.ds-overall small{display:block;font-size:11px;font-weight:700;letter-spacing:.08em}.ds-overall b{display:block;font-size:21px;margin-top:4px}@media(max-width:800px){.ds-identity{grid-template-columns:76px minmax(0,1fr)}.ds-identity-copy{padding:22px 20px}.ds-identity-mark{padding:28px 10px;font-size:11px}}"
+    },
+    {
+      "name": "Active Stage Rail",
+      "kind": "nav",
+      "refersTo": "stage-rail-active",
+      "description": "The current analytical stage reverses to near-black as it enters the review zone.",
+      "html": "<aside class=\"ds-stage-rail ds-active\"><span>1</span><b>Explore</b></aside>",
+      "css": ".ds-stage-rail{width:248px;padding:38px 24px;border-right:1px solid var(--ink);background:#f4f5f7;color:var(--blue);font-family:Archivo,\"Helvetica Neue\",sans-serif}.ds-stage-rail span{display:block;font-size:74px;line-height:.8;font-weight:800;letter-spacing:-.06em}.ds-stage-rail b{display:block;margin-top:20px;text-transform:uppercase;letter-spacing:.1em;font-size:12px;color:var(--ink)}.ds-stage-rail.ds-active{background:var(--ink);color:var(--paper)}.ds-stage-rail.ds-active b{color:var(--paper)}@media(max-width:800px){.ds-stage-rail{width:76px;padding:28px 10px}.ds-stage-rail span{font-size:48px}.ds-stage-rail b{writing-mode:vertical-rl;margin:18px auto 0}}"
+    },
+    {
+      "name": "Stage Navigation",
+      "kind": "nav",
+      "refersTo": "stage-navigation",
+      "description": "Sticky four-stage reading rail whose links become four equal compact columns on narrow screens.",
+      "html": "<nav class=\"ds-stage-nav\" aria-label=\"Analysis stages\"><a href=\"#\">1 · Explore</a><a href=\"#\">2 · Test</a><a href=\"#\">3 · Time scale</a><a href=\"#\">4 · Interpret</a></nav>",
+      "css": ".ds-stage-nav{display:flex;padding-left:248px;background:var(--paper);border-bottom:1px solid var(--ink);overflow:auto;font-family:Archivo,\"Helvetica Neue\",sans-serif}.ds-stage-nav a{flex:1;min-width:170px;padding:13px 18px;border-left:1px solid var(--line);color:var(--ink);text-decoration:none;font-size:13px;font-weight:700}.ds-stage-nav a:hover{background:#edf3ff}.ds-stage-nav a:focus-visible{outline:3px solid #ffb800;outline-offset:3px}@media(max-width:800px){.ds-stage-nav{padding-left:0;overflow:visible}.ds-stage-nav a{min-width:0;padding:12px 7px;text-align:center;font-size:11px;white-space:nowrap}}"
+    },
+    {
+      "name": "Review Decision Mark",
+      "kind": "chip",
+      "refersTo": "decision-review",
+      "description": "Cobalt square label for a review step that continues to the formal test.",
+      "html": "<strong class=\"ds-decision ds-review\">CONTINUE TO TEST</strong>",
+      "css": ".ds-decision{display:block;width:max-content;min-width:150px;padding:10px 12px;border:2px solid currentColor;text-align:center;font:700 12px Archivo,\"Helvetica Neue\",sans-serif;letter-spacing:.08em;background:transparent}.ds-decision.ds-review{color:var(--blue)}.ds-decision:focus-visible{outline:3px solid #ffb800;outline-offset:3px}"
+    },
+    {
+      "name": "Proceed Decision Mark",
+      "kind": "chip",
+      "refersTo": "decision-proceed",
+      "description": "Vermillion square label for a gate that changes the inferential path.",
+      "html": "<strong class=\"ds-decision ds-proceed\">PROCEED</strong>",
+      "css": ".ds-decision{display:block;width:max-content;min-width:150px;padding:10px 12px;border:2px solid currentColor;text-align:center;font:700 12px Archivo,\"Helvetica Neue\",sans-serif;letter-spacing:.08em;background:transparent}.ds-decision.ds-proceed{color:var(--red)}.ds-decision:focus-visible{outline:3px solid #ffb800;outline-offset:3px}"
+    },
+    {
+      "name": "Evidence Manifest",
+      "kind": "custom",
+      "refersTo": "evidence-manifest",
+      "description": "Open disclosure listing exact source files after the figure and its meaning or verdict in narrow semantic order.",
+      "html": "<details class=\"ds-evidence\" open><summary>Evidence and downloads</summary><ul><li><a href=\"#\"><span>Root-to-tip figure</span><small>Scalable vector figure</small><b>SVG</b></a></li><li><a href=\"#\"><span>Root-to-tip data</span><small>Collection dates, divergence and residuals</small><b>CSV</b></a></li></ul></details>",
+      "css": ".ds-evidence{border-top:1px solid var(--ink);border-bottom:1px solid var(--ink);font-family:Archivo,\"Helvetica Neue\",sans-serif;color:var(--ink)}.ds-evidence summary{padding:14px 0;cursor:pointer;font-weight:800}.ds-evidence summary:focus-visible,.ds-evidence a:focus-visible{outline:3px solid #ffb800;outline-offset:3px}.ds-evidence ul{list-style:none;margin:0 0 14px;padding:8px 12px 12px;border-top:1px solid var(--line)}.ds-evidence a{display:grid;grid-template-columns:minmax(120px,1fr) 2fr 42px;gap:14px;padding:11px 4px;border-bottom:1px solid var(--line);color:var(--blue);text-decoration:none}.ds-evidence a:hover{background:#edf3ff}.ds-evidence small{color:var(--muted)}.ds-evidence b{text-align:right;font-size:11px;letter-spacing:.08em;color:var(--muted)}"
+    },
+    {
+      "name": "Measure Strip",
+      "kind": "custom",
+      "refersTo": "measure-strip",
+      "description": "Ruled three-cell strip for the values that determine or explain a stage.",
+      "html": "<div class=\"ds-measures\"><div><small>EXPLORATORY ROOT-TO-TIP FIT</small><b>R² 0.94</b><span>real collection dates</span></div><div><small>NULL EXCEEDANCES</small><b>0 / 100</b><span>successful randomisations</span></div><div><small>EMPIRICAL P</small><b>0.0099</b><span>threshold 0.05</span></div></div>",
+      "css": ".ds-measures{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--ink);font-family:Archivo,\"Helvetica Neue\",sans-serif;color:var(--ink);background:var(--paper)}.ds-measures>div{padding:16px;border-right:1px solid var(--line)}.ds-measures>div:last-child{border:0}.ds-measures small{display:block;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-size:11px;font-weight:700}.ds-measures b{display:block;font-size:21px;margin:4px 0 2px;font-variant-numeric:tabular-nums}.ds-measures span{color:var(--muted);font-size:12px}@media(max-width:800px){.ds-measures{grid-template-columns:1fr}.ds-measures>div{border-right:0;border-bottom:1px solid var(--line)}}"
+    },
+    {
+      "name": "Time-Tree Confidence Grid",
+      "kind": "custom",
+      "refersTo": "confidence-grid",
+      "description": "Six ruled measures expose dated-tree fit and the scale of internal-node uncertainty.",
+      "html": "<div class=\"ds-confidence\"><div><small>CLOCK RATE</small><b>1.71e-06 ± 9.1e-08</b><span>subs/site/year ± 1 SD</span></div><div><small>FINAL DATED-TREE FIT</small><b>R² 0.95</b><span>after time-tree refitting</span></div><div><small>ROOT ESTIMATE</small><b>1946-01-07</b><span>90% region 1939.5–1949.7</span></div><div><small>INTERNAL NODES</small><b>71</b><span>with inferred dates</span></div><div><small>MEDIAN INTERVAL WIDTH</small><b>2.92 years</b><span>across internal nodes</span></div><div><small>WIDEST INTERVAL</small><b>12.62 years</b><span>least precise node date</span></div></div>",
+      "css": ".ds-confidence{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--ink);font-family:Archivo,\"Helvetica Neue\",sans-serif;color:var(--ink);background:var(--paper)}.ds-confidence>div{padding:16px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}.ds-confidence>div:nth-child(3n){border-right:0}.ds-confidence>div:nth-last-child(-n+3){border-bottom:0}.ds-confidence small{display:block;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-size:11px;font-weight:700}.ds-confidence b{display:block;font-size:21px;margin:4px 0 2px;font-variant-numeric:tabular-nums}.ds-confidence span{color:var(--muted);font-size:12px}@media(max-width:800px){.ds-confidence{grid-template-columns:1fr}.ds-confidence>div,.ds-confidence>div:nth-child(3n),.ds-confidence>div:nth-last-child(-n+3){border-right:0;border-bottom:1px solid var(--line)}.ds-confidence>div:last-child{border-bottom:0}}"
+    },
+    {
+      "name": "Dated Phylogeny",
+      "kind": "custom",
+      "refersTo": "figure-sheet",
+      "description": "Calendar-time tree with 90% node-date intervals inside a labelled, keyboard-focusable horizontal detail region.",
+      "html": "<figure class=\"ds-time-tree\"><strong>Dated phylogeny with node-time uncertainty</strong><div class=\"ds-figure-scroll\" tabindex=\"0\" role=\"region\" aria-label=\"Dated phylogeny; scroll horizontally to inspect detail\"><svg viewBox=\"0 0 560 230\" role=\"img\" aria-label=\"Dated phylogeny with visible 90% node-date intervals\"><g class=\"ds-grid\"><line x1=\"80\" y1=\"30\" x2=\"80\" y2=\"205\"/><line x1=\"230\" y1=\"30\" x2=\"230\" y2=\"205\"/><line x1=\"380\" y1=\"30\" x2=\"380\" y2=\"205\"/></g><g class=\"ds-intervals\"><line x1=\"55\" y1=\"116\" x2=\"135\" y2=\"116\"/><line x1=\"185\" y1=\"70\" x2=\"250\" y2=\"70\"/><line x1=\"300\" y1=\"50\" x2=\"355\" y2=\"50\"/><line x1=\"330\" y1=\"145\" x2=\"395\" y2=\"145\"/><line x1=\"405\" y1=\"175\" x2=\"455\" y2=\"175\"/></g><g class=\"ds-branches\"><path d=\"M95 116H180M180 70V165M180 70H315M180 165H340M315 45V95M315 45H430M315 95H455M340 140V190M340 140H445M340 190H490\"/></g><g class=\"ds-tips\"><circle cx=\"430\" cy=\"45\" r=\"4\"/><circle cx=\"455\" cy=\"95\" r=\"4\"/><circle cx=\"445\" cy=\"140\" r=\"4\"/><circle cx=\"490\" cy=\"190\" r=\"4\"/></g><circle class=\"ds-root\" cx=\"95\" cy=\"116\" r=\"5\"/></svg></div><figcaption>Black branches · cobalt samples · pale vermillion 90% node-date intervals</figcaption></figure>",
+      "css": ".ds-time-tree{margin:0;padding:12px;border:1px solid var(--ink);background:var(--paper);color:var(--ink);font-family:Archivo,\"Helvetica Neue\",sans-serif}.ds-time-tree strong{font-size:15px}.ds-figure-scroll{max-width:100%;overflow:auto;scrollbar-color:var(--blue) #e5e7ec}.ds-figure-scroll:focus-visible{outline:3px solid #ffb800;outline-offset:3px}.ds-time-tree svg{display:block;width:100%;height:auto;margin-top:10px}.ds-grid line{stroke:#d7d9df;stroke-width:1}.ds-intervals line{stroke:#e2aaa3;stroke-width:8;stroke-linecap:butt;opacity:.72}.ds-branches path{fill:none;stroke:var(--ink);stroke-width:1.5}.ds-tips circle{fill:var(--blue)}.ds-root{fill:var(--red)}.ds-time-tree figcaption{margin-top:8px;color:var(--muted);font-size:13px}@media(max-width:800px){.ds-time-tree svg{min-width:760px}}"
+    },
+    {
+      "name": "Evidence Table",
+      "kind": "custom",
+      "refersTo": "evidence-table",
+      "description": "Labelled, keyboard-focusable evidence region; wide tables scroll while compact two-column tables stack into evidence rows on narrow screens.",
+      "html": "<div class=\"ds-table-scroll ds-compact-table\" tabindex=\"0\" role=\"region\" aria-label=\"Recombination-filtered genomic distance summaries\"><span class=\"ds-scroll-hint\">Scroll horizontally to inspect every column</span><table><thead><tr><th>Comparison</th><th>Clonal SNP summary</th></tr></thead><tbody><tr><td>Focal–focal</td><td>n=2415; median 188; range 3–538 SNPs</td></tr><tr><td>Focal–context</td><td>n=140; median 375; range 269–510 SNPs</td></tr></tbody></table></div>",
+      "css": ".ds-table-scroll{max-width:100%;overflow:auto;scrollbar-color:var(--blue) #e5e7ec;font-family:Archivo,\"Helvetica Neue\",sans-serif;color:var(--ink)}.ds-table-scroll:focus-visible{outline:3px solid #ffb800;outline-offset:3px}.ds-table-scroll table{width:100%;border-collapse:collapse;margin-top:16px;font-size:14px}.ds-table-scroll th,.ds-table-scroll td{padding:10px 8px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}.ds-table-scroll th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}.ds-scroll-hint{display:none}@media(max-width:800px){.ds-table-scroll:not(.ds-compact-table) table{min-width:680px}.ds-compact-table{overflow:visible}.ds-compact-table .ds-scroll-hint,.ds-compact-table thead{display:none}.ds-compact-table table,.ds-compact-table tbody,.ds-compact-table tr,.ds-compact-table td{display:block;min-width:0;width:100%}.ds-compact-table tr{padding:10px 0;border-bottom:1px solid var(--line)}.ds-compact-table td{padding:3px 0;border:0}.ds-compact-table td:first-child{font-weight:700}}"
+    },
+    {
+      "name": "Report Completion",
+      "kind": "custom",
+      "refersTo": "report-completion",
+      "description": "Compact provenance close for the completed evidence package, without a separate ESS explainer.",
+      "html": "<footer class=\"ds-report-complete\"><b>REPORT COMPLETE</b><div><p>Generated by ChronoClade. The dated-tree figure, node-date intervals, clock statistics and source tables are preserved in the supporting-results bundle.</p></div></footer>",
+      "css": ".ds-report-complete{display:grid;grid-template-columns:248px 1fr;background:var(--ink);color:var(--paper);font-family:Archivo,\"Helvetica Neue\",sans-serif}.ds-report-complete>b{padding:30px 24px;border-right:1px solid #555b67}.ds-report-complete div{padding:30px 42px}.ds-report-complete p{margin:0;max-width:75ch}@media(max-width:800px){.ds-report-complete{grid-template-columns:76px 1fr}}@media print{.ds-report-complete{color:#000;background:#fff;border-top:2px solid #000}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Public-Health Case Conference Evidence Wall",
+    "overview": "ChronoClade reports feel like an expert case conference assembled on a white working wall: numbered sheets establish the order of review, large scientific figures carry the evidence, and hairline rules keep every claim attached to its source. The world is rigorous, direct, and deliberately more editorial than dashboard-like.\n\nNear-black ink supplies authority, cobalt marks evidence and continued investigation, and vermillion marks decisions that change the inferential path. Pale interval vermillion extends that decision family into dated-tree uncertainty without competing with the stronger root and gate marks. The report stays dense enough for expert scrutiny while preserving a clear reading sequence, explicit gates, and ready access to underlying files.",
+    "keyCharacteristics": [
+      "White paper on a pale outer wash, divided by near-black and grey rules.",
+      "Embedded Archivo throughout, with italic spaced taxon names, oversized compact headings, and tabular numerals for measures.",
+      "A numbered four-stage rail whose active sheet reverses to near-black and whose compact mobile links divide the width equally.",
+      "Large figures—including dated phylogenies with visible 90% internal-node intervals—paired with open evidence manifests and downloadable source files.",
+      "Flat, square, print-capable surfaces without decorative chrome or shadow."
+    ],
+    "rules": [
+      { "name": "The Evidence/Decision Rule", "body": "Use cobalt for evidence and review; reserve vermillion for explicit inferential decisions and observed marks.", "section": "colors" },
+      { "name": "The Redundancy Rule", "body": "Every colour-coded state also carries a readable label such as “PROCEED”, “CONTINUE TO TEST”, or “DO NOT TIME-SCALE”.", "section": "colors" },
+      { "name": "The Interval Is Uncertainty Rule", "body": "Use pale interval vermillion only for dated-node ranges; keep roots, observed marks, and gate decisions in the stronger decision vermillion.", "section": "colors" },
+      { "name": "The Question-First Rule", "body": "Every analytical stage begins with a plain-language scientific question before statistics or files.", "section": "typography" },
+      { "name": "The Embedded-Type Rule", "body": "Keep Archivo embedded in every generated report so offline, shared, and printed copies retain the same hierarchy.", "section": "typography" },
+      { "name": "The Taxon Display Rule", "body": "Present scientific taxon names as readable spaced names in italics; preserve machine identifiers only in source data and filenames.", "section": "typography" },
+      { "name": "The Ordered Wall Rule", "body": "Preserve the Explore → Test → Time scale → Interpret sequence and its numbered rail in every lineage report.", "section": "layout" },
+      { "name": "The Evidence-Beside-Claim Rule", "body": "Pair each major figure with its open evidence manifest at wide widths; on narrow screens preserve the semantic figure → meaning or verdict → downloads order.", "section": "layout" },
+      { "name": "The Flat Evidence Rule", "body": "Never introduce box shadows or floating cards; a report surface earns hierarchy through rules, contrast, and position.", "section": "elevation" },
+      { "name": "The Square Sheet Rule", "body": "Keep report containers and state marks at square corners; rounded UI would weaken the case-file character.", "section": "shapes" }
+    ],
+    "dos": [
+      "Do begin each analytical stage with its scientific question and explicit decision state.",
+      "Do keep figures large and place their exact source files in an open adjacent evidence manifest.",
+      "Do use square sheets, hairline dividers, and strong stage boundaries to organise dense evidence.",
+      "Do preserve labelled states, keyboard focus, horizontal-scroll guidance, sticky first columns, and print order.",
+      "Do keep taxon names reader-facing, spaced, and italic while retaining machine identifiers in data outputs.",
+      "Do distinguish exploratory root-to-tip fit from the final refitted dated-tree fit in every measure label.",
+      "Do preserve the figure → meaning or verdict → downloads sequence when evidence layouts stack.",
+      "Do embed Archivo and keep figures and report assets self-contained for offline review.",
+      "Do expose dated-tree uncertainty in both the phylogeny and the six-measure confidence grid.",
+      "Do end with the compact report-completion statement and supporting-results provenance."
+    ],
+    "donts": [
+      "Don't convert stages into generic dashboard cards or detach statistics from the question they answer.",
+      "Don't use cobalt and vermillion interchangeably: cobalt is evidence; vermillion is a decision.",
+      "Don't add rounded corners, shadows, gradients, glass effects, or decorative chrome.",
+      "Don't collapse evidence access into an unlabeled icon or hide the only copy of a supporting result.",
+      "Don't rely on colour alone or let narrow tables silently clip evidence.",
+      "Don't force compact two-column evidence tables into horizontal scrolling on narrow screens.",
+      "Don't append an ESS or not-applicable explainer to a report generated by this likelihood-based workflow."
+    ]
+  }
+}

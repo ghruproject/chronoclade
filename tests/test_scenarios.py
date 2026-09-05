@@ -20,7 +20,9 @@ def test_controlled_scenarios_generate_all_four_expected_interpretations(
         report = json.loads((tmp_path / directory / "report.json").read_text(encoding="utf-8"))
         observed[directory] = report["public_health"]["scenario"]["code"]
         html = (tmp_path / directory / "report.html").read_text(encoding="utf-8")
-        assert '<details class="technical">' in html
+        assert 'id="root-to-tip"' in html
+        assert '<section class="stage" id="randomisation"' in html
+        assert '<section class="stage" id="interpretation"' in html
         assert "What does the genomic evidence support?" in html
         assert code in html
 

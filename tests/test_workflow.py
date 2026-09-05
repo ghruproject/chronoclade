@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from beyondmlst import workflow
-from beyondmlst.metadata import Sample
-from beyondmlst.workflow import (
+from chronoclade import workflow
+from chronoclade.metadata import Sample
+from chronoclade.workflow import (
     allocate_resources,
     complete_alignment_sites,
     context_evidence,

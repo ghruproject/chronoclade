@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="390" viewBox="0 0 920 390" role="img" aria-labelledby="title description">
+  <title id="title">Date-randomisation comparison</title>
+  <desc id="description">Histograms compare the observed root-to-tip R squared and clock rate with values from permuted sampling dates.</desc>
+  <style>
+    text { font-family: Archivo, sans-serif; fill: #243340; }
+    .title { font-size: 16px; font-weight: 700; }
+    .axis-label { font-size: 13px; font-weight: 600; }
+    .tick, .empty { font-size: 12px; fill: #607080; }
+    .plot-bg { fill: #f5f8fa; stroke: #d6e0e6; }
+    .bar { fill: #6285a3; opacity: 0.82; }
+    .observed { stroke: #c6403d; stroke-width: 3; }
+    .observed-label { font-size: 12px; font-weight: 700; fill: #a52f2c; }
+    .axis { stroke: #607080; stroke-width: 1; }
+    .footer { font-size: 13px; fill: #40515e; }
+  </style>
+  
+    <g>
+      <text x="235.0" y="36" text-anchor="middle" class="title">Root-to-tip fit under randomised dates</text>
+      <rect x="72" y="72.0" width="340.0" height="220.0" class="plot-bg"/>
+      <rect x="73.00" y="72.00" width="32.00" height="220.00" class="bar"/><rect x="107.00" y="282.83" width="32.00" height="9.17" class="bar"/><rect x="141.00" y="292.00" width="32.00" height="0.00" class="bar"/><rect x="175.00" y="292.00" width="32.00" height="0.00" class="bar"/><rect x="209.00" y="292.00" width="32.00" height="0.00" class="bar"/><rect x="243.00" y="292.00" width="32.00" height="0.00" class="bar"/><rect x="277.00" y="292.00" width="32.00" height="0.00" class="bar"/><rect x="311.00" y="292.00" width="32.00" height="0.00" class="bar"/><rect x="345.00" y="292.00" width="32.00" height="0.00" class="bar"/><rect x="379.00" y="292.00" width="32.00" height="0.00" class="bar"/>
+      <line x1="396.55" y1="64.0" x2="396.55" y2="292.0" class="observed"/>
+      <text x="396.55" y="56.0" text-anchor="middle" class="observed-label">Observed 0.94</text>
+      <line x1="72" y1="292.0" x2="412.0" y2="292.0" class="axis"/>
+      <text x="72" y="312.0" text-anchor="start" class="tick">-0.047</text>
+      <text x="412.0" y="312.0" text-anchor="end" class="tick">0.987</text>
+      <text x="235.0" y="330" text-anchor="middle" class="axis-label">R²</text>
+    </g>
+    
+  
+    <g>
+      <text x="685.0" y="36" text-anchor="middle" class="title">Clock rate under randomised dates</text>
+      <rect x="522" y="72.0" width="340.0" height="220.0" class="plot-bg"/>
+      <rect x="523.00" y="262.00" width="32.00" height="30.00" class="bar"/><rect x="557.00" y="87.00" width="32.00" height="205.00" class="bar"/><rect x="591.00" y="72.00" width="32.00" height="220.00" class="bar"/><rect x="625.00" y="252.00" width="32.00" height="40.00" class="bar"/><rect x="659.00" y="287.00" width="32.00" height="5.00" class="bar"/><rect x="693.00" y="292.00" width="32.00" height="0.00" class="bar"/><rect x="727.00" y="292.00" width="32.00" height="0.00" class="bar"/><rect x="761.00" y="292.00" width="32.00" height="0.00" class="bar"/><rect x="795.00" y="292.00" width="32.00" height="0.00" class="bar"/><rect x="829.00" y="292.00" width="32.00" height="0.00" class="bar"/>
+      <line x1="846.55" y1="64.0" x2="846.55" y2="292.0" class="observed"/>
+      <text x="846.55" y="56.0" text-anchor="middle" class="observed-label">Observed 1.69e-06</text>
+      <line x1="522" y1="292.0" x2="862.0" y2="292.0" class="axis"/>
+      <text x="522" y="312.0" text-anchor="start" class="tick">-4.54e-07</text>
+      <text x="862.0" y="312.0" text-anchor="end" class="tick">1.80e-06</text>
+      <text x="685.0" y="330" text-anchor="middle" class="axis-label">Substitutions/site/year</text>
+    </g>
+    
+  <text x="460" y="372" text-anchor="middle" class="footer">100 of 100 permutations completed · root-to-tip randomisation p=0.0099</text>
+</svg>

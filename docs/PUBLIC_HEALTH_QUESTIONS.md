@@ -2,7 +2,7 @@
 
 ## Purpose
 
-`beyondmlst` examines longitudinal sampling within a species and ST. Its main
+`chronoclade` examines longitudinal sampling within a species and ST. Its main
 question is whether local isolates collected over months or years are
 consistent with one persistent local lineage, several introductions, or a
 mixture of both.

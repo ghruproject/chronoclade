@@ -3,7 +3,7 @@ requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
-name = "beyondmlst"
+name = "chronoclade"
 version = "0.1.0"
 description = "Recombination-aware temporal and contextual bacterial phylogenetics"
 readme = "README.md"
@@ -14,6 +14,8 @@ authors = [
 ]
 keywords = ["bacterial-genomics", "phylogenetics", "temporal-signal", "clonalframeml", "treetime"]
 dependencies = [
+  "biopython>=1.80,<2",
+  "matplotlib>=3.8,<4",
   "numpy>=1.26,<3",
   "pyarrow>=14,<26",
   "rich>=14,<15",
@@ -21,14 +23,14 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/ghruproject/beyondmlst"
-Repository = "https://github.com/ghruproject/beyondmlst"
+Homepage = "https://github.com/ghruproject/chronoclade"
+Repository = "https://github.com/ghruproject/chronoclade"
 
 [project.scripts]
-beyondmlst = "beyondmlst.cli:app"
+chronoclade = "chronoclade.cli:app"
 
 [tool.hatch.build.targets.wheel]
-packages = ["beyondmlst"]
+packages = ["chronoclade"]
 
 [tool.ruff]
 line-length = 100

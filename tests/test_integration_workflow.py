@@ -3,8 +3,8 @@ from random import Random
 
 import pytest
 
-from beyondmlst.metadata import Sample
-from beyondmlst.workflow import native_platform_supported, run_workflow, tool_status
+from chronoclade.metadata import Sample
+from chronoclade.workflow import native_platform_supported, run_workflow, tool_status
 
 
 def write_variant_assembly(path: Path, mutations: dict[int, str]) -> None:
@@ -65,11 +65,20 @@ def test_small_workflow_reaches_time_scaled_and_location_trees(tmp_path: Path) -
     assert (output / "E_coli__ST_test" / "clonalframeml.labelled_tree.newick").is_file()
     assert (output / "E_coli__ST_test" / "timetree" / "timetree.nexus").is_file()
     assert (output / "E_coli__ST_test" / "timetree" / "timetree.svg").is_file()
+    assert (output / "E_coli__ST_test" / "timetree.png").is_file()
+    assert (output / "E_coli__ST_test" / "timetree_with_confidence.svg").is_file()
     assert (output / "E_coli__ST_test" / "location" / "annotated_tree.nexus").is_file()
     assert (output / "E_coli__ST_test" / "clonal_pairwise_distances.tsv").is_file()
     assert (output / "E_coli__ST_test" / "clonal_snp_matrix.tsv").is_file()
     assert (output / "E_coli__ST_test" / "pairwise_callable_sites.tsv").is_file()
     assert (output / "E_coli__ST_test" / "clonal_snp_heatmap.svg").is_file()
+    assert (output / "E_coli__ST_test" / "clonal_snp_heatmap.png").is_file()
+    assert (output / "E_coli__ST_test" / "root_to_tip.png").is_file()
+    assert (output / "E_coli__ST_test" / "date_randomisation.csv").is_file()
+    assert (output / "E_coli__ST_test" / "date_randomisation.png").is_file()
+    assert (output / "E_coli__ST_test" / "timetree_confidence.csv").is_file()
+    assert (output / "E_coli__ST_test" / "node_dates.csv").is_file()
+    assert (output / "E_coli__ST_test" / "supporting_results.zip").is_file()
     assert (output / "E_coli__ST_test" / "public_health_evidence.json").is_file()
     scenario = summary["lineages"][0]["public_health"]["scenario"]
     assert scenario["code"] in {

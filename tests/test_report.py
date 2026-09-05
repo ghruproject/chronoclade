@@ -1,8 +1,9 @@
 from pathlib import Path
 
-from beyondmlst.report import (
+from chronoclade.report import (
     assess_temporal_signal,
     write_lineage_report,
+    write_supporting_bundle,
     write_summary_report,
 )
 
@@ -40,6 +41,23 @@ def test_lineage_report_contains_visuals_verdict_and_guardrail(tmp_path: Path) -
     )
     (tmp_path / "timetree" / "timetree.svg").write_text(
         "<svg xmlns='http://www.w3.org/2000/svg'/>", encoding="utf-8"
+    )
+    (tmp_path / "timetree" / "molecular_clock.txt").write_text(
+        "Root-Tip-Regression:\n --rate:\t1.2e-06 +/- 8e-08 (one std-dev)\n"
+        " --chi^2:\t12.4\n --r^2:\t0.71\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "timetree" / "dates.tsv").write_text(
+        "#node\tdate\tnumeric date\tlower bound\tupper bound\n"
+        "NODE_0000000\t1999-01-01\t1999.0\t1997.5\t2000.5\n"
+        "S1\t2020-01-01\t2020.0\t2020.0\t2020.0\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "clock" / "rtt.csv").write_text(
+        "#Dates inferred from root-to-tip regression.\n"
+        "name, date, root-to-tip distance, clock-deviation\n"
+        "S1, 2020, 0.001, 0.0\nS2, 2021, 0.002, 0.0\n",
+        encoding="utf-8",
     )
     (tmp_path / "clonal_snp_heatmap.svg").write_text(
         "<svg xmlns='http://www.w3.org/2000/svg'/>", encoding="utf-8"
@@ -126,12 +144,17 @@ def test_lineage_report_contains_visuals_verdict_and_guardrail(tmp_path: Path) -
     assert "Consistent with local persistence plus additional introductions" in text
     assert "What does the genomic evidence support?" in text
     assert "What should happen next?" in text
-    assert "Technical evidence and audit" in text
-    assert '<details class="technical">' in text
-    assert text.index("What does the genomic evidence support?") < text.index(
-        "Technical evidence and audit"
+    assert "Does divergence increase with sampling time?" in text
+    assert "This is the formal proceed/stop gate for time scaling." in text
+    assert text.index("Does divergence increase with sampling time?") < text.index(
+        "Is the observed fit stronger than shuffled dates?"
     )
-    assert text.index("Technical evidence and audit") < text.index("Temporal analysis")
+    assert text.index("Is the observed fit stronger than shuffled dates?") < text.index(
+        "Estimate the dated phylogeny"
+    )
+    assert text.index("Estimate the dated phylogeny") < text.index(
+        "What pattern is consistent with these genomes?"
+    )
     assert "Recombination-filtered genomic distances" in text
     assert "Candidate local groups" in text
     assert "Patient-level sensitivity" in text
@@ -143,6 +166,25 @@ def test_lineage_report_contains_visuals_verdict_and_guardrail(tmp_path: Path) -
     assert "SKA distances" in text
     assert "does not prove direct transmission" in text
     assert (tmp_path / "date_randomisation.svg").is_file()
+    assert (tmp_path / "date_randomisation.png").is_file()
+    assert (tmp_path / "date_randomisation.csv").is_file()
+    assert (tmp_path / "root_to_tip.png").is_file()
+    assert (tmp_path / "timetree_confidence.csv").is_file()
+    assert (tmp_path / "node_dates.csv").is_file()
+    assert (tmp_path / "supporting_results.zip").is_file()
+    assert "Median interval width" in text
+    assert "Widest interval" in text
+    assert "<i>E coli</i><span>ST131</span>" in text
+    assert "E_coli</i>" not in text
+    assert "Final dated-tree fit" in text
+    assert "Open the full-resolution dated phylogeny" in text
+    assert 'role="region" aria-label="Evidence ledger"' in text
+    assert "prefers-reduced-motion:reduce" in text
+    assert text.index(
+        "Temporal signal supported", text.index("date_randomisation.svg")
+    ) < text.index("Evidence and downloads", text.index("date_randomisation.svg"))
+    assert "ESS" not in text
+    assert "Not applicable" not in text
 
 
 def test_unsupported_report_omits_dated_tree_visual(tmp_path: Path) -> None:
@@ -160,6 +202,16 @@ def test_unsupported_report_omits_dated_tree_visual(tmp_path: Path) -> None:
     assert "Temporal signal not supported" in text
     assert "Time-scaled phylogeny" not in text
     assert "cannot distinguish" in text
+
+
+def test_supporting_bundle_is_reproducible(tmp_path: Path) -> None:
+    (tmp_path / "result.csv").write_text("sample,value\nS1,1\n", encoding="utf-8")
+
+    first = write_supporting_bundle(tmp_path).read_bytes()
+    (tmp_path / "result.csv").touch()
+    second = write_supporting_bundle(tmp_path).read_bytes()
+
+    assert first == second
 
 
 def test_summary_report_links_lineage_reports(tmp_path: Path) -> None:
