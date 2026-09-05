@@ -10,6 +10,8 @@ flagged only when it is both at least five times the cohort median and an
 extreme robust outlier (robust z-score at least 10). The workflow stops and
 writes `lineage_coherence.tsv` when this screen fails, avoiding an expensive
 tree and recombination run on an obvious accession, species or lineage error.
+After ClonalFrameML, the same relative check is repeated on the filtered
+alignment and written to `clonal_lineage_coherence.tsv` before clock analysis.
 This relative check is an input safeguard, not a universal bacterial SNP
 threshold or a transmission definition.
 

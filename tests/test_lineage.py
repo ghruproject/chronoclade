@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 
-from chronoclade.lineage import _run_command
+from chronoclade.lineage import LineageFiles, _run_command, _run_dated_tree
 
 
 COPY_INPUT = (
@@ -25,3 +25,25 @@ def test_stage_reruns_when_direct_input_changes(tmp_path: Path) -> None:
 
     assert output.read_text(encoding="utf-8") == "second"
     assert (tmp_path / "logs" / "copy.fingerprint.json").is_file()
+
+
+def test_dated_tree_keeps_the_root_used_for_temporal_testing(
+    tmp_path: Path, monkeypatch
+) -> None:
+    files = LineageFiles.in_directory(tmp_path)
+    observed: dict[str, object] = {}
+
+    def capture(command, **kwargs):
+        observed["command"] = command
+        observed["inputs"] = kwargs["inputs"]
+
+    monkeypatch.setattr("chronoclade.lineage._run_command", capture)
+
+    _run_dated_tree(files, sequence_length=1234, force=False)
+
+    command = observed["command"]
+    assert isinstance(command, list)
+    assert str(files.clock_dir / "rerooted.newick") in command
+    assert "--keep-root" in command
+    assert "--reroot" not in command
+    assert observed["inputs"] == (files.clock_dir / "rerooted.newick", files.metadata)

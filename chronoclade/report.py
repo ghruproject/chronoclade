@@ -320,6 +320,27 @@ def _timetree_section(
     )
     rate_std = confidence.get("rate_std_dev")
     rate_std_text = f" ± {float(rate_std):.2g}" if rate_std is not None else ""
+    root_width = (
+        float(upper) - float(lower)
+        if lower is not None and upper is not None
+        else 0.0
+    )
+    median_width = float(confidence.get("median_internal_interval_width_years", 0.0))
+    root_is_poorly_constrained = root_width > max(50.0, 5.0 * median_width)
+    precision_decision = "REVIEW ROOT DATE" if root_is_poorly_constrained else "DATED TREE"
+    precision_class = "review" if root_is_poorly_constrained else "proceed"
+    precision_warning = (
+        f"""
+        <section class="card caveat"><h3>Root date is poorly constrained</h3>
+        <p>The sampling dates carry temporal signal, but that does not make every node date
+        precise. The root's 90% interval spans {root_width:.1f} years, much wider than the
+        typical internal-node interval ({median_width:.1f} years). Treat the root point
+        estimate as provisional and inspect the root placement, earliest samples and model
+        assumptions before using it in a public-health interpretation.</p></section>
+        """
+        if root_is_poorly_constrained
+        else ""
+    )
     downloads = _download_list(
         [
             (
@@ -359,7 +380,7 @@ def _timetree_section(
       <div class="stage-body">
         <div class="stage-head">
           <div><h2>Estimate the dated phylogeny</h2><p class="question">Only reached because the temporal-signal gate passed.</p></div>
-          <strong class="decision proceed">PROCEED</strong>
+          <strong class="decision {precision_class}">{precision_decision}</strong>
         </div>
         <p>TreeTime now estimates calendar dates for internal nodes. The pale vermillion bars
         on the phylogeny show the 90% node-date interval for each inferred node. TreeTime
@@ -372,6 +393,7 @@ def _timetree_section(
           <div><small>Median interval width</small><b>{float(confidence.get("median_internal_interval_width_years", 0.0)):.2f} years</b><span>across internal nodes</span></div>
           <div><small>Widest interval</small><b>{float(confidence.get("maximum_internal_interval_width_years", 0.0)):.2f} years</b><span>least precise node date</span></div>
         </div>
+        {precision_warning}
         <div class="evidence-layout"><figure><div class="figure-scroll" tabindex="0" role="region" aria-label="Dated phylogeny; scroll horizontally to inspect detail"><a class="figure-expand" href="{displayed_timetree}" title="Open the full-resolution dated phylogeny"><img src="{displayed_timetree}" alt="Time-scaled phylogeny with visible 90% node-date intervals"></a></div><figcaption>Calendar-time phylogeny. Branches are black, sampled genomes are blue, and pale vermillion bars are 90% node-date intervals. <a href="{displayed_timetree}">Open the full-resolution dated phylogeny</a>.</figcaption></figure>
         <details class="evidence-files" open><summary>Evidence and downloads</summary>{downloads}</details></div>
       </div>
@@ -477,6 +499,11 @@ def _report_downloads(directory: Path) -> tuple[str, str, str]:
                 "lineage_coherence.tsv",
                 "Lineage-coherence screen",
                 "Pre-phylogeny raw-distance outlier evidence",
+            ),
+            (
+                "clonal_lineage_coherence.tsv",
+                "Filtered lineage-coherence screen",
+                "Post-recombination clonal-distance outlier evidence",
             ),
             (
                 "clonalframeml.labelled_tree.newick",

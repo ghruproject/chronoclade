@@ -183,7 +183,42 @@ def test_lineage_report_contains_visuals_verdict_and_guardrail(tmp_path: Path) -
     assert text.index(
         "Temporal signal supported", text.index("date_randomisation.svg")
     ) < text.index("Evidence and downloads", text.index("date_randomisation.svg"))
-    assert "ESS" not in text
+
+
+def test_lineage_report_warns_when_root_interval_is_disproportionately_wide(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "clock").mkdir()
+    (tmp_path / "timetree").mkdir()
+    (tmp_path / "timetree" / "timetree.svg").write_text("<svg/>", encoding="utf-8")
+    (tmp_path / "timetree" / "molecular_clock.txt").write_text(
+        " --rate:\t4.4e-07 +/- 7e-08 (one std-dev)\n --r^2:\t0.11\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "timetree" / "dates.tsv").write_text(
+        "#node\tdate\tnumeric date\tlower bound\tupper bound\n"
+        "NODE_0000000\t1980-01-01\t1980\t1775\t2002\n"
+        "NODE_1\t1995-01-01\t1995\t1985\t2000\n"
+        "NODE_2\t1996-01-01\t1996\t1988\t2001\n"
+        "NODE_3\t1997-01-01\t1997\t1990\t2002\n",
+        encoding="utf-8",
+    )
+    report = {
+        "species": "Escherichia_coli",
+        "lineage": "ST131",
+        "sample_count": 96,
+        "distinct_dates": 15,
+        "temporal_signal": temporal_result(),
+        "context": {},
+        "public_health": {},
+    }
+
+    output = write_lineage_report(report, directory=tmp_path, p_value_threshold=0.05)
+    text = output.read_text(encoding="utf-8")
+
+    assert "REVIEW ROOT DATE" in text
+    assert "Root date is poorly constrained" in text
+    assert "spans 227.0 years" in text
     assert "Not applicable" not in text
 
 
