@@ -10,6 +10,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
 
+from chronoclade.coherence import screen_alignment
 from chronoclade.errors import WorkflowError
 from chronoclade.evidence import build_public_health_evidence
 from chronoclade.metadata import Sample, select_reference
@@ -30,6 +31,7 @@ class LineageFiles:
     metadata: Path
     states: Path
     alignment: Path
+    coherence_screen: Path
     ska_prefix: Path
     ska_file: Path
     iqtree_prefix: Path
@@ -52,6 +54,7 @@ class LineageFiles:
             metadata=directory / "metadata.csv",
             states=directory / "states.csv",
             alignment=directory / "core_alignment.fasta",
+            coherence_screen=directory / "lineage_coherence.tsv",
             ska_prefix=directory / "ska",
             ska_file=directory / "ska.skf",
             iqtree_prefix=directory / "iqtree",
@@ -337,7 +340,7 @@ def _run_core_phylogeny(
     threads: int,
     force: bool,
 ) -> None:
-    stages = [
+    mapping_stages = [
         (
             [
                 "ska",
@@ -370,6 +373,31 @@ def _run_core_phylogeny(
             files.alignment,
             (reference.assembly, files.ska_file),
         ),
+    ]
+    for command, log_name, expected, inputs in mapping_stages:
+        _run_command(
+            command,
+            log=files.directory / "logs" / log_name,
+            expected=expected,
+            force=force,
+            cwd=files.directory,
+            inputs=inputs,
+        )
+
+    coherence = screen_alignment(
+        files.alignment,
+        members,
+        output=files.coherence_screen,
+    )
+    if coherence["flagged_samples"]:
+        names = ", ".join(str(name) for name in coherence["flagged_samples"])
+        raise WorkflowError(
+            "Lineage-coherence screen found extreme raw-distance outlier(s): "
+            f"{names}. Verify their accessions, species and lineage assignment, or split the "
+            f"input lineage. Evidence: {files.coherence_screen}"
+        )
+
+    phylogeny_stages = [
         (
             [
                 "iqtree",
@@ -405,7 +433,7 @@ def _run_core_phylogeny(
             (files.starting_tree, files.alignment),
         ),
     ]
-    for command, log_name, expected, inputs in stages:
+    for command, log_name, expected, inputs in phylogeny_stages:
         _run_command(
             command,
             log=files.directory / "logs" / log_name,
@@ -564,6 +592,7 @@ def _report_record(
         "public_health": public_health,
         "outputs": {
             "alignment": str(files.alignment),
+            "lineage_coherence": str(files.coherence_screen),
             "starting_tree": str(files.starting_tree),
             "tree": str(files.tree),
             "recombination_importations": str(files.importations),
