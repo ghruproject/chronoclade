@@ -64,6 +64,7 @@ def test_small_workflow_reaches_time_scaled_and_location_trees(tmp_path: Path) -
     assert len(summary["lineages"]) == 1
     assert (output / "E_coli__ST_test" / "clonalframeml.labelled_tree.newick").is_file()
     assert (output / "E_coli__ST_test" / "lineage_coherence.tsv").is_file()
+    assert (output / "E_coli__ST_test" / "clonal_lineage_coherence.tsv").is_file()
     assert (output / "E_coli__ST_test" / "timetree" / "timetree.nexus").is_file()
     assert (output / "E_coli__ST_test" / "timetree" / "timetree.svg").is_file()
     assert (output / "E_coli__ST_test" / "timetree.png").is_file()

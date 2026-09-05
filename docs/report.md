@@ -39,11 +39,6 @@ intervals show the uncertainty in internal-node dates. The report also gives
 the clock rate and its standard deviation, root estimate, and summaries of
 node-interval width.
 
-TreeTime uses maximum-likelihood inference. Terms such as effective sample size
-and MCMC convergence do not apply because the software does not sample a
-posterior chain. ChronoClade reports the uncertainty measures that TreeTime
-produces instead of presenting Bayesian diagnostics from a different method.
-
 ## 4. Review topology, distance and context
 
 The working interpretation uses the recombination-filtered topology, clonal SNP

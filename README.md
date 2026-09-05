@@ -63,7 +63,8 @@ After SKA mapping, ChronoClade checks whether any genome is an extreme
 raw-distance outlier within its declared lineage. A failed check stops before
 IQ-TREE and ClonalFrameML and records the per-genome evidence in
 `lineage_coherence.tsv`; verify the accession and lineage assignment before
-rerunning.
+rerunning. A second check on the recombination-filtered alignment writes
+`clonal_lineage_coherence.tsv` before temporal analysis.
 
 Open `chronoclade_results/index.html` when the run completes. Each lineage has
 its own report and a ZIP archive containing the figures, tables, trees and
@@ -107,6 +108,12 @@ with the published analysis of the collection.
 The [worked example](https://ghruproject.github.io/chronoclade/worked-example/)
 shows the commands, root-to-tip plot, randomisation result, dated tree with node
 intervals, clonal distances and the resulting public-health interpretation.
+
+The repository also includes an
+[accession-defined ST131-H30 validation](validation/komori2024_st131/README.md)
+against the 96 C0/C1 chromosomes from Komori et al. (2024). It records the
+identity audit, both lineage-coherence checks and the distinction between
+detectable temporal signal and an imprecise TreeTime root date.
 
 ## Documentation
 

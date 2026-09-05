@@ -11,3 +11,7 @@ site/
 chronoclade_results/
 demo_run/
 tmp/
+validation/**/assemblies/
+validation/**/atb_assemblies/
+validation/**/results/
+validation/**/source/

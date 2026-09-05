@@ -32,6 +32,7 @@ class LineageFiles:
     states: Path
     alignment: Path
     coherence_screen: Path
+    clonal_coherence_screen: Path
     ska_prefix: Path
     ska_file: Path
     iqtree_prefix: Path
@@ -55,6 +56,7 @@ class LineageFiles:
             states=directory / "states.csv",
             alignment=directory / "core_alignment.fasta",
             coherence_screen=directory / "lineage_coherence.tsv",
+            clonal_coherence_screen=directory / "clonal_lineage_coherence.tsv",
             ska_prefix=directory / "ska",
             ska_file=directory / "ska.skf",
             iqtree_prefix=directory / "iqtree",
@@ -443,6 +445,19 @@ def _run_core_phylogeny(
             inputs=inputs,
         )
 
+    clonal_coherence = screen_alignment(
+        files.filtered_alignment,
+        members,
+        output=files.clonal_coherence_screen,
+    )
+    if clonal_coherence["flagged_samples"]:
+        names = ", ".join(str(name) for name in clonal_coherence["flagged_samples"])
+        raise WorkflowError(
+            "Lineage-coherence screen found extreme recombination-filtered distance "
+            f"outlier(s): {names}. Verify their accessions and lineage assignment before "
+            f"temporal analysis. Evidence: {files.clonal_coherence_screen}"
+        )
+
 
 def _run_observed_clock(files: LineageFiles, sequence_length: int, force: bool) -> None:
     _run_command(
@@ -500,11 +515,12 @@ def _temporal_signal(
 
 
 def _run_dated_tree(files: LineageFiles, sequence_length: int, force: bool) -> None:
+    rooted_tree = files.clock_dir / "rerooted.newick"
     _run_command(
         [
             "treetime",
             "--tree",
-            str(files.tree),
+            str(rooted_tree),
             "--dates",
             str(files.metadata),
             "--name-column",
@@ -516,8 +532,7 @@ def _run_dated_tree(files: LineageFiles, sequence_length: int, force: bool) -> N
             "--confidence",
             "--time-marginal",
             "only-final",
-            "--reroot",
-            "least-squares",
+            "--keep-root",
             "--covariation",
             "--clock-filter",
             "0",
@@ -531,7 +546,7 @@ def _run_dated_tree(files: LineageFiles, sequence_length: int, force: bool) -> N
         log=files.directory / "logs" / "timetree.log",
         expected=files.time_tree,
         force=force,
-        inputs=(files.tree, files.metadata),
+        inputs=(rooted_tree, files.metadata),
     )
 
 
@@ -593,6 +608,7 @@ def _report_record(
         "outputs": {
             "alignment": str(files.alignment),
             "lineage_coherence": str(files.coherence_screen),
+            "clonal_lineage_coherence": str(files.clonal_coherence_screen),
             "starting_tree": str(files.starting_tree),
             "tree": str(files.tree),
             "recombination_importations": str(files.importations),

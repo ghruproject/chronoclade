@@ -16,6 +16,7 @@ completed stage can be reused.
 | `supporting_results.zip` | Portable report evidence bundle |
 | `core_alignment.fasta` | SKA2 reference-ordered alignment |
 | `lineage_coherence.tsv` | Per-genome raw-distance screen run before IQ-TREE and ClonalFrameML |
+| `clonal_lineage_coherence.tsv` | Per-genome recombination-filtered distance screen run before temporal analysis |
 | `iqtree.treefile` | Starting maximum-likelihood tree |
 | `clonalframeml.labelled_tree.newick` | Recombination-corrected tree |
 | `clonalframeml.importation_status.txt` | Recombination intervals by branch |

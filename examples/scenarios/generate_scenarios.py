@@ -39,8 +39,7 @@ def _sequence(positions: set[int]) -> str:
 
 def _temporal_result(supported: bool) -> dict[str, object]:
     randomised = [
-        {"rate": 2e-7 + index * 1e-8, "r_squared": 0.04 + index * 0.01}
-        for index in range(20)
+        {"rate": 2e-7 + index * 1e-8, "r_squared": 0.04 + index * 0.01} for index in range(20)
     ]
     return {
         "observed": {
@@ -207,9 +206,7 @@ def _build_scenario(scenario: Scenario, output: Path) -> dict[str, object]:
     (directory / "temporal_signal.json").write_text(
         json.dumps(temporal, indent=2) + "\n", encoding="utf-8"
     )
-    (directory / "report.json").write_text(
-        json.dumps(report, indent=2) + "\n", encoding="utf-8"
-    )
+    (directory / "report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     write_lineage_report(report, directory=directory, p_value_threshold=0.05)
     return {
         "species": report["species"],
