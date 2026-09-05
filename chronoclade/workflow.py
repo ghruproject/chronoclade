@@ -25,12 +25,11 @@ from chronoclade.metadata import (
 )
 from chronoclade.report import write_summary_report
 
-REQUIRED_TOOLS = (
-    "ska",
-    "iqtree",
-    "ClonalFrameML",
-    "treetime",
-)
+TOOLS_BY_MODE = {
+    "full": ("ska", "iqtree", "ClonalFrameML", "treetime"),
+    "fast": ("ska", "iqtree", "Profile", "treetime"),
+}
+REQUIRED_TOOLS = tuple(dict.fromkeys(tool for tools in TOOLS_BY_MODE.values() for tool in tools))
 
 
 @dataclass(frozen=True)
@@ -80,13 +79,13 @@ def native_platform_supported() -> bool:
     return sys.platform.startswith(("linux", "darwin"))
 
 
-def check_tools() -> None:
+def check_tools(mode: str = "full") -> None:
     if not native_platform_supported():
         raise WorkflowError(
             "Native execution is supported on macOS and Linux. This platform is not in the "
             "locked Pixi environment."
         )
-    missing = [tool for tool, path in tool_status().items() if path is None]
+    missing = [tool for tool in TOOLS_BY_MODE[mode] if shutil.which(tool) is None]
     if missing:
         raise WorkflowError(
             "Missing workflow tools: "
@@ -129,10 +128,18 @@ def run_workflow(
     seed: int,
     force: bool,
     context_manifest: Path | None = None,
+    mode: str = "full",
+    date_randomisation_method: str = "root_to_tip",
 ) -> dict[str, object]:
     """Run every lineage through alignment, recombination and dating stages."""
 
-    check_tools()
+    if mode not in TOOLS_BY_MODE:
+        raise WorkflowError("mode must be 'full' or 'fast'")
+    if date_randomisation_method not in {"root_to_tip", "full_tree"}:
+        raise WorkflowError("date randomisation method must be 'root_to_tip' or 'full_tree'")
+    if mode == "fast" and date_randomisation_method != "root_to_tip":
+        raise WorkflowError("fast mode only supports root-to-tip date randomisation")
+    check_tools() if mode == "full" else check_tools(mode)
     output = output.expanduser().resolve()
     output.mkdir(parents=True, exist_ok=True)
     lineage_plan = plan(samples, min_samples=min_samples)
@@ -161,6 +168,8 @@ def run_workflow(
                 seed=seed + index,
                 force=force,
                 context_manifest_rows=manifest_rows,
+                mode=mode,
+                date_randomisation_method=date_randomisation_method,
             )
         except (EvidenceError, OSError, WorkflowError) as error:
             raise WorkflowError(f"Lineage {key[0]} / {key[1]} failed: {error}") from error
@@ -179,6 +188,8 @@ def run_workflow(
 
     summary = {
         "workflow": "chronoclade",
+        "analysis_mode": mode,
+        "date_randomisation_method": date_randomisation_method,
         "resources": asdict(resources),
         "lineages": reports,
         "context_manifest": str(context_manifest.expanduser().resolve())

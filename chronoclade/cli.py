@@ -269,6 +269,17 @@ def run(
             help="Number of tip-date permutations; use at least 100 for analysis",
         ),
     ] = 100,
+    mode: Annotated[
+        str,
+        typer.Option("--mode", help="Analysis mode: full or fast"),
+    ] = "full",
+    date_randomisation_method: Annotated[
+        str,
+        typer.Option(
+            "--date-randomisation-method",
+            help="root-to-tip (fast permutation screen) or full-tree (complete TreeTime refits)",
+        ),
+    ] = "root-to-tip",
     temporal_p_value: Annotated[float, typer.Option("--temporal-p-value", min=0.0, max=1.0)] = 0.05,
     min_samples: Annotated[int, typer.Option("--min-samples", min=3)] = 10,
     seed: Annotated[int, typer.Option("--seed")] = 20260818,
@@ -284,9 +295,18 @@ def run(
         bool, typer.Option("--dry-run", help="Validate and print the plan only")
     ] = False,
 ) -> None:
-    """Run lineage-specific recombination, temporal and location analyses."""
+    """Run lineage-specific recombination and temporal analyses."""
 
     try:
+        normalized_method = date_randomisation_method.replace("-", "_")
+        if mode not in {"full", "fast"}:
+            raise WorkflowError("--mode must be full or fast")
+        if normalized_method not in {"root_to_tip", "full_tree"}:
+            raise WorkflowError(
+                "--date-randomisation-method must be root-to-tip or full-tree"
+            )
+        if mode == "fast" and normalized_method != "root_to_tip":
+            raise WorkflowError("--mode fast only supports root-to-tip randomisation")
         samples = read_metadata(metadata)
         items = plan(samples, min_samples=min_samples)
         if dry_run:
@@ -305,13 +325,16 @@ def run(
             seed=seed,
             force=force,
             context_manifest=context_manifest,
+            mode=mode,
+            date_randomisation_method=normalized_method,
         )
     except (MetadataError, WorkflowError, OSError) as error:
         _fail(error)
     supported = sum(bool(item.get("temporal_signal_supported")) for item in summary["lineages"])
+    result_word = "screen" if mode == "fast" else "configured temporal-signal test"
     console.print(
         f"[green]Completed {len(summary['lineages'])} lineage records; "
-        f"{supported} passed the temporal-signal gate.[/green]"
+        f"{supported} passed the {result_word}.[/green]"
     )
     console.print(f"Summary: {(output.expanduser().resolve() / 'summary.json')}")
 

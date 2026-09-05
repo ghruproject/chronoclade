@@ -642,7 +642,7 @@ def synthesise_scenario(
         },
     ]
     reasons = [
-        f"The local isolates form {len(groups)} separate {_plural(len(groups), 'group')} in "
+        f"The focal isolates form {len(groups)} separate {_plural(len(groups), 'group')} in "
         "the recombination-corrected tree.",
         f"{len(spanning)} local {_plural(len(spanning), 'group')} "
         f"{'contains' if len(spanning) == 1 else 'contain'} isolates collected on more than "
@@ -670,7 +670,7 @@ def synthesise_scenario(
             "Continue targeted sampling to determine whether the lineage remains locally detectable.",
         ],
         "multiple_introductions": [
-            "Review referral, travel, community and source histories separately for each candidate local group.",
+            "Review referral, travel, community and source histories separately for each candidate focal group.",
             "Expand public or regional context around each group before estimating introduction pathways.",
         ],
         "mixed": [

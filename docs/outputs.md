@@ -42,6 +42,16 @@ completed stage can be reused.
 | `timetree_confidence.csv` | Clock and root uncertainty summary |
 | `node_dates.csv` | Internal-node estimates and 90% intervals |
 
+## Fast-mode evidence
+
+| File | Content |
+| --- | --- |
+| `phipack_profile.tsv` | PhiPack Profile positions and p-values, with reference-record coordinates |
+| `phipack_recombination_regions.tsv` | Significant regions masked before the screening tree |
+| `phipack_summary.json` | Parameters, tested blocks, calls and boundary rule |
+| `phipack.filtered.fasta` | Alignment supplied to the fast-mode IQ-TREE run |
+| `iqtree_fast.treefile` | Screening phylogeny used for root-to-tip analysis |
+
 ## Context preparation
 
 `prepare-context` writes the complete same-ST accession list, the balanced

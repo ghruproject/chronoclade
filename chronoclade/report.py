@@ -129,8 +129,8 @@ def _public_health_visual(report: dict[str, object], directory: Path) -> tuple[s
         ("same_month", "Focal pairs in the same month"),
         ("same_year", "Focal pairs in the same year"),
         ("between_years", "Focal pairs between years"),
-        ("within_candidate_groups", "Within candidate local groups"),
-        ("between_candidate_groups", "Between candidate local groups"),
+        ("within_candidate_groups", "Within candidate focal groups"),
+        ("between_candidate_groups", "Between candidate focal groups"),
         ("same_patient", "Within-patient focal pairs"),
         ("different_patients", "Between-patient focal pairs"),
     )
@@ -178,7 +178,7 @@ def _public_health_visual(report: dict[str, object], directory: Path) -> tuple[s
             "<th>Date span</th><th>Locations</th><th>Within-group clonal distance</th>"
             "<th>Nearest final context</th><th>Samples</th></tr></thead>"
             f"<tbody>{''.join(group_rows)}</tbody></table>",
-            label="Candidate local groups",
+            label="Candidate focal groups",
         )
         if group_rows
         else "<p>No topology-defined focal groups were available.</p>"
@@ -258,7 +258,7 @@ def _public_health_visual(report: dict[str, object], directory: Path) -> tuple[s
   </section>
 
   <section class="card">
-    <h3>Candidate local groups</h3>
+    <h3>Candidate focal groups</h3>
     <p>{escape(str(topology.get("interpretation", "No topology summary was available.")))}</p>
     {group_table}
   </section>
@@ -425,7 +425,7 @@ def _context_section(context: dict[str, object], directory: Path) -> str:
         return f"""
         <section class="card caveat"><h3>Public contextual genomes</h3>
           <p>{escape(str(context.get("interpretation", "No contextual genomes were supplied.")))}</p>
-          <p>The report can describe structure among local isolates, but it cannot distinguish
+          <p>The report can describe structure among focal isolates, but it cannot distinguish
           persistence from repeated introductions without an appropriate same-lineage context set.</p>
         </section>
         """
@@ -552,7 +552,8 @@ def write_lineage_report(
     public_health_summary, public_health_evidence = _public_health_visual(report, directory)
     observed_rate = observed_metric(temporal, "rate")
     observed_r_squared = observed_metric(temporal, "r_squared")
-    p_value = float(temporal["p_value_r_squared"])
+    method = str(temporal.get("method", "root_to_tip"))
+    p_value = float(temporal.get("p_value_r_squared", float("nan")))
     successful = int(temporal["successful_randomisations"])
 
     root_plot = directory / "clock" / "root_to_tip_regression.svg"
@@ -583,6 +584,38 @@ def write_lineage_report(
     exceedances = sum(
         float(value["r_squared"]) >= observed_r_squared for value in randomised_values
     )
+    if method == "full_tree":
+        randomisation_question = "Does the clock rate survive full dating-model refits?"
+        randomisation_intro = (
+            "TreeTime is refitted after each tip-date permutation, including re-estimating the "
+            "root. The configured strict CR2 rule passes only when the observed approximate 95% "
+            "rate interval overlaps none of the intervals from randomised-date fits."
+        )
+        randomisation_metrics = (
+            f"<div><small>Observed rate</small><b>{observed_rate:.3g}</b><span>substitutions/site/year</span></div>"
+            f"<div><small>Completed refits</small><b>{successful}</b><span>full TreeTime analyses</span></div>"
+            f"<div><small>CR2 overlaps</small><b>{int(temporal.get('cr2_overlapping_randomisations', 0))}</b><span>approximate 95% rate intervals</span></div>"
+        )
+        randomisation_caption = (
+            "The observed rate is compared with full TreeTime fits after tip dates are permuted. "
+            "Intervals are normal approximations from TreeTime's reported rate standard error."
+        )
+    else:
+        randomisation_question = "Is the observed fit stronger than shuffled dates?"
+        randomisation_intro = (
+            "The same corrected tree is analysed repeatedly after collection dates are permuted "
+            "among genomes. The empirical p-value is the proportion of shuffled analyses whose "
+            "root-to-tip R² equals or exceeds the observed value, with a one-count correction."
+        )
+        randomisation_metrics = (
+            f"<div><small>Exploratory root-to-tip fit</small><b>R² {observed_r_squared:.3g}</b><span>real collection dates</span></div>"
+            f"<div><small>Null exceedances</small><b>{exceedances} / {successful}</b><span>successful randomisations</span></div>"
+            f"<div><small>Empirical p</small><b>{p_value:.3g}</b><span>predefined threshold {p_value_threshold:.3g}</span></div>"
+        )
+        randomisation_caption = (
+            "The red line is the observed result; blue bars are the null distribution generated "
+            "by permuting collection dates. R² drives this screening decision; the rate panel is descriptive."
+        )
     root_decision = "CONTINUE TO TEST" if observed_rate > 0 else "STOP"
     root_class = "review" if observed_rate > 0 else "stop"
     final_decision = "PROCEED" if bool(assessment["supported"]) else "DO NOT TIME-SCALE"
@@ -674,10 +707,10 @@ def write_lineage_report(
   <section class="stage" id="randomisation" data-stage="2">
     <div class="stage-index"><span>2</span><b>Test</b></div>
     <div class="stage-body">
-      <div class="stage-head"><div><h2>Is the observed fit stronger than shuffled dates?</h2><p class="question">This is the formal proceed/stop gate for time scaling.</p></div><strong class="decision {final_class}">{final_decision}</strong></div>
-      <p>The same corrected tree is analysed repeatedly after collection dates are permuted among genomes. The empirical p-value is the proportion of shuffled analyses whose root-to-tip R² equals or exceeds the observed value, with a one-count correction.</p>
-      <div class="measure-strip"><div><small>Exploratory root-to-tip fit</small><b>R² {observed_r_squared:.3g}</b><span>real collection dates</span></div><div><small>Null exceedances</small><b>{exceedances} / {successful}</b><span>successful randomisations</span></div><div><small>Empirical p</small><b>{p_value:.3g}</b><span>predefined threshold {p_value_threshold:.3g}</span></div></div>
-      <div class="evidence-layout"><figure><img src="date_randomisation.svg" alt="Histograms comparing observed TreeTime fit and rate with date-randomised values"><figcaption>The red line is the observed result; blue bars are the null distribution generated by permuting collection dates.</figcaption></figure>
+      <div class="stage-head"><div><h2>{escape(randomisation_question)}</h2><p class="question">This is the workflow's configured screening rule for time scaling.</p></div><strong class="decision {final_class}">{final_decision}</strong></div>
+      <p>{escape(randomisation_intro)}</p>
+      <div class="measure-strip">{randomisation_metrics}</div>
+      <div class="evidence-layout"><figure><img src="date_randomisation.svg" alt="Date-randomisation results"><figcaption>{escape(randomisation_caption)}</figcaption></figure>
       <section class="verdict {escape(status)}"><strong>{escape(str(assessment["label"]))}</strong><p>{escape(str(assessment["reason"]))}</p></section>
       <details class="evidence-files" open><summary>Evidence and downloads</summary>{randomisation_downloads}</details></div>
     </div>
@@ -692,7 +725,7 @@ def write_lineage_report(
       {public_health_summary}
       {context_visual}
       {public_health_evidence}
-      <section class="card caveat"><h3>Interpretation boundary</h3><p>Temporal signal means the dates inform evolutionary rate and node timing under this model. It does not prove direct transmission, local circulation, or a definitive number of introductions. Those conclusions also depend on recombination filtering, contextual sampling and epidemiological metadata.</p></section>
+      <section class="card caveat"><h3>Interpretation boundary</h3><p>Passing the configured temporal screen means the dates contain information useful for rate and node-time estimation under this topology and clock model. TreeTime's intervals are conditional on the supplied topology, dates and model; they do not include uncertainty in sampling, topology or model choice. This result does not prove direct transmission, local circulation, or a definitive number of introductions.</p></section>
       <h3>Complete audit package</h3><p>Every reader-facing result is available separately and as one ZIP bundle.</p>{audit_downloads}
       <p><a href="supporting_results.zip"><strong>Download all supporting results (.zip)</strong></a></p>
     </div>
@@ -703,6 +736,52 @@ def write_lineage_report(
 </body>
 </html>
 """),
+        encoding="utf-8",
+    )
+    return output
+
+
+def write_fast_lineage_report(
+    report: dict[str, object], *, directory: Path, p_value_threshold: float
+) -> Path:
+    """Write the deliberately limited report produced by the fast screening mode."""
+
+    temporal = report["temporal_signal"]
+    recombination = report.get("recombination", {})
+    if not isinstance(temporal, dict) or not isinstance(recombination, dict):
+        raise ValueError("fast report lacks temporal or recombination results")
+    assessment = assess_temporal_signal(temporal, p_value_threshold=p_value_threshold)
+    observed_rate = observed_metric(temporal, "rate")
+    observed_r_squared = observed_metric(temporal, "r_squared")
+    p_value = float(temporal["p_value_r_squared"])
+    write_randomisation_plot(temporal, directory / "date_randomisation.svg")
+    write_randomisation_png(temporal, directory / "date_randomisation.png")
+    write_randomisation_csv(temporal, directory / "date_randomisation.csv")
+    write_root_to_tip_png(directory / "clock" / "rtt.csv", directory / "root_to_tip.png")
+    write_supporting_bundle(directory)
+    species = escape(str(report["species"]).replace("_", " "))
+    lineage = escape(str(report["lineage"]))
+    label = escape(str(assessment["label"]))
+    reason = escape(str(assessment["reason"]))
+    boundary = escape(str(recombination.get("boundary_rule", "")))
+    output = directory / "report.html"
+    output.write_text(
+        _clean_html(f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ChronoClade fast screen — {species} {lineage}</title><style>{embedded_font_css()}
+:root{{--ink:#17191f;--muted:#5f6470;--line:#c9ccd4;--blue:#2855a6;--red:#d63c2f;--wash:#eef0f4}}
+*{{box-sizing:border-box}}html{{scroll-behavior:smooth}}body{{margin:0;background:var(--wash);color:var(--ink);font:16px/1.6 Archivo,sans-serif}}
+main{{width:min(1120px,100%);margin:auto;background:#fff;min-height:100vh}}header{{padding:46px clamp(22px,6vw,70px);border-bottom:3px solid var(--ink)}}
+h1{{font-size:clamp(32px,5vw,68px);line-height:1;margin:8px 0 18px;letter-spacing:-.035em}}h2{{font-size:clamp(27px,3.2vw,44px);line-height:1.05;margin:0 0 12px}}p{{max-width:72ch}}.identity-label{{font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--blue)}}
+.status{{display:inline-block;border:2px solid var(--red);color:var(--red);padding:9px 13px;font-weight:800}}section{{display:grid;grid-template-columns:130px minmax(0,1fr);border-bottom:2px solid var(--ink)}}
+.number{{padding:42px 22px;background:#f4f5f7;border-right:1px solid var(--ink);font-size:68px;font-weight:800;color:var(--blue)}}.body{{padding:44px clamp(22px,6vw,70px)}}
+.metrics{{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--ink);margin:24px 0}}.metrics div{{padding:15px;border-right:1px solid var(--line)}}.metrics div:last-child{{border:0}}.metrics small{{display:block;color:var(--muted)}}.metrics b{{font-size:21px}}img{{width:100%;border:1px solid var(--ink)}}
+.note{{background:#fff8dc;padding:16px}}.downloads{{display:flex;flex-wrap:wrap;gap:14px;margin-top:24px}}a{{color:var(--blue);font-weight:700}}footer{{padding:30px clamp(22px,6vw,70px);background:var(--ink);color:#fff}}
+@media(max-width:700px){{section{{grid-template-columns:64px 1fr}}.number{{padding:28px 9px;font-size:48px}}.metrics{{grid-template-columns:1fr}}.metrics div{{border-right:0;border-bottom:1px solid var(--line)}}}}
+</style></head><body><main><header><div class="identity-label">ChronoClade · fast temporal screen</div><h1><i>{species}</i><br>{lineage}</h1><p>This result is a triage screen. It checks recombination and temporal structure quickly; it does not estimate a dated phylogeny or infer circulation and introductions.</p><div class="status">{label}</div></header>
+<section><div class="number">1</div><div class="body"><h2>Were PHI-positive regions removed without crossing sequence joins?</h2><p>ChronoClade ran PhiPack Profile on bounded, reference-ordered analysis blocks. {boundary}</p><div class="metrics"><div><small>Blocks tested</small><b>{int(recombination.get('tested_core_blocks', 0))}</b></div><div><small>Regions masked</small><b>{int(recombination.get('recombination_regions', 0))}</b></div><div><small>Sites masked</small><b>{int(recombination.get('masked_alignment_sites', 0))}</b></div></div><p class="note">This follows Parsnp's Profile window and threshold settings, adapted to SKA's reference-ordered alignment. The fixed 250 kb blocks are computational units, not biological segments or Parsnp locally collinear blocks.</p><div class="downloads"><a href="phipack_profile.tsv">Profile results (TSV)</a><a href="phipack_recombination_regions.tsv">Masked regions (TSV)</a><a href="phipack_summary.json">Summary (JSON)</a><a href="phipack.filtered.fasta">Filtered alignment (FASTA)</a></div></div></section>
+<section><div class="number">2</div><div class="body"><h2>Is the observed root-to-tip association stronger than shuffled dates?</h2><p>The decision is driven by the root-to-tip R² permutation test. The rate is reported as a diagnostic; it is not a separate pass criterion.</p><div class="metrics"><div><small>Observed R²</small><b>{observed_r_squared:.3g}</b></div><div><small>Exploratory rate</small><b>{observed_rate:.3g}</b></div><div><small>Empirical p</small><b>{p_value:.3g}</b></div></div><img src="date_randomisation.svg" alt="Root-to-tip date-randomisation results"><p><strong>{label}.</strong> {reason}</p><p class="note">Dates are permuted without clustering. Population structure, outbreak structure and uneven sampling can therefore affect this screen. A passing result justifies considering the full workflow; it is not evidence of direct transmission or local circulation.</p><div class="downloads"><a href="clock/root_to_tip_regression.svg">Root-to-tip plot (SVG)</a><a href="root_to_tip.png">Root-to-tip plot (PNG)</a><a href="date_randomisation.csv">Randomisations (CSV)</a><a href="date_randomisation.svg">Randomisations (SVG)</a><a href="date_randomisation.png">Randomisations (PNG)</a></div></div></section>
+<footer><a style="color:white" href="supporting_results.zip">Download all supporting results</a></footer></main></body></html>"""),
         encoding="utf-8",
     )
     return output
@@ -727,7 +806,11 @@ def write_summary_report(summary: dict[str, object], *, output: Path) -> Path:
         if isinstance(metrics, dict) and "observed" in metrics:
             rate = format_rate(observed_metric(metrics, "rate"))
             r_squared = f"{observed_metric(metrics, 'r_squared'):.3g}"
-            p_value = f"{float(metrics['p_value_r_squared']):.3g}"
+            p_value = (
+                "CR2 pass" if bool(metrics.get("cr2_passed")) else "CR2 fail"
+                if metrics.get("method") == "full_tree"
+                else f"p={float(metrics['p_value_r_squared']):.3g}"
+            )
         slug = str(lineage["slug"])
         lineage_context = lineage.get("context", {})
         context_count = (
@@ -762,7 +845,7 @@ def write_summary_report(summary: dict[str, object], *, output: Path) -> Path:
 <style>
 body{{margin:0;background:#f2f6f8;color:#1d2b34;font:16px/1.5 Inter,ui-sans-serif,system-ui,sans-serif}}main{{width:min(1200px,calc(100% - 32px));margin:32px auto}}header{{background:#17394d;color:white;padding:30px;border-radius:16px}}h1{{margin:0}}header p{{color:#d5e5ed}}section{{background:white;border:1px solid #d8e1e7;border-radius:13px;margin-top:18px;padding:22px;overflow:auto}}table{{width:100%;border-collapse:collapse;min-width:900px}}th,td{{padding:12px;text-align:left;border-bottom:1px solid #e4eaee}}th{{font-size:13px;text-transform:uppercase;color:#5b6b76}}a{{color:#265f7d;font-weight:700}}.status{{font-weight:700}}.supported{{color:#157347}}.not_supported{{color:#a33a36}}.not_assessed{{color:#8a6420}}footer{{margin-top:20px;color:#5b6b76}}
 </style></head><body><main><header><h1>ChronoClade analysis report</h1><p>Recombination-aware temporal and contextual bacterial phylogenetics</p></header>
-<section><h2>Lineage results</h2><table><thead><tr><th>Species</th><th>Lineage</th><th>Genomes</th><th>Context</th><th>Working interpretation</th><th>Temporal result</th><th>Rate</th><th>R²</th><th>p</th><th></th></tr></thead><tbody>{"".join(rows)}</tbody></table></section>
+<section><h2>Lineage results</h2><table><thead><tr><th>Species</th><th>Lineage</th><th>Genomes</th><th>Context</th><th>Working interpretation</th><th>Temporal result</th><th>Rate</th><th>R²</th><th>Date test</th><th></th></tr></thead><tbody>{"".join(rows)}</tbody></table></section>
 <section><h2>How to interpret this report</h2><p>The working interpretation combines recombination-filtered distances, corrected topology, longitudinal sampling and public context. It is provisional and must be reviewed with epidemiological information. A supported temporal signal permits time scaling under the fitted model but is not required for the genomic scenario assessment.</p></section>
 <footer>Generated by ChronoClade.</footer></main></body></html>
 """),

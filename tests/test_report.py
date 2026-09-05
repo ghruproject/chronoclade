@@ -2,6 +2,7 @@ from pathlib import Path
 
 from chronoclade.report import (
     assess_temporal_signal,
+    write_fast_lineage_report,
     write_lineage_report,
     write_supporting_bundle,
     write_summary_report,
@@ -19,6 +20,42 @@ def temporal_result(*, rate: float = 1e-6, p_value: float = 0.01) -> dict[str, o
             {"rate": 4e-7, "r_squared": 0.15},
             {"rate": 6e-7, "r_squared": 0.20},
             {"rate": 8e-7, "r_squared": 0.25},
+        ],
+    }
+
+
+def full_tree_temporal_result() -> dict[str, object]:
+    return {
+        "method": "full_tree",
+        "observed": {
+            "rate": 1e-6,
+            "r_squared": 0.5,
+            "rate_std": 1e-7,
+            "rate_lower_95": 8.04e-7,
+            "rate_upper_95": 1.196e-6,
+        },
+        "requested_randomisations": 2,
+        "successful_randomisations": 2,
+        "criterion": "cr2",
+        "cr1_passed": True,
+        "cr2_passed": True,
+        "cr1_overlapping_randomisations": 0,
+        "cr2_overlapping_randomisations": 0,
+        "randomised": [
+            {
+                "rate": 2e-7,
+                "r_squared": 0.1,
+                "rate_std": 2e-8,
+                "rate_lower_95": 1.608e-7,
+                "rate_upper_95": 2.392e-7,
+            },
+            {
+                "rate": 4e-7,
+                "r_squared": 0.2,
+                "rate_std": 2e-8,
+                "rate_lower_95": 3.608e-7,
+                "rate_upper_95": 4.392e-7,
+            },
         ],
     }
 
@@ -140,12 +177,12 @@ def test_lineage_report_contains_visuals_verdict_and_guardrail(tmp_path: Path) -
     output = write_lineage_report(report, directory=tmp_path, p_value_threshold=0.05)
     text = output.read_text(encoding="utf-8")
 
-    assert "Temporal signal supported" in text
+    assert "Root-to-tip permutation screen passed" in text
     assert "Consistent with local persistence plus additional introductions" in text
     assert "What does the genomic evidence support?" in text
     assert "What should happen next?" in text
     assert "Does divergence increase with sampling time?" in text
-    assert "This is the formal proceed/stop gate for time scaling." in text
+    assert "workflow's configured screening rule for time scaling" in text
     assert text.index("Does divergence increase with sampling time?") < text.index(
         "Is the observed fit stronger than shuffled dates?"
     )
@@ -156,7 +193,7 @@ def test_lineage_report_contains_visuals_verdict_and_guardrail(tmp_path: Path) -
         "What pattern is consistent with these genomes?"
     )
     assert "Recombination-filtered genomic distances" in text
-    assert "Candidate local groups" in text
+    assert "Candidate focal groups" in text
     assert "Patient-level sensitivity" in text
     assert "clock/root_to_tip_regression.svg" in text
     assert "date_randomisation.svg" in text
@@ -184,7 +221,7 @@ def test_lineage_report_contains_visuals_verdict_and_guardrail(tmp_path: Path) -
     assert 'class="stage active"' not in text
     assert ".stage.active" not in text
     assert text.index(
-        "Temporal signal supported", text.index("date_randomisation.svg")
+        "Root-to-tip permutation screen passed", text.index("date_randomisation.svg")
     ) < text.index("Evidence and downloads", text.index("date_randomisation.svg"))
 
 
@@ -237,7 +274,7 @@ def test_unsupported_report_omits_dated_tree_visual(tmp_path: Path) -> None:
     output = write_lineage_report(report, directory=tmp_path, p_value_threshold=0.05)
     text = output.read_text(encoding="utf-8")
 
-    assert "Temporal signal not supported" in text
+    assert "Root-to-tip permutation screen failed" in text
     assert "Time-scaled phylogeny" not in text
     assert "cannot distinguish" in text
 
@@ -250,6 +287,55 @@ def test_supporting_bundle_is_reproducible(tmp_path: Path) -> None:
     second = write_supporting_bundle(tmp_path).read_bytes()
 
     assert first == second
+
+
+def test_full_tree_report_explains_cr2_without_root_to_tip_p_value(tmp_path: Path) -> None:
+    report = {
+        "species": "E_coli",
+        "lineage": "ST131",
+        "sample_count": 20,
+        "distinct_dates": 5,
+        "temporal_signal": full_tree_temporal_result(),
+        "context": {},
+        "public_health": {},
+    }
+
+    text = write_lineage_report(
+        report, directory=tmp_path, p_value_threshold=0.05
+    ).read_text(encoding="utf-8")
+
+    assert "Full TreeTime randomisation screen passed" in text
+    assert "strict CR2 rule" in text
+    assert "CR2 overlaps" in text
+    assert "Empirical p" not in text
+
+
+def test_fast_report_has_only_the_two_screening_stages(tmp_path: Path) -> None:
+    (tmp_path / "clock").mkdir()
+    report = {
+        "species": "E_coli",
+        "lineage": "ST131",
+        "sample_count": 20,
+        "distinct_dates": 5,
+        "temporal_signal": temporal_result(),
+        "recombination": {
+            "tested_core_blocks": 3,
+            "recombination_regions": 1,
+            "masked_alignment_sites": 100,
+            "boundary_rule": "No block crossed a reference-contig join.",
+        },
+    }
+
+    text = write_fast_lineage_report(
+        report, directory=tmp_path, p_value_threshold=0.05
+    ).read_text(encoding="utf-8")
+
+    assert "fast temporal screen" in text
+    assert "not biological segments" in text
+    assert "dated phylogeny" in text
+    assert "Time-scaled phylogeny" not in text
+    assert "Interpret" not in text
+    assert "Not applicable" not in text
 
 
 def test_summary_report_links_lineage_reports(tmp_path: Path) -> None:

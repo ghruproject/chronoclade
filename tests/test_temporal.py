@@ -7,7 +7,7 @@ import pytest
 
 from chronoclade.metadata import Sample
 from chronoclade import temporal
-from chronoclade.temporal import TemporalError, parse_clock
+from chronoclade.temporal import TemporalError, parse_clock, parse_clock_with_uncertainty
 
 
 def test_parse_treetime_clock(tmp_path: Path) -> None:
@@ -18,6 +18,20 @@ def test_parse_treetime_clock(tmp_path: Path) -> None:
     )
 
     assert parse_clock(output) == {"rate": 1.234e-06, "r_squared": 0.67}
+
+
+def test_parse_treetime_clock_uncertainty(tmp_path: Path) -> None:
+    output = tmp_path / "molecular_clock.txt"
+    output.write_text(
+        "Root-Tip-Regression:\n --rate:\t1.2e-06 +/- 8e-08 (one std-dev)\n --r^2: 0.6\n",
+        encoding="utf-8",
+    )
+
+    result = parse_clock_with_uncertainty(output)
+
+    assert result["rate_std"] == 8e-08
+    assert result["rate_lower_95"] == pytest.approx(1.0432e-06)
+    assert result["rate_upper_95"] == pytest.approx(1.3568e-06)
 
 
 def test_rejects_unrecognised_clock_output(tmp_path: Path) -> None:
@@ -54,6 +68,7 @@ def test_date_randomisations_run_with_bounded_concurrency(
         return {"rate": 1e-6, "r_squared": 0.2}
 
     monkeypatch.setattr(temporal, "_run_randomised_clock", fake_randomised_clock)
+    (tmp_path / "tree.nwk").write_text("(S0,S1,S2,S3);\n", encoding="utf-8")
     result = temporal.run_date_randomisation(
         tree=tmp_path / "tree.nwk",
         sequence_length=4,
@@ -66,6 +81,7 @@ def test_date_randomisations_run_with_bounded_concurrency(
     )
 
     assert result["successful_randomisations"] == 6
+    assert result["method"] == "root_to_tip"
     assert 1 < maximum_active <= 3
 
 
@@ -94,3 +110,84 @@ def test_randomised_clock_allows_negative_null_rates(
     assert "--allow-negative-rate" in captured
     assert captured[captured.index("--clock-filter") + 1] == "0"
     assert result == {"rate": -1e-7, "r_squared": 0.1}
+
+
+def test_full_tree_randomisation_refits_model_and_applies_cr2(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    observed = tmp_path / "molecular_clock.txt"
+    observed.write_text(
+        "--rate: 1e-6 +/- 1e-7 (one std-dev)\n--r^2: 0.5\n", encoding="utf-8"
+    )
+    assembly = tmp_path / "assembly.fasta"
+    assembly.write_text(">contig\nAAAA\n", encoding="utf-8")
+    samples = [
+        Sample(f"S{index}", assembly, str(2020 + index), "KIMS", "E_coli", "ST1", "local")
+        for index in range(4)
+    ]
+    randomised = iter(
+        [
+            {
+                "rate": 2e-7,
+                "r_squared": 0.1,
+                "rate_std": 5e-8,
+                "rate_lower_95": 1.02e-7,
+                "rate_upper_95": 2.98e-7,
+            },
+            {
+                "rate": 4e-7,
+                "r_squared": 0.2,
+                "rate_std": 5e-8,
+                "rate_lower_95": 3.02e-7,
+                "rate_upper_95": 4.98e-7,
+            },
+        ]
+    )
+    monkeypatch.setattr(temporal, "_run_randomised_full_tree", lambda **_: next(randomised))
+    (tmp_path / "tree.nwk").write_text("(S0,S1,S2,S3);\n", encoding="utf-8")
+
+    result = temporal.run_full_tree_date_randomisation(
+        tree=tmp_path / "tree.nwk",
+        sequence_length=4,
+        samples=samples,
+        observed_clock=observed,
+        randomisations=2,
+        randomisation_jobs=1,
+        seed=42,
+        output=tmp_path / "temporal_signal.json",
+    )
+
+    assert result["method"] == "full_tree"
+    assert result["criterion"] == "cr2"
+    assert result["cr1_passed"] is True
+    assert result["cr2_passed"] is True
+
+
+def test_full_tree_randomisation_command_reroots_every_permutation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: list[str] = []
+
+    def fake_run(command: list[str], **_: object) -> SimpleNamespace:
+        captured.extend(command)
+        run_dir = Path(command[command.index("--outdir") + 1])
+        run_dir.mkdir()
+        (run_dir / "molecular_clock.txt").write_text(
+            "--rate: 1e-6 +/- 1e-7 (one std-dev)\n--r^2: 0.4\n", encoding="utf-8"
+        )
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(temporal.subprocess, "run", fake_run)
+    result = temporal._run_randomised_full_tree(
+        tree=tmp_path / "tree.nwk",
+        sequence_length=100,
+        date_path=tmp_path / "dates.csv",
+        run_dir=tmp_path / "randomised",
+    )
+
+    assert captured[0] == "treetime"
+    assert "clock" not in captured
+    assert captured[captured.index("--reroot") + 1] == "least-squares"
+    assert captured[captured.index("--time-marginal") + 1] == "only-final"
+    assert "--covariation" in captured
+    assert result is not None
