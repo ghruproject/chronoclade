@@ -1,4 +1,4 @@
-"""Command-line interface for beyondMLST."""
+"""Command-line interface for ChronoClade."""
 
 from __future__ import annotations
 
@@ -10,10 +10,10 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
-from beyondmlst import __version__
-from beyondmlst.context import ContextError, prepare_context
-from beyondmlst.metadata import MetadataError, group_samples, read_metadata
-from beyondmlst.workflow import (
+from chronoclade import __version__
+from chronoclade.context import ContextError, prepare_context
+from chronoclade.metadata import MetadataError, group_samples, read_metadata
+from chronoclade.workflow import (
     WorkflowError,
     native_platform_supported,
     plan,
@@ -22,7 +22,7 @@ from beyondmlst.workflow import (
 )
 
 app = typer.Typer(
-    name="beyondmlst",
+    name="chronoclade",
     help="Recombination-aware temporal and contextual bacterial phylogenetics.",
     no_args_is_help=True,
 )
@@ -45,7 +45,7 @@ def version() -> None:
 def preflight() -> None:
     """Check that external workflow tools are available."""
 
-    table = Table(title="beyondMLST preflight")
+    table = Table(title="ChronoClade preflight")
     table.add_column("Tool")
     table.add_column("Status")
     ok = True
@@ -108,7 +108,7 @@ def prepare_context_command(
     ],
     output: Annotated[
         Path, typer.Option("--output", "-o", help="Context preparation directory")
-    ] = Path("beyondmlst_context"),
+    ] = Path("chronoclade_context"),
     species: Annotated[
         str | None,
         typer.Option("--species", help="Species to prepare when metadata contains several"),
@@ -242,7 +242,7 @@ def prepare_context_command(
 def run(
     metadata: Annotated[Path, typer.Argument(help="Input metadata CSV")],
     output: Annotated[Path, typer.Option("--output", "-o", help="Output directory")] = Path(
-        "beyondmlst_results"
+        "chronoclade_results"
     ),
     threads: Annotated[int, typer.Option("--threads", "-t", min=1)] = 4,
     lineage_jobs: Annotated[

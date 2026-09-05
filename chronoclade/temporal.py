@@ -10,7 +10,7 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from beyondmlst.metadata import Sample
+from chronoclade.metadata import Sample
 
 RATE = re.compile(r"--rate:\s*([+-]?[0-9.]+(?:e[+-]?\d+)?)", re.IGNORECASE)
 R_SQUARED = re.compile(r"--r\^2:\s*([+-]?[0-9.]+(?:e[+-]?\d+)?)", re.IGNORECASE)

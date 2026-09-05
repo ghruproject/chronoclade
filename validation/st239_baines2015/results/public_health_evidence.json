@@ -1,0 +1,912 @@
+{
+  "scenario": {
+    "code": "mixed",
+    "label": "Consistent with local persistence plus additional introductions",
+    "confidence": "low",
+    "provisional": true,
+    "decision_rule": "At least two separated focal-only topology groups are present and at least one contains multiple focal genomes spanning sampling dates.",
+    "reasons": [
+      "The local isolates form 2 separate groups in the recombination-corrected tree.",
+      "2 local groups contain isolates collected on more than one date.",
+      "The comparison includes 2 public context genomes.",
+      "Median clonal distance was 124 SNPs within candidate groups and 454 SNPs between them."
+    ],
+    "recommended_follow_up": [
+      "Investigate the longitudinal candidate group for local persistence and the separated groups for external acquisition pathways.",
+      "Prioritise missing patient, facility and exposure metadata that could distinguish these explanations.",
+      "Complete coded patient identifiers to assess repeated-patient sampling."
+    ],
+    "evidence": [
+      {
+        "id": "clonal_distances",
+        "status": "supported",
+        "finding": "Recombination-filtered SNP and callable-site counts were calculated for 2556 genome pairs."
+      },
+      {
+        "id": "longitudinal_span",
+        "status": "supported",
+        "finding": "70 focal genomes cover 16 distinct collection dates."
+      },
+      {
+        "id": "context",
+        "status": "suggestive",
+        "finding": "2 public context genomes were analysed; neighbour selection was bounded and cannot guarantee the globally nearest public genome."
+      },
+      {
+        "id": "topology",
+        "status": "suggestive",
+        "finding": "The rooted corrected tree contains 2 maximal focal-only candidate groups; branch support is not yet propagated through ClonalFrameML."
+      },
+      {
+        "id": "patient_sensitivity",
+        "status": "unavailable",
+        "finding": "Patient identifiers are incomplete, so patient-level sensitivity is limited."
+      },
+      {
+        "id": "temporal_signal",
+        "status": "supported",
+        "finding": "The lineage has a positive estimated rate and its observed root-to-tip fit was stronger than expected after randomly permuting sampling dates."
+      }
+    ],
+    "guardrail": "This is a working genomic interpretation, not a count of introduction events or evidence of direct transmission. Epidemiological review is required.",
+    "distance_summary": {
+      "categories": {
+        "focal_focal": {
+          "comparisons": 2415,
+          "minimum": 3,
+          "median": 188,
+          "maximum": 538
+        },
+        "focal_context": {
+          "comparisons": 140,
+          "minimum": 269,
+          "median": 375.0,
+          "maximum": 510
+        },
+        "context_context": {
+          "comparisons": 1,
+          "minimum": 114,
+          "median": 114,
+          "maximum": 114
+        },
+        "same_month": {
+          "comparisons": 0,
+          "minimum": null,
+          "median": null,
+          "maximum": null
+        },
+        "same_year": {
+          "comparisons": 209,
+          "minimum": 3,
+          "median": 84,
+          "maximum": 530
+        },
+        "between_years": {
+          "comparisons": 2206,
+          "minimum": 5,
+          "median": 200.0,
+          "maximum": 538
+        },
+        "same_patient": {
+          "comparisons": 0,
+          "minimum": null,
+          "median": null,
+          "maximum": null
+        },
+        "different_patients": {
+          "comparisons": 0,
+          "minimum": null,
+          "median": null,
+          "maximum": null
+        },
+        "within_candidate_groups": {
+          "comparisons": 1290,
+          "minimum": 3,
+          "median": 124.0,
+          "maximum": 232
+        },
+        "between_candidate_groups": {
+          "comparisons": 1125,
+          "minimum": 354,
+          "median": 454,
+          "maximum": 538
+        }
+      },
+      "callable_sites": {
+        "comparisons": 2556,
+        "minimum": 2462674,
+        "median": 2462677.0,
+        "maximum": 2462677
+      }
+    }
+  },
+  "distance_summary": {
+    "categories": {
+      "focal_focal": {
+        "comparisons": 2415,
+        "minimum": 3,
+        "median": 188,
+        "maximum": 538
+      },
+      "focal_context": {
+        "comparisons": 140,
+        "minimum": 269,
+        "median": 375.0,
+        "maximum": 510
+      },
+      "context_context": {
+        "comparisons": 1,
+        "minimum": 114,
+        "median": 114,
+        "maximum": 114
+      },
+      "same_month": {
+        "comparisons": 0,
+        "minimum": null,
+        "median": null,
+        "maximum": null
+      },
+      "same_year": {
+        "comparisons": 209,
+        "minimum": 3,
+        "median": 84,
+        "maximum": 530
+      },
+      "between_years": {
+        "comparisons": 2206,
+        "minimum": 5,
+        "median": 200.0,
+        "maximum": 538
+      },
+      "same_patient": {
+        "comparisons": 0,
+        "minimum": null,
+        "median": null,
+        "maximum": null
+      },
+      "different_patients": {
+        "comparisons": 0,
+        "minimum": null,
+        "median": null,
+        "maximum": null
+      },
+      "within_candidate_groups": {
+        "comparisons": 1290,
+        "minimum": 3,
+        "median": 124.0,
+        "maximum": 232
+      },
+      "between_candidate_groups": {
+        "comparisons": 1125,
+        "minimum": 354,
+        "median": 454,
+        "maximum": 538
+      }
+    },
+    "callable_sites": {
+      "comparisons": 2556,
+      "minimum": 2462674,
+      "median": 2462677.0,
+      "maximum": 2462677
+    }
+  },
+  "topology": {
+    "rooting": "TreeTime least-squares root",
+    "branch_support_available": false,
+    "focal_monophyletic": false,
+    "candidate_local_group_count": 2,
+    "groups": [
+      {
+        "group_id": "LG1",
+        "sample_ids": [
+          "SAMEA3212883",
+          "SAMEA3212885",
+          "SAMEA3212886",
+          "SAMEA3212888",
+          "SAMEA3212889",
+          "SAMEA3212890",
+          "SAMEA3212891",
+          "SAMEA3212892",
+          "SAMEA3212893",
+          "SAMEA3212894",
+          "SAMEA3212895",
+          "SAMEA3212896",
+          "SAMEA3212897",
+          "SAMEA3212900",
+          "SAMEA3212901",
+          "SAMEA3212902",
+          "SAMEA3212907",
+          "SAMEA3212912",
+          "SAMEA3212914",
+          "SAMEA3212916",
+          "SAMEA3212920",
+          "SAMEA3212922",
+          "SAMEA3212926",
+          "SAMEA3212927",
+          "SAMEA3212928",
+          "SAMEA3212929",
+          "SAMEA3212931",
+          "SAMEA3212932",
+          "SAMEA3212938",
+          "SAMEA3212940",
+          "SAMEA3212941",
+          "SAMEA3212942",
+          "SAMEA3212947",
+          "SAMEA3212948",
+          "SAMEA3212949",
+          "SAMEA3212950",
+          "SAMEA3212951",
+          "SAMEA3212952",
+          "SAMEA3212957",
+          "SAMEA3212958",
+          "SAMEA3212960",
+          "SAMEA3212961",
+          "SAMEA3212964",
+          "SAMEA3212968",
+          "SAMEA3212969"
+        ],
+        "sample_count": 45,
+        "patient_count": 0,
+        "locations": [
+          "Australia",
+          "New Zealand"
+        ],
+        "first_collection_date": "1980",
+        "last_collection_date": "2007",
+        "distinct_collection_dates": 13,
+        "spans_sampling_periods": true,
+        "within_group_clonal_snps": {
+          "comparisons": 990,
+          "minimum": 3,
+          "median": 130.0,
+          "maximum": 232
+        },
+        "nearest_context": {
+          "sample_id": "SAMEA3212921",
+          "nearest_focal": "SAMEA3212897",
+          "clonal_snps": 269
+        }
+      },
+      {
+        "group_id": "LG2",
+        "sample_ids": [
+          "SAMEA3212898",
+          "SAMEA3212899",
+          "SAMEA3212903",
+          "SAMEA3212904",
+          "SAMEA3212905",
+          "SAMEA3212906",
+          "SAMEA3212908",
+          "SAMEA3212910",
+          "SAMEA3212913",
+          "SAMEA3212917",
+          "SAMEA3212918",
+          "SAMEA3212924",
+          "SAMEA3212925",
+          "SAMEA3212934",
+          "SAMEA3212936",
+          "SAMEA3212937",
+          "SAMEA3212943",
+          "SAMEA3212945",
+          "SAMEA3212954",
+          "SAMEA3212955",
+          "SAMEA3212956",
+          "SAMEA3212959",
+          "SAMEA3212962",
+          "SAMEA3212965",
+          "SAMEA3212966"
+        ],
+        "sample_count": 25,
+        "patient_count": 0,
+        "locations": [
+          "Australia"
+        ],
+        "first_collection_date": "2000",
+        "last_collection_date": "2012",
+        "distinct_collection_dates": 10,
+        "spans_sampling_periods": true,
+        "within_group_clonal_snps": {
+          "comparisons": 300,
+          "minimum": 21,
+          "median": 106.0,
+          "maximum": 195
+        },
+        "nearest_context": {
+          "sample_id": "SAMEA3212921",
+          "nearest_focal": "SAMEA3212913",
+          "clonal_snps": 421
+        }
+      }
+    ],
+    "interpretation": "Candidate groups are maximal focal-only clades in the rooted recombination-corrected tree. They are review aids, not confirmed transmission clusters."
+  },
+  "patient_sensitivity": {
+    "focal_samples": 70,
+    "samples_with_patient_id": 0,
+    "patient_metadata_complete": false,
+    "representative_samples": [
+      "SAMEA3212883",
+      "SAMEA3212885",
+      "SAMEA3212886",
+      "SAMEA3212888",
+      "SAMEA3212889",
+      "SAMEA3212890",
+      "SAMEA3212891",
+      "SAMEA3212892",
+      "SAMEA3212893",
+      "SAMEA3212894",
+      "SAMEA3212895",
+      "SAMEA3212896",
+      "SAMEA3212897",
+      "SAMEA3212898",
+      "SAMEA3212899",
+      "SAMEA3212900",
+      "SAMEA3212901",
+      "SAMEA3212902",
+      "SAMEA3212903",
+      "SAMEA3212904",
+      "SAMEA3212905",
+      "SAMEA3212906",
+      "SAMEA3212907",
+      "SAMEA3212908",
+      "SAMEA3212910",
+      "SAMEA3212912",
+      "SAMEA3212913",
+      "SAMEA3212914",
+      "SAMEA3212916",
+      "SAMEA3212917",
+      "SAMEA3212918",
+      "SAMEA3212920",
+      "SAMEA3212922",
+      "SAMEA3212924",
+      "SAMEA3212925",
+      "SAMEA3212926",
+      "SAMEA3212927",
+      "SAMEA3212928",
+      "SAMEA3212929",
+      "SAMEA3212931",
+      "SAMEA3212932",
+      "SAMEA3212934",
+      "SAMEA3212936",
+      "SAMEA3212937",
+      "SAMEA3212938",
+      "SAMEA3212940",
+      "SAMEA3212941",
+      "SAMEA3212942",
+      "SAMEA3212943",
+      "SAMEA3212945",
+      "SAMEA3212947",
+      "SAMEA3212948",
+      "SAMEA3212949",
+      "SAMEA3212950",
+      "SAMEA3212951",
+      "SAMEA3212952",
+      "SAMEA3212954",
+      "SAMEA3212955",
+      "SAMEA3212956",
+      "SAMEA3212957",
+      "SAMEA3212958",
+      "SAMEA3212959",
+      "SAMEA3212960",
+      "SAMEA3212961",
+      "SAMEA3212962",
+      "SAMEA3212964",
+      "SAMEA3212965",
+      "SAMEA3212966",
+      "SAMEA3212968",
+      "SAMEA3212969"
+    ],
+    "excluded_repeated_patient_samples": [],
+    "full_focal_distances": {
+      "comparisons": 2415,
+      "minimum": 3,
+      "median": 188,
+      "maximum": 538
+    },
+    "one_per_patient_distances": {
+      "comparisons": 2415,
+      "minimum": 3,
+      "median": 188,
+      "maximum": 538
+    },
+    "interpretation": "No repeated coded patient isolates were removed."
+  },
+  "nearest_contexts_by_clonal_distance": [
+    {
+      "focal_sample": "SAMEA3212883",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 282,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00011450953576128741
+    },
+    {
+      "focal_sample": "SAMEA3212885",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 295,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00011978834414744605
+    },
+    {
+      "focal_sample": "SAMEA3212886",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 281,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00011410347357773675
+    },
+    {
+      "focal_sample": "SAMEA3212888",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 336,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.0001364368936730233
+    },
+    {
+      "focal_sample": "SAMEA3212889",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 294,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00011938228196389539
+    },
+    {
+      "focal_sample": "SAMEA3212890",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 351,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00014252782642628327
+    },
+    {
+      "focal_sample": "SAMEA3212891",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 375,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00015227331883149923
+    },
+    {
+      "focal_sample": "SAMEA3212892",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 284,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00011532166012838874
+    },
+    {
+      "focal_sample": "SAMEA3212893",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 378,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.0001534915053821512
+    },
+    {
+      "focal_sample": "SAMEA3212894",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 365,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00014821269699599258
+    },
+    {
+      "focal_sample": "SAMEA3212895",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 351,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00014252782642628327
+    },
+    {
+      "focal_sample": "SAMEA3212896",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 280,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00011369741139418608
+    },
+    {
+      "focal_sample": "SAMEA3212897",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 269,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00010923072737512877
+    },
+    {
+      "focal_sample": "SAMEA3212898",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 432,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.0001754188632938871
+    },
+    {
+      "focal_sample": "SAMEA3212899",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 447,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00018150979604714706
+    },
+    {
+      "focal_sample": "SAMEA3212900",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 286,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00011613378449549007
+    },
+    {
+      "focal_sample": "SAMEA3212901",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 352,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00014293388860983394
+    },
+    {
+      "focal_sample": "SAMEA3212902",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 279,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00011329134921063542
+    },
+    {
+      "focal_sample": "SAMEA3212903",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 444,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00018029160949649506
+    },
+    {
+      "focal_sample": "SAMEA3212904",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 451,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00018313404478134972
+    },
+    {
+      "focal_sample": "SAMEA3212905",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 482,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00019572197247142033
+    },
+    {
+      "focal_sample": "SAMEA3212906",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 473,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00019206741281946435
+    },
+    {
+      "focal_sample": "SAMEA3212907",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 308,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.0001250671525336047
+    },
+    {
+      "focal_sample": "SAMEA3212908",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 450,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00018272798259779907
+    },
+    {
+      "focal_sample": "SAMEA3212910",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 484,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00019653409683852166
+    },
+    {
+      "focal_sample": "SAMEA3212912",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 353,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.0001433399507933846
+    },
+    {
+      "focal_sample": "SAMEA3212913",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 421,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00017095217927482978
+    },
+    {
+      "focal_sample": "SAMEA3212914",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 373,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00015146119446439788
+    },
+    {
+      "focal_sample": "SAMEA3212916",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 361,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00014658844826178992
+    },
+    {
+      "focal_sample": "SAMEA3212917",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 464,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00018841285316750837
+    },
+    {
+      "focal_sample": "SAMEA3212918",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 423,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00017176430364193113
+    },
+    {
+      "focal_sample": "SAMEA3212920",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 314,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00012750352563490868
+    },
+    {
+      "focal_sample": "SAMEA3212922",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 284,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00011532166012838874
+    },
+    {
+      "focal_sample": "SAMEA3212924",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 476,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00019328559937011635
+    },
+    {
+      "focal_sample": "SAMEA3212925",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 432,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.0001754188632938871
+    },
+    {
+      "focal_sample": "SAMEA3212926",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 345,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.0001400914533249793
+    },
+    {
+      "focal_sample": "SAMEA3212927",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 289,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00011735197104614206
+    },
+    {
+      "focal_sample": "SAMEA3212928",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 370,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.0001502430079137459
+    },
+    {
+      "focal_sample": "SAMEA3212929",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 277,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.0001124792248435341
+    },
+    {
+      "focal_sample": "SAMEA3212931",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 367,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.0001490248213630939
+    },
+    {
+      "focal_sample": "SAMEA3212932",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 305,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.0001238489659829527
+    },
+    {
+      "focal_sample": "SAMEA3212934",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 443,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.0001798855473129444
+    },
+    {
+      "focal_sample": "SAMEA3212936",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 448,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00018191585823069774
+    },
+    {
+      "focal_sample": "SAMEA3212937",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 488,
+      "callable_sites": 2462676,
+      "snp_proportion": 0.00019815842603736748
+    },
+    {
+      "focal_sample": "SAMEA3212938",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 375,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00015227331883149923
+    },
+    {
+      "focal_sample": "SAMEA3212940",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 378,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.0001534915053821512
+    },
+    {
+      "focal_sample": "SAMEA3212941",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 284,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00011532166012838874
+    },
+    {
+      "focal_sample": "SAMEA3212942",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 384,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.0001559278784834552
+    },
+    {
+      "focal_sample": "SAMEA3212943",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 473,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00019206741281946435
+    },
+    {
+      "focal_sample": "SAMEA3212945",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 444,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00018029160949649506
+    },
+    {
+      "focal_sample": "SAMEA3212947",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 273,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00011085497610933143
+    },
+    {
+      "focal_sample": "SAMEA3212948",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 338,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00013724901804012464
+    },
+    {
+      "focal_sample": "SAMEA3212949",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 359,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.0001457763238946886
+    },
+    {
+      "focal_sample": "SAMEA3212950",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 281,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00011410347357773675
+    },
+    {
+      "focal_sample": "SAMEA3212951",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 364,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.0001478066348124419
+    },
+    {
+      "focal_sample": "SAMEA3212952",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 369,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00014983694573019523
+    },
+    {
+      "focal_sample": "SAMEA3212954",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 464,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00018841285316750837
+    },
+    {
+      "focal_sample": "SAMEA3212955",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 447,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00018150979604714706
+    },
+    {
+      "focal_sample": "SAMEA3212956",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 440,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.0001786673607622924
+    },
+    {
+      "focal_sample": "SAMEA3212957",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 372,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00015105513228084723
+    },
+    {
+      "focal_sample": "SAMEA3212958",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 345,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.0001400914533249793
+    },
+    {
+      "focal_sample": "SAMEA3212959",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 469,
+      "callable_sites": 2462675,
+      "snp_proportion": 0.0001904433187489214
+    },
+    {
+      "focal_sample": "SAMEA3212960",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 365,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00014821269699599258
+    },
+    {
+      "focal_sample": "SAMEA3212961",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 347,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00014090357769208062
+    },
+    {
+      "focal_sample": "SAMEA3212962",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 432,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.0001754188632938871
+    },
+    {
+      "focal_sample": "SAMEA3212964",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 368,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00014943088354664458
+    },
+    {
+      "focal_sample": "SAMEA3212965",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 476,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00019328559937011635
+    },
+    {
+      "focal_sample": "SAMEA3212966",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 490,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00019897046993982563
+    },
+    {
+      "focal_sample": "SAMEA3212968",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 284,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00011532166012838874
+    },
+    {
+      "focal_sample": "SAMEA3212969",
+      "context_sample": "SAMEA3212921",
+      "clonal_snps": 343,
+      "callable_sites": 2462677,
+      "snp_proportion": 0.00013927932895787794
+    }
+  ],
+  "outputs": {
+    "pairwise_distances": "/private/tmp/chronoclade-baines-st239-20260905/results/Staphylococcus_aureus__ST239/clonal_pairwise_distances.tsv",
+    "snp_matrix": "/private/tmp/chronoclade-baines-st239-20260905/results/Staphylococcus_aureus__ST239/clonal_snp_matrix.tsv",
+    "callable_sites_matrix": "/private/tmp/chronoclade-baines-st239-20260905/results/Staphylococcus_aureus__ST239/pairwise_callable_sites.tsv",
+    "heatmap": "/private/tmp/chronoclade-baines-st239-20260905/results/Staphylococcus_aureus__ST239/clonal_snp_heatmap.svg"
+  }
+}

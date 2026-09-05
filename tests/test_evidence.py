@@ -1,12 +1,12 @@
 from pathlib import Path
 
-from beyondmlst.evidence import (
+from chronoclade.evidence import (
     build_public_health_evidence,
     pairwise_distances,
     patient_sensitivity,
     read_alignment,
 )
-from beyondmlst.metadata import Sample
+from chronoclade.metadata import Sample
 
 
 def samples(tmp_path: Path, *, include_third_local: bool = False) -> list[Sample]:

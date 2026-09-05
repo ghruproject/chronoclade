@@ -1,0 +1,300 @@
+{"kind":"layout","layoutId":"/ppt/slideMasters/slideMaster1.xml","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"/ppt/slideLayouts/slideLayout1.xml","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/y90nupkv","slide":1,"title":"TGBIF DISCUSSION","textShapes":4}
+{"kind":"textbox","id":"sh/ts7md4r2","slide":1,"text":"TGBIF DISCUSSION","textPreview":"TGBIF DISCUSSION","textChars":16,"textLines":1,"bbox":[48,42,520,40]}
+{"kind":"textbox","id":"sh/547294r6","slide":1,"name":"cover-title","text":"ChronoClade:\nwhen did a clone arrive?","textPreview":"ChronoClade: | when did a clone arrive?","textChars":37,"textLines":2,"bbox":[48,175,1040,250]}
+{"kind":"shape","id":"sh/k3yl0zql","slide":1,"bbox":[48,472,120,8]}
+{"kind":"textbox","id":"sh/7qp4be9c","slide":1,"text":"Time-resolved, context-aware bacterial phylogenetics for public health","textPreview":"Time-resolved, context-aware bacterial phylogenetics for public health","textChars":70,"textLines":1,"bbox":[48,505,840,72]}
+{"kind":"textbox","id":"sh/65g3298r","slide":1,"text":"Nabil-Fareed Alikhan · 28 August 2026","textPreview":"Nabil-Fareed Alikhan · 28 August 2026","textChars":37,"textLines":1,"bbox":[48,627,620,30]}
+{"kind":"notes","id":"nt/y90nupkv","slide":1,"text":"Open with the operational question: once we know several isolates share an ST, can we tell whether that lineage has been circulating locally or has been introduced repeatedly? This talk is about the evidence needed to ask that question safely. Aim for about 45 seconds.\n\n[Sources]\n- https://github.com/ghruproject/chronoclade"}
+{"kind":"slide","id":"sl/hwbqtkby","slide":2,"title":"The public-health question starts where MLST stops","textShapes":11}
+{"kind":"textbox","id":"sh/a1cba1wb","slide":2,"name":"slide-2-title","text":"The public-health question starts where MLST stops","textPreview":"The public-health question starts where MLST stops","textChars":50,"textLines":1,"bbox":[48,34,1130,74]}
+{"kind":"shape","id":"sh/0vq1o36x","slide":2,"bbox":[48,126,1184,0]}
+{"kind":"textbox","id":"sh/ozy1ofad","slide":2,"text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[1182,658,50,22]}
+{"kind":"textbox","id":"sh/b29kza94","slide":2,"text":"ChronoClade · TGBIF · 28 August 2026","textPreview":"ChronoClade · TGBIF · 28 August 2026","textChars":36,"textLines":1,"bbox":[48,658,700,22]}
+{"kind":"textbox","id":"sh/a10jqpsj","slide":2,"text":"Same ST","textPreview":"Same ST","textChars":7,"textLines":1,"bbox":[105,165,220,40]}
+{"kind":"textbox","id":"sh/x4r21kru","slide":2,"text":"Persistent local lineage","textPreview":"Persistent local lineage","textChars":24,"textLines":1,"bbox":[105,205,430,42]}
+{"kind":"shape","id":"sh/d8zit87m","slide":2,"bbox":[150,390,85,0]}
+{"kind":"shape","id":"sh/q5ozitov","slide":2,"bbox":[235,323,0,134]}
+{"kind":"shape","id":"sh/r6x0rypg","slide":2,"bbox":[235,323,105,0]}
+{"kind":"shape","id":"sh/w3a1wn65","slide":2,"bbox":[235,390,105,0]}
+{"kind":"shape","id":"sh/xoji5s7q","slide":2,"bbox":[235,457,105,0]}
+{"kind":"shape","id":"sh/5kfipszu","slide":2,"bbox":[340,323,0,134]}
+{"kind":"shape","id":"sh/kj6hgny9","slide":2,"bbox":[340,323,90,0]}
+{"kind":"shape","id":"sh/jix0niho","slide":2,"bbox":[340,390,90,0]}
+{"kind":"shape","id":"sh/ihozedgj","slide":2,"bbox":[340,457,90,0]}
+{"kind":"shape","id":"sh/ahwrqhgj","slide":2,"bbox":[425,316,14,14]}
+{"kind":"shape","id":"sh/bip8jmho","slide":2,"bbox":[425,383,14,14]}
+{"kind":"shape","id":"sh/cnupgny5","slide":2,"bbox":[425,450,14,14]}
+{"kind":"shape","id":"sh/do3q9szq","slide":2,"bbox":[138,383,14,14]}
+{"kind":"textbox","id":"sh/t8byxkn2","slide":2,"text":"One local group is sampled repeatedly through time.","textPreview":"One local group is sampled repeatedly through time.","textChars":51,"textLines":1,"bbox":[105,535,430,64]}
+{"kind":"textbox","id":"sh/s72xofmh","slide":2,"text":"Same ST","textPreview":"Same ST","textChars":7,"textLines":1,"bbox":[715,165,220,40]}
+{"kind":"textbox","id":"sh/76twva5c","slide":2,"text":"Repeated introductions","textPreview":"Repeated introductions","textChars":22,"textLines":1,"bbox":[715,205,430,42]}
+{"kind":"shape","id":"sh/zytgbexk","slide":2,"bbox":[765,390,62,0]}
+{"kind":"shape","id":"sh/0j2xkje5","slide":2,"bbox":[827,315,0,150]}
+{"kind":"shape","id":"sh/lkbyd4fq","slide":2,"bbox":[827,315,93,0]}
+{"kind":"shape","id":"sh/qt0fepw3","slide":2,"bbox":[920,295,0,40]}
+{"kind":"shape","id":"sh/bu9w7uxo","slide":2,"bbox":[920,295,95,0]}
+{"kind":"shape","id":"sh/cv2xgzet","slide":2,"bbox":[920,335,95,0]}
+{"kind":"shape","id":"sh/4zmxwzmp","slide":2,"bbox":[1010,288,14,14]}
+{"kind":"shape","id":"sh/mlgvq147","slide":2,"bbox":[1010,328,14,14]}
+{"kind":"shape","id":"sh/3q9w3uxc","slide":2,"bbox":[827,390,93,0]}
+{"kind":"shape","id":"sh/ret8r2dk","slide":2,"bbox":[920,370,0,40]}
+{"kind":"shape","id":"sh/6tk7yxcz","slide":2,"bbox":[920,370,95,0]}
+{"kind":"shape","id":"sh/tgvqtcva","slide":2,"bbox":[920,410,95,0]}
+{"kind":"shape","id":"sh/ba9cn6l4","slide":2,"bbox":[1010,363,14,14]}
+{"kind":"shape","id":"sh/wbidwb29","slide":2,"bbox":[1010,403,14,14]}
+{"kind":"shape","id":"sh/ipk7udcn","slide":2,"bbox":[827,465,93,0]}
+{"kind":"shape","id":"sh/5sbqpsve","slide":2,"bbox":[920,445,0,40]}
+{"kind":"shape","id":"sh/4r2pwnut","slide":2,"bbox":[920,445,95,0]}
+{"kind":"shape","id":"sh/3md8zmtc","slide":2,"bbox":[920,485,95,0]}
+{"kind":"shape","id":"sh/69wbilcj","slide":2,"bbox":[1010,438,14,14]}
+{"kind":"shape","id":"sh/tw7ud0va","slide":2,"bbox":[1010,478,14,14]}
+{"kind":"shape","id":"sh/svedkvup","slide":2,"bbox":[753,383,14,14]}
+{"kind":"textbox","id":"sh/fypcfqdg","slide":2,"text":"Local isolates sit in separated groups beside different contextual genomes.","textPreview":"Local isolates sit in separated groups beside different contextual genomes.","textChars":75,"textLines":1,"bbox":[715,535,450,70]}
+{"kind":"shape","id":"sh/exgvmlcv","slide":2,"bbox":[1010,634,12,12]}
+{"kind":"textbox","id":"sh/107uh0v6","slide":2,"text":"local","textPreview":"local","textChars":5,"textLines":1,"bbox":[1030,630,90,24]}
+{"kind":"shape","id":"sh/gzydovul","slide":2,"bbox":[1110,634,12,12]}
+{"kind":"textbox","id":"sh/v2lc36dw","slide":2,"text":"context","textPreview":"context","textChars":7,"textLines":1,"bbox":[1130,630,110,24]}
+{"kind":"notes","id":"nt/hwbqtkby","slide":2,"text":"MLST is a useful first stratification, but the same ST can contain very different public-health histories. The left-hand pattern is consistent with local persistence. The right-hand pattern is consistent with repeated introductions. Whole-genome topology, distances, dates and public context are needed to distinguish them. About 75 seconds.\n\n[Sources]\n- https://github.com/ghruproject/chronoclade"}
+{"kind":"slide","id":"sl/ofy9wn61","slide":3,"title":"Sampling dates can translate genetic change into calendar time","textShapes":10}
+{"kind":"textbox","id":"sh/v6l4jq94","slide":3,"name":"slide-3-title","text":"Sampling dates can translate genetic change into calendar time","textPreview":"Sampling dates can translate genetic change into calendar time","textChars":62,"textLines":1,"bbox":[48,34,1130,74]}
+{"kind":"shape","id":"sh/a5c3ql8z","slide":3,"bbox":[48,126,1184,0]}
+{"kind":"textbox","id":"sh/d0jax03i","slide":3,"text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[1182,658,50,22]}
+{"kind":"textbox","id":"sh/298ryl4v","slide":3,"text":"ChronoClade · TGBIF · 28 August 2026","textPreview":"ChronoClade · TGBIF · 28 August 2026","textChars":36,"textLines":1,"bbox":[48,658,700,22]}
+{"kind":"textbox","id":"sh/3ah8rqlg","slide":3,"text":"genetic distance","textPreview":"genetic distance","textChars":16,"textLines":1,"bbox":[60,205,440,56]}
+{"kind":"textbox","id":"sh/obq90bml","slide":3,"text":"+ sampling dates","textPreview":"+ sampling dates","textChars":16,"textLines":1,"bbox":[60,284,440,56]}
+{"kind":"shape","id":"sh/e10f2twf","slide":3,"bbox":[60,366,410,0]}
+{"kind":"textbox","id":"sh/m5cra54z","slide":3,"text":"calendar time","textPreview":"calendar time","textChars":13,"textLines":1,"bbox":[60,390,440,68]}
+{"kind":"textbox","id":"sh/n6ls3alk","slide":3,"text":"A dated tree estimates rates and the timing of ancestral nodes.","textPreview":"A dated tree estimates rates and the timing of ancestral nodes.","textChars":63,"textLines":1,"bbox":[60,495,480,76]}
+{"kind":"textbox","id":"sh/n2l4fq98","slide":3,"text":"The molecular-clock idea","textPreview":"The molecular-clock idea","textChars":24,"textLines":1,"bbox":[650,200,520,42]}
+{"kind":"textbox","id":"sh/m1c3mlsn","slide":3,"text":"• Mutations accumulate along branches.\n• Tips sampled at different times provide calibration points.\n• A clock model estimates substitutions per site per year.\n• The branch lengths can then be expressed in dates.","textPreview":"• Mutations accumulate along branches. | • Tips sampled at different times provide calibration points. | • A clock model estimates substi...","textChars":212,"textLines":4,"bbox":[650,260,520,235]}
+{"kind":"shape","id":"sh/943mhgre","slide":3,"bbox":[650,520,520,82]}
+{"kind":"textbox","id":"sh/83ulovat","slide":3,"text":"Only if the lineage evolved measurably over the sampling window.","textPreview":"Only if the lineage evolved measurably over the sampling window.","textChars":64,"textLines":1,"bbox":[674,541,472,48]}
+{"kind":"notes","id":"nt/ofy9wn61","slide":3,"text":"The tree initially measures change in substitutions per site, not years. Sampling dates at the tips can calibrate a molecular clock. TreeTime uses an approximate maximum-likelihood framework to estimate rates and node dates efficiently. The crucial qualification is that the dates must contain measurable information about evolutionary change. About 90 seconds.\n\n[Sources]\n- https://academic.oup.com/ve/article/4/1/vex042/4794731\n- https://discovery.ucl.ac.uk/id/eprint/1483140/"}
+{"kind":"slide","id":"sl/jyx0ra1s","slide":4,"title":"The minimum input is small—but its quality matters","textShapes":15}
+{"kind":"textbox","id":"sh/oz29krqh","slide":4,"name":"slide-4-title","text":"The minimum input is small—but its quality matters","textPreview":"The minimum input is small—but its quality matters","textChars":50,"textLines":1,"bbox":[48,34,1130,74]}
+{"kind":"shape","id":"sh/3ytsrmpw","slide":4,"bbox":[48,126,1184,0]}
+{"kind":"textbox","id":"sh/0ba143al","slide":4,"text":"4","textPreview":"4","textChars":1,"textLines":1,"bbox":[1182,658,50,22]}
+{"kind":"textbox","id":"sh/rm1k7yt4","slide":4,"text":"ChronoClade · TGBIF · 28 August 2026","textPreview":"ChronoClade · TGBIF · 28 August 2026","textChars":36,"textLines":1,"bbox":[48,658,700,22]}
+{"kind":"textbox","id":"sh/ql8jytsj","slide":4,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[60,190,58,36]}
+{"kind":"textbox","id":"sh/doj29oba","slide":4,"text":"Whole genomes","textPreview":"Whole genomes","textChars":13,"textLines":1,"bbox":[138,188,450,42]}
+{"kind":"textbox","id":"sh/sna103ap","slide":4,"text":"Assemblies or a core-genome alignment from sufficiently close isolates.","textPreview":"Assemblies or a core-genome alignment from sufficiently close isolates.","textChars":71,"textLines":1,"bbox":[138,245,450,105]}
+{"kind":"shape","id":"sh/tsrqlc7u","slide":4,"bbox":[138,232,450,0]}
+{"kind":"textbox","id":"sh/ih8ju9sn","slide":4,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[650,190,58,36]}
+{"kind":"textbox","id":"sh/kbm987y5","slide":4,"text":"Collection dates","textPreview":"Collection dates","textChars":16,"textLines":1,"bbox":[728,188,450,42]}
+{"kind":"textbox","id":"sh/5cva1cfq","slide":4,"text":"At least year and month where possible; uncertainty must be retained.","textPreview":"At least year and month where possible; uncertainty must be retained.","textChars":69,"textLines":1,"bbox":[728,245,450,105]}
+{"kind":"shape","id":"sh/knex8j21","slide":4,"bbox":[728,232,450,0]}
+{"kind":"textbox","id":"sh/jadsz2xk","slide":4,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[60,420,58,36]}
+{"kind":"textbox","id":"sh/w72947yt","slide":4,"text":"A coherent lineage","textPreview":"A coherent lineage","textChars":18,"textLines":1,"bbox":[138,418,450,42]}
+{"kind":"textbox","id":"sh/x8vaxsfe","slide":4,"text":"Analyse species separately and normally work within an ST or narrower clonal group.","textPreview":"Analyse species separately and normally work within an ST or narrower clonal group.","textChars":83,"textLines":1,"bbox":[138,475,450,105]}
+{"kind":"shape","id":"sh/wzex4z2p","slide":4,"bbox":[138,462,450,0]}
+{"kind":"textbox","id":"sh/v6tsv2xo","slide":4,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[650,420,58,36]}
+{"kind":"textbox","id":"sh/g36tgryd","slide":4,"text":"Public-health context","textPreview":"Public-health context","textChars":21,"textLines":1,"bbox":[728,418,450,42]}
+{"kind":"textbox","id":"sh/h4fa9wfy","slide":4,"text":"Focal versus contextual origin, location and coded patient or facility fields where available.","textPreview":"Focal versus contextual origin, location and coded patient or facility fields where available.","textChars":94,"textLines":1,"bbox":[728,475,450,105]}
+{"kind":"shape","id":"sh/fm5c3q54","slide":4,"bbox":[728,462,450,0]}
+{"kind":"notes","id":"nt/jyx0ra1s","slide":4,"text":"The basic data contract is one row per genome. We need a stable isolate identifier, the assembly path, a collection date, species, lineage or ST, and whether the sample is focal or context. Patient identifiers can be coded and are optional. Dates can be year-only, but month-level data improve resolution. Emphasise that this is a modest metadata requirement. About 75 seconds.\n\n[Sources]\n- https://discovery.ucl.ac.uk/id/eprint/1483140/\n- https://github.com/ghruproject/chronoclade"}
+{"kind":"slide","id":"sl/i107q5of","slide":5,"title":"Bacterial genomes make the clock harder to read","textShapes":10}
+{"kind":"textbox","id":"sh/i54fmlc7","slide":5,"name":"slide-5-title","text":"Bacterial genomes make the clock harder to read","textPreview":"Bacterial genomes make the clock harder to read","textChars":47,"textLines":1,"bbox":[48,34,1130,74]}
+{"kind":"shape","id":"sh/j6dwfqds","slide":5,"bbox":[48,126,1184,0]}
+{"kind":"textbox","id":"sh/cf2tcr61","slide":5,"text":"5","textPreview":"5","textChars":1,"textLines":1,"bbox":[1182,658,50,22]}
+{"kind":"textbox","id":"sh/z2tcnm5s","slide":5,"text":"ChronoClade · TGBIF · 28 August 2026","textPreview":"ChronoClade · TGBIF · 28 August 2026","textChars":36,"textLines":1,"bbox":[48,658,700,22]}
+{"kind":"shape","id":"sh/yhkbe1o7","slide":5,"bbox":[60,190,330,12]}
+{"kind":"textbox","id":"sh/l4bupwny","slide":5,"text":"Recombination","textPreview":"Recombination","textChars":13,"textLines":1,"bbox":[60,230,330,45]}
+{"kind":"textbox","id":"sh/032tgr6d","slide":5,"text":"Imported DNA can add many changes at once and distort both distances and branch lengths.","textPreview":"Imported DNA can add many changes at once and distort both distances and branch lengths.","textChars":88,"textLines":1,"bbox":[60,300,330,170]}
+{"kind":"shape","id":"sh/n6dcr65o","slide":5,"bbox":[445,190,330,12]}
+{"kind":"textbox","id":"sh/m5kbi1oj","slide":5,"text":"Weak temporal signal","textPreview":"Weak temporal signal","textChars":20,"textLines":1,"bbox":[445,230,330,45]}
+{"kind":"textbox","id":"sh/w32dkbuh","slide":5,"text":"Slow evolution, narrow sampling windows or clustered dates may leave too few substitutions to calibrate time.","textPreview":"Slow evolution, narrow sampling windows or clustered dates may leave too few substitutions to calibrate time.","textChars":109,"textLines":1,"bbox":[445,300,330,170]}
+{"kind":"shape","id":"sh/x4vedgvm","slide":5,"bbox":[830,190,330,12]}
+{"kind":"textbox","id":"sh/ahkvi1cb","slide":5,"text":"Biased context","textPreview":"Biased context","textChars":14,"textLines":1,"bbox":[830,230,330,45]}
+{"kind":"textbox","id":"sh/v2twb6dw","slide":5,"text":"Sparse or geographically uneven public sampling can make an introduction look like local persistence—or vice versa.","textPreview":"Sparse or geographically uneven public sampling can make an introduction look like local persistence—or vice versa.","textChars":115,"textLines":1,"bbox":[830,300,330,170]}
+{"kind":"shape","id":"sh/k7mxovud","slide":5,"bbox":[60,525,1100,82]}
+{"kind":"textbox","id":"sh/58vehgvy","slide":5,"text":"Correct recombination · test the dates · show the contextual sampling","textPreview":"Correct recombination · test the dates · show the contextual sampling","textChars":69,"textLines":1,"bbox":[88,546,1045,44]}
+{"kind":"notes","id":"nt/i107q5of","slide":5,"text":"This is why a bacterial time tree is not simply a tree plus dates. Homologous recombination violates a simple clonal tree model, so ChronoClade uses ClonalFrameML before calculating clonal distances or temporal signal. Bacterial evolution may also be too slow over two years, and public context will always be incomplete. About 90 seconds.\n\n[Sources]\n- https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1004041\n- https://discovery.ucl.ac.uk/id/eprint/1483140/\n- https://github.com/ghruproject/chronoclade"}
+{"kind":"slide","id":"sl/x8f69ofe","slide":6,"title":"Published datasets show why root-to-tip is only a diagnostic","textShapes":24}
+{"kind":"textbox","id":"sh/u907axkf","slide":6,"name":"slide-6-title","text":"Published datasets show why root-to-tip is only a diagnostic","textPreview":"Published datasets show why root-to-tip is only a diagnostic","textChars":60,"textLines":1,"bbox":[48,34,1130,74]}
+{"kind":"shape","id":"sh/hcrqlcj6","slide":6,"bbox":[48,126,1184,0]}
+{"kind":"textbox","id":"sh/zi98nu94","slide":6,"text":"6","textPreview":"6","textChars":1,"textLines":1,"bbox":[1182,658,50,22]}
+{"kind":"textbox","id":"sh/87ipkzal","slide":6,"text":"ChronoClade · TGBIF · 28 August 2026","textPreview":"ChronoClade · TGBIF · 28 August 2026","textChars":36,"textLines":1,"bbox":[48,658,700,22]}
+{"kind":"shape","id":"sh/98rqt4r6","slide":6,"bbox":[60,170,560,188]}
+{"kind":"shape","id":"sh/ml07i9sv","slide":6,"bbox":[60,170,12,188]}
+{"kind":"textbox","id":"sh/7m98ru9g","slide":6,"text":"Pseudomonas aeruginosa ST17","textPreview":"Pseudomonas aeruginosa ST17","textChars":27,"textLines":1,"bbox":[94,188,500,36]}
+{"kind":"textbox","id":"sh/oryp8fah","slide":6,"text":"Within one ICU patient","textPreview":"Within one ICU patient","textChars":22,"textLines":1,"bbox":[94,227,500,24]}
+{"kind":"textbox","id":"sh/pc76hkr2","slide":6,"text":"r² = 0.50 · 0.063 SNP/day · P < 0.0001","textPreview":"r² = 0.50 · 0.063 SNP/day · P < 0.0001","textChars":38,"textLines":1,"bbox":[94,258,500,28]}
+{"kind":"textbox","id":"sh/h4bupgn6","slide":6,"text":"The regression placed the MRCA near day 0, supporting diversification during the infection.","textPreview":"The regression placed the MRCA near day 0, supporting diversification during the infection.","textChars":91,"textLines":1,"bbox":[94,292,500,42]}
+{"kind":"textbox","id":"sh/w32twb6l","slide":6,"text":"Wheatley et al. · Nature Communications 2021","textPreview":"Wheatley et al. · Nature Communications 2021","textChars":44,"textLines":1,"bbox":[94,336,500,18]}
+{"kind":"shape","id":"sh/v2tcn650","slide":6,"bbox":[650,170,560,188]}
+{"kind":"shape","id":"sh/u1kbu1ov","slide":6,"bbox":[650,170,12,188]}
+{"kind":"textbox","id":"sh/5svutgni","slide":6,"text":"Salmonella Typhi 3.1.1","textPreview":"Salmonella Typhi 3.1.1","textChars":22,"textLines":1,"bbox":[684,188,500,36]}
+{"kind":"textbox","id":"sh/47mt0b6x","slide":6,"text":"West African lineage","textPreview":"West African lineage","textChars":20,"textLines":1,"bbox":[684,227,500,24]}
+{"kind":"textbox","id":"sh/j6dcr65c","slide":6,"text":"R² = 0.12 · P = 3×10⁻⁶","textPreview":"R² = 0.12 · P = 3×10⁻⁶","textChars":22,"textLines":1,"bbox":[684,258,500,28]}
+{"kind":"textbox","id":"sh/i54bylor","slide":6,"text":"A modest fit was still informative—and the independent date-randomisation test passed.","textPreview":"A modest fit was still informative—and the independent date-randomisation test passed.","textChars":86,"textLines":1,"bbox":[684,292,500,42]}
+{"kind":"textbox","id":"sh/twfux0ne","slide":6,"text":"Park et al. · Nature Communications 2018","textPreview":"Park et al. · Nature Communications 2018","textChars":40,"textLines":1,"bbox":[684,336,500,18]}
+{"kind":"shape","id":"sh/svmt4v6t","slide":6,"bbox":[60,395,560,188]}
+{"kind":"shape","id":"sh/cbe5g3ih","slide":6,"bbox":[60,395,12,188]}
+{"kind":"textbox","id":"sh/dcnm98zm","slide":6,"text":"Klebsiella pneumoniae ST101","textPreview":"Klebsiella pneumoniae ST101","textChars":27,"textLines":1,"bbox":[94,413,500,36]}
+{"kind":"textbox","id":"sh/qpwnet0b","slide":6,"text":"36 dated global genomes","textPreview":"36 dated global genomes","textChars":23,"textLines":1,"bbox":[94,452,500,24]}
+{"kind":"textbox","id":"sh/bq547yhw","slide":6,"text":"Positive slope · 10,000 permutations P = 0.339","textPreview":"Positive slope · 10,000 permutations P = 0.339","textChars":46,"textLines":1,"bbox":[94,483,500,28]}
+{"kind":"textbox","id":"sh/0fy5k3id","slide":6,"text":"It looked clock-like, but the dates were not more informative than chance.","textPreview":"It looked clock-like, but the dates were not more informative than chance.","textChars":74,"textLines":1,"bbox":[94,517,500,42]}
+{"kind":"textbox","id":"sh/lg76d8zy","slide":6,"text":"Roe et al. · Frontiers in Microbiology 2019","textPreview":"Roe et al. · Frontiers in Microbiology 2019","textChars":43,"textLines":1,"bbox":[94,561,500,18]}
+{"kind":"shape","id":"sh/ydgnit07","slide":6,"bbox":[650,395,560,188]}
+{"kind":"shape","id":"sh/zep4byhs","slide":6,"bbox":[650,395,12,188]}
+{"kind":"textbox","id":"sh/gju58ji9","slide":6,"text":"Mycobacterium tuberculosis","textPreview":"Mycobacterium tuberculosis","textChars":26,"textLines":1,"bbox":[684,413,500,36]}
+{"kind":"textbox","id":"sh/1k3mhozu","slide":6,"text":"6,285 genomes across lineages","textPreview":"6,285 genomes across lineages","textChars":29,"textLines":1,"bbox":[684,452,500,24]}
+{"kind":"textbox","id":"sh/jet8nm1c","slide":6,"text":"R² ≤ 0.10 · several negative slopes","textPreview":"R² ≤ 0.10 · several negative slopes","textChars":35,"textLines":1,"bbox":[684,483,500,28]}
+{"kind":"textbox","id":"sh/idk7ehkr","slide":6,"text":"Reliable estimates generally needed sampling windows of about 15 years or more.","textPreview":"Reliable estimates generally needed sampling windows of about 15 years or more.","textChars":79,"textLines":1,"bbox":[684,517,500,42]}
+{"kind":"textbox","id":"sh/50bqpcj2","slide":6,"text":"Menardo et al. · PLOS Pathogens 2019","textPreview":"Menardo et al. · PLOS Pathogens 2019","textChars":36,"textLines":1,"bbox":[684,561,500,18]}
+{"kind":"shape","id":"sh/4f2pgr2h","slide":6,"bbox":[60,615,1150,42]}
+{"kind":"textbox","id":"sh/va98j210","slide":6,"text":"Explore with root-to-tip; make the decision with a randomisation test.","textPreview":"Explore with root-to-tip; make the decision with a randomisation test.","textChars":70,"textLines":1,"bbox":[85,624,1100,26]}
+{"kind":"notes","id":"nt/x8f69ofe","slide":6,"text":"These are published bacterial datasets, not simulated points. Pseudomonas within one patient produced a clear association and an MRCA near admission. Typhi had only an R-squared of 0.12 but a highly significant slope and passed the randomisation test. Klebsiella ST101 is the warning case: a positive slope, but 10,000 permutations gave P equals 0.339. The large tuberculosis study found very weak fits and showed that slow organisms often need much longer sampling windows. The lesson is that R-squared is descriptive, not the gate. About two minutes.\n\n[Sources]\n- https://www.nature.com/articles/s41467-021-22814-9\n- https://www.nature.com/articles/s41467-018-07370-z\n- https://www.frontiersin.org/journals/microbiology/articles/10.3389/fmicb.2019.00542/full\n- https://journals.plos.org/plospathogens/article?id=10.1371/journal.ppat.1008067"}
+{"kind":"slide","id":"sl/gnmp4jqx","slide":7,"title":"Published date-randomisation tests change the decision","textShapes":24}
+{"kind":"textbox","id":"sh/ozq5szq9","slide":7,"name":"slide-7-title","text":"Published date-randomisation tests change the decision","textPreview":"Published date-randomisation tests change the decision","textChars":54,"textLines":1,"bbox":[48,34,1130,74]}
+{"kind":"shape","id":"sh/nyh4jupo","slide":7,"bbox":[48,126,1184,0]}
+{"kind":"textbox","id":"sh/dcbud0ra","slide":7,"text":"7","textPreview":"7","textChars":1,"textLines":1,"bbox":[1182,658,50,22]}
+{"kind":"textbox","id":"sh/ydkbm5sv","slide":7,"text":"ChronoClade · TGBIF · 28 August 2026","textPreview":"ChronoClade · TGBIF · 28 August 2026","textChars":36,"textLines":1,"bbox":[48,658,700,22]}
+{"kind":"shape","id":"sh/zedcfa9g","slide":7,"bbox":[60,170,560,188]}
+{"kind":"textbox","id":"sh/kzmdova1","slide":7,"text":"PASS","textPreview":"PASS","textChars":4,"textLines":1,"bbox":[84,188,170,24]}
+{"kind":"textbox","id":"sh/l0vuh0rm","slide":7,"text":"Mycobacterium leprae","textPreview":"Mycobacterium leprae","textChars":20,"textLines":1,"bbox":[84,219,510,34]}
+{"kind":"textbox","id":"sh/eh0ba1sr","slide":7,"text":"10 modern + 5 ancient genomes","textPreview":"10 modern + 5 ancient genomes","textChars":29,"textLines":1,"bbox":[84,258,510,24]}
+{"kind":"textbox","id":"sh/fi9c369c","slide":7,"text":"R² = 0.90 · date randomisation P < 10⁻⁴","textPreview":"R² = 0.90 · date randomisation P < 10⁻⁴","textChars":39,"textLines":1,"bbox":[84,290,510,42]}
+{"kind":"textbox","id":"sh/baxkjqlk","slide":7,"text":"Didelot et al. · NAR 2018","textPreview":"Didelot et al. · NAR 2018","textChars":25,"textLines":1,"bbox":[84,336,510,18]}
+{"kind":"shape","id":"sh/a9ojq5kz","slide":7,"bbox":[650,170,560,188]}
+{"kind":"textbox","id":"sh/xcz2l03q","slide":7,"text":"PASS","textPreview":"PASS","textChars":4,"textLines":1,"bbox":[674,188,170,24]}
+{"kind":"textbox","id":"sh/cbq1sv25","slide":7,"text":"Salmonella Typhi 3.1.1","textPreview":"Salmonella Typhi 3.1.1","textChars":22,"textLines":1,"bbox":[674,219,510,34]}
+{"kind":"textbox","id":"sh/n6x0fqlo","slide":7,"text":"20 randomised-date analyses","textPreview":"20 randomised-date analyses","textChars":27,"textLines":1,"bbox":[674,258,510,24]}
+{"kind":"textbox","id":"sh/25ojml43","slide":7,"text":"Observed clock-rate estimates did not overlap the randomisations.","textPreview":"Observed clock-rate estimates did not overlap the randomisations.","textChars":65,"textLines":1,"bbox":[674,290,510,42]}
+{"kind":"textbox","id":"sh/p8fih03e","slide":7,"text":"Park et al. · Nature Communications 2018","textPreview":"Park et al. · Nature Communications 2018","textChars":40,"textLines":1,"bbox":[674,336,510,18]}
+{"kind":"shape","id":"sh/o761ov2t","slide":7,"bbox":[60,395,560,188]}
+{"kind":"textbox","id":"sh/f2d0b6lc","slide":7,"text":"PASS","textPreview":"PASS","textChars":4,"textLines":1,"bbox":[84,413,170,24]}
+{"kind":"textbox","id":"sh/eh4jil4r","slide":7,"text":"Klebsiella pneumoniae ST17","textPreview":"Klebsiella pneumoniae ST17","textChars":26,"textLines":1,"bbox":[84,444,510,34]}
+{"kind":"textbox","id":"sh/id4ju1oz","slide":7,"text":"145 genomes selected from a global set of 300","textPreview":"145 genomes selected from a global set of 300","textChars":45,"textLines":1,"bbox":[84,483,510,24]}
+{"kind":"textbox","id":"sh/jedkn654","slide":7,"text":"DRT confirmed signal · estimated 2.17 SNPs/year.","textPreview":"DRT confirmed signal · estimated 2.17 SNPs/year.","textChars":48,"textLines":1,"bbox":[84,515,510,42]}
+{"kind":"textbox","id":"sh/4fm1wb6p","slide":7,"text":"Hetland et al. · Microbial Genomics 2023","textPreview":"Hetland et al. · Microbial Genomics 2023","textChars":40,"textLines":1,"bbox":[84,561,510,18]}
+{"kind":"shape","id":"sh/50v2pgna","slide":7,"bbox":[650,395,560,188]}
+{"kind":"textbox","id":"sh/q143ylov","slide":7,"text":"NOT SUPPORTED","textPreview":"NOT SUPPORTED","textChars":13,"textLines":1,"bbox":[674,413,170,24]}
+{"kind":"textbox","id":"sh/r2dkrq5g","slide":7,"text":"Klebsiella pneumoniae ST101","textPreview":"Klebsiella pneumoniae ST101","textChars":27,"textLines":1,"bbox":[674,444,510,34]}
+{"kind":"textbox","id":"sh/s3ml0v61","slide":7,"text":"36 dated genomes · narrow sampling window","textPreview":"36 dated genomes · narrow sampling window","textChars":41,"textLines":1,"bbox":[674,483,510,24]}
+{"kind":"textbox","id":"sh/d4f2t0nm","slide":7,"text":"10,000 permutations gave P = 0.339: do not treat the clock as established.","textPreview":"10,000 permutations gave P = 0.339: do not treat the clock as established.","textChars":74,"textLines":1,"bbox":[674,515,510,42]}
+{"kind":"textbox","id":"sh/e5o32lor","slide":7,"text":"Roe et al. · Frontiers in Microbiology 2019","textPreview":"Roe et al. · Frontiers in Microbiology 2019","textChars":43,"textLines":1,"bbox":[674,561,510,18]}
+{"kind":"shape","id":"sh/f6xkvq5c","slide":7,"bbox":[60,615,1150,42]}
+{"kind":"textbox","id":"sh/p0zmlk7u","slide":7,"text":"A defensible workflow must be allowed to say: do not produce a time tree.","textPreview":"A defensible workflow must be allowed to say: do not produce a time tree.","textChars":73,"textLines":1,"bbox":[85,624,1100,26]}
+{"kind":"notes","id":"nt/gnmp4jqx","slide":7,"text":"Here are four real applications of date randomisation. Mycobacterium leprae has an unusually strong signal because ancient genomes extend the calibration window. Typhi 3.1.1 and Klebsiella ST17 both passed, supporting dated analyses. Klebsiella ST101 did not: despite a positive slope, 10,000 permutations gave a non-significant result. That is precisely why the pipeline must permit an indeterminate output and suppress the dated tree when the evidence gate fails. About two minutes.\n\n[Sources]\n- https://academic.oup.com/nar/article/46/22/e134/5078231\n- https://www.nature.com/articles/s41467-018-07370-z\n- https://doi.org/10.1099/mgen.0.001005\n- https://www.frontiersin.org/journals/microbiology/articles/10.3389/fmicb.2019.00542/full\n- https://pubmed.ncbi.nlm.nih.gov/25771196/"}
+{"kind":"slide","id":"sl/fu1gfa1s","slide":8,"title":"From dated genomes to a time tree: four conceptual steps","textShapes":16}
+{"kind":"textbox","id":"sh/jq5w365o","slide":8,"name":"slide-8-title","text":"From dated genomes to a time tree: four conceptual steps","textPreview":"From dated genomes to a time tree: four conceptual steps","textChars":56,"textLines":1,"bbox":[48,34,1130,74]}
+{"kind":"shape","id":"sh/i5wva1o3","slide":8,"bbox":[48,126,1184,0]}
+{"kind":"textbox","id":"sh/g72x4zyd","slide":8,"text":"8","textPreview":"8","textChars":1,"textLines":1,"bbox":[1182,658,50,22]}
+{"kind":"textbox","id":"sh/ri9g7uhw","slide":8,"text":"ChronoClade · TGBIF · 28 August 2026","textPreview":"ChronoClade · TGBIF · 28 August 2026","textChars":36,"textLines":1,"bbox":[48,658,700,22]}
+{"kind":"shape","id":"sh/m9sb2x4v","slide":8,"bbox":[290,320,50,0]}
+{"kind":"shape","id":"sh/na1sb2lg","slide":8,"bbox":[590,320,50,0]}
+{"kind":"shape","id":"sh/8bat47ml","slide":8,"bbox":[890,320,50,0]}
+{"kind":"shape","id":"sh/je9g3ahk","slide":8,"bbox":[60,250,230,170]}
+{"kind":"textbox","id":"sh/id0fu50z","slide":8,"text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[78,267,30,28]}
+{"kind":"textbox","id":"sh/o7ydoret","slide":8,"text":"Build a clonal tree","textPreview":"Build a clonal tree","textChars":19,"textLines":1,"bbox":[78,308,195,52]}
+{"kind":"textbox","id":"sh/98rehwve","slide":8,"text":"Align related genomes and correct recombination.","textPreview":"Align related genomes and correct recombination.","textChars":48,"textLines":1,"bbox":[78,365,195,44]}
+{"kind":"shape","id":"sh/m5gvmhwn","slide":8,"bbox":[360,250,230,170]}
+{"kind":"textbox","id":"sh/n6pwfmd8","slide":8,"text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[378,267,30,28]}
+{"kind":"textbox","id":"sh/0jydkreh","slide":8,"text":"Attach collection dates","textPreview":"Attach collection dates","textChars":23,"textLines":1,"bbox":[378,308,195,52]}
+{"kind":"textbox","id":"sh/1k7edwv2","slide":8,"text":"Use the most precise dates available; retain uncertainty.","textPreview":"Use the most precise dates available; retain uncertainty.","textChars":57,"textLines":1,"bbox":[378,365,195,44]}
+{"kind":"shape","id":"sh/ehgvihwr","slide":8,"bbox":[660,250,230,170]}
+{"kind":"textbox","id":"sh/zipwbmdc","slide":8,"text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[678,267,30,28]}
+{"kind":"textbox","id":"sh/kfixwbe1","slide":8,"text":"Test temporal signal","textPreview":"Test temporal signal","textChars":20,"textLines":1,"bbox":[678,308,195,52]}
+{"kind":"textbox","id":"sh/lgbepgvm","slide":8,"text":"Root-to-tip exploration plus date randomisation.","textPreview":"Root-to-tip exploration plus date randomisation.","textChars":48,"textLines":1,"bbox":[678,365,195,44]}
+{"kind":"shape","id":"sh/tw7e9gnq","slide":8,"bbox":[960,250,230,170]}
+{"kind":"textbox","id":"sh/svydgb65","slide":8,"text":"4","textPreview":"4","textChars":1,"textLines":1,"bbox":[978,267,30,28]}
+{"kind":"textbox","id":"sh/7u5w765k","slide":8,"text":"Fit a molecular clock","textPreview":"Fit a molecular clock","textChars":21,"textLines":1,"bbox":[978,308,195,52]}
+{"kind":"textbox","id":"sh/6twve1oz","slide":8,"text":"Only when the dates carry more information than chance.","textPreview":"Only when the dates carry more information than chance.","textChars":55,"textLines":1,"bbox":[978,365,195,44]}
+{"kind":"shape","id":"sh/5sne5wne","slide":8,"bbox":[150,525,980,56]}
+{"kind":"textbox","id":"sh/kredcr6t","slide":8,"text":"The software can vary; the scientific logic does not.","textPreview":"The software can vary; the scientific logic does not.","textChars":53,"textLines":1,"bbox":[180,538,920,32]}
+{"kind":"notes","id":"nt/fu1gfa1s","slide":8,"text":"Keep the workflow conceptual. First reconstruct the clonal evolutionary history, correcting recombination. Second attach collection dates with their real precision. Third ask whether those dates explain more divergence than random dates. Only then fit the molecular clock and express branches in calendar time. TreeTime, BactDating or other software can implement parts of this logic; the key point is the evidence gate. About 90 seconds.\n\n[Sources]\n- https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1004041\n- https://academic.oup.com/ve/article/4/1/vex042/4794731\n- https://academic.oup.com/nar/article/46/22/e134/5078231\n- https://discovery.ucl.ac.uk/id/eprint/1483140/"}
+{"kind":"slide","id":"sl/udsvah03","slide":9,"title":"A time-scaled tree places evolution on a calendar","textShapes":13}
+{"kind":"textbox","id":"sh/qtkf21ob","slide":9,"name":"slide-9-title","text":"A time-scaled tree places evolution on a calendar","textPreview":"A time-scaled tree places evolution on a calendar","textChars":49,"textLines":1,"bbox":[48,34,1130,74]}
+{"kind":"shape","id":"sh/rutwv65w","slide":9,"bbox":[48,126,1184,0]}
+{"kind":"textbox","id":"sh/0b65obm9","slide":9,"text":"9","textPreview":"9","textChars":1,"textLines":1,"bbox":[1182,658,50,22]}
+{"kind":"textbox","id":"sh/nex4jq5k","slide":9,"text":"ChronoClade · TGBIF · 28 August 2026","textPreview":"ChronoClade · TGBIF · 28 August 2026","textChars":36,"textLines":1,"bbox":[48,658,700,22]}
+{"kind":"shape","id":"sh/903ml8be","slide":9,"bbox":[120,360,140,0]}
+{"kind":"shape","id":"sh/8zu5c3ut","slide":9,"bbox":[260,260,0,195]}
+{"kind":"shape","id":"sh/v2l4nitk","slide":9,"bbox":[260,260,160,0]}
+{"kind":"shape","id":"sh/u1cnedcz","slide":9,"bbox":[260,455,260,0]}
+{"kind":"shape","id":"sh/h43mp8ba","slide":9,"bbox":[420,205,0,110]}
+{"kind":"shape","id":"sh/w3u5g3u5","slide":9,"bbox":[420,205,270,0]}
+{"kind":"shape","id":"sh/j6l4ritg","slide":9,"bbox":[420,315,350,0]}
+{"kind":"shape","id":"sh/i5cnidcv","slide":9,"bbox":[520,400,0,110]}
+{"kind":"shape","id":"sh/0bel8na9","slide":9,"bbox":[520,400,130,0]}
+{"kind":"shape","id":"sh/1wnm1sru","slide":9,"bbox":[520,510,215,0]}
+{"kind":"shape","id":"sh/e9w36ds3","slide":9,"bbox":[100,570,690,0]}
+{"kind":"shape","id":"sh/fa54zi9o","slide":9,"bbox":[120,565,0,10]}
+{"kind":"textbox","id":"sh/bml0buxs","slide":9,"text":"2019","textPreview":"2019","textChars":4,"textLines":1,"bbox":[92,584,56,22]}
+{"kind":"shape","id":"sh/t8nmx8ri","slide":9,"bbox":[250,565,0,10]}
+{"kind":"textbox","id":"sh/lsn2h4fa","slide":9,"text":"2020","textPreview":"2020","textChars":4,"textLines":1,"bbox":[222,584,56,22]}
+{"kind":"shape","id":"sh/r654vi9c","slide":9,"bbox":[380,565,0,10]}
+{"kind":"textbox","id":"sh/87a18zqt","slide":9,"text":"2021","textPreview":"2021","textChars":4,"textLines":1,"bbox":[352,584,56,22]}
+{"kind":"shape","id":"sh/5432t8rm","slide":9,"bbox":[510,565,0,10]}
+{"kind":"textbox","id":"sh/ml8j6p8n","slide":9,"text":"2022","textPreview":"2022","textChars":4,"textLines":1,"bbox":[482,584,56,22]}
+{"kind":"shape","id":"sh/kzm14z2p","slide":9,"bbox":[640,565,0,10]}
+{"kind":"textbox","id":"sh/wba1cjqp","slide":9,"text":"2023","textPreview":"2023","textChars":4,"textLines":1,"bbox":[612,584,56,22]}
+{"kind":"shape","id":"sh/yx4j2pkj","slide":9,"bbox":[770,565,0,10]}
+{"kind":"textbox","id":"sh/u9sja98z","slide":9,"text":"2024","textPreview":"2024","textChars":4,"textLines":1,"bbox":[742,584,56,22]}
+{"kind":"shape","id":"sh/xgzitk76","slide":9,"bbox":[690,197,16,16]}
+{"kind":"shape","id":"sh/cf6h0fql","slide":9,"bbox":[770,307,16,16]}
+{"kind":"shape","id":"sh/2l4faloj","slide":9,"bbox":[650,392,16,16]}
+{"kind":"shape","id":"sh/nmdg3q54","slide":9,"bbox":[735,502,16,16]}
+{"kind":"shape","id":"sh/onmxcv69","slide":9,"bbox":[390,225,60,70]}
+{"kind":"textbox","id":"sh/pofy50nu","slide":9,"text":"estimated\nancestor","textPreview":"estimated | ancestor","textChars":18,"textLines":2,"bbox":[374,235,92,45]}
+{"kind":"textbox","id":"sh/apofe5of","slide":9,"text":"How to read it","textPreview":"How to read it","textChars":14,"textLines":1,"bbox":[850,175,330,42]}
+{"kind":"textbox","id":"sh/bqxg7q50","slide":9,"text":"• Tips are anchored by collection date\n• Horizontal position represents calendar time\n• Internal nodes are estimated ancestral dates\n• Uncertainty belongs with every date estimate","textPreview":"• Tips are anchored by collection date | • Horizontal position represents calendar time | • Internal nodes are estimated ancestral dates ...","textChars":179,"textLines":4,"bbox":[850,245,350,225]}
+{"kind":"shape","id":"sh/cr6xgv6l","slide":9,"bbox":[850,500,350,86]}
+{"kind":"textbox","id":"sh/xcfy90n6","slide":9,"text":"It estimates when ancestors existed—not who infected whom.","textPreview":"It estimates when ancestors existed—not who infected whom.","textChars":58,"textLines":1,"bbox":[875,518,300,52]}
+{"kind":"notes","id":"nt/udsvah03","slide":9,"text":"A time-scaled tree has the same topology as an evolutionary tree, but its horizontal axis is calendar time. The observed tips are anchored by collection dates. The clock model estimates when internal ancestors existed and attaches uncertainty to those dates. It does not reconstruct a chain of person-to-person transmission. About 90 seconds.\n\n[Sources]\n- https://academic.oup.com/ve/article/4/1/vex042/4794731\n- https://discovery.ucl.ac.uk/id/eprint/1483140/"}
+{"kind":"slide","id":"sl/m90b6t0r","slide":10,"title":"Adding time lets us ask better public-health questions","textShapes":12}
+{"kind":"textbox","id":"sh/p0ru503u","slide":10,"name":"slide-10-title","text":"Adding time lets us ask better public-health questions","textPreview":"Adding time lets us ask better public-health questions","textChars":54,"textLines":1,"bbox":[48,34,1130,74]}
+{"kind":"shape","id":"sh/xwnupgvy","slide":10,"bbox":[48,126,1184,0]}
+{"kind":"textbox","id":"sh/cbu58j2h","slide":10,"text":"10","textPreview":"10","textChars":2,"textLines":1,"bbox":[1182,658,50,22]}
+{"kind":"textbox","id":"sh/zelojyl8","slide":10,"text":"ChronoClade · TGBIF · 28 August 2026","textPreview":"ChronoClade · TGBIF · 28 August 2026","textChars":36,"textLines":1,"bbox":[48,658,700,22]}
+{"kind":"textbox","id":"sh/ydcnatkn","slide":10,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[60,185,58,36]}
+{"kind":"shape","id":"sh/lk7ut0va","slide":10,"bbox":[138,201,430,0]}
+{"kind":"textbox","id":"sh/kzu5c32t","slide":10,"text":"When did this lineage begin circulating locally?","textPreview":"When did this lineage begin circulating locally?","textChars":48,"textLines":1,"bbox":[60,247,520,86]}
+{"kind":"textbox","id":"sh/725onyl4","slide":10,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[650,185,58,36]}
+{"kind":"shape","id":"sh/yxgbilcj","slide":10,"bbox":[728,201,430,0]}
+{"kind":"textbox","id":"sh/s7yt4b21","slide":10,"text":"Do isolates sampled two years apart share a recent ancestor?","textPreview":"Do isolates sampled two years apart share a recent ancestor?","textChars":60,"textLines":1,"bbox":[650,247,520,86]}
+{"kind":"textbox","id":"sh/d87uxg3m","slide":10,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[60,400,58,36]}
+{"kind":"shape","id":"sh/q9srixs3","slide":10,"bbox":[138,416,430,0]}
+{"kind":"textbox","id":"sh/r6pcv6lw","slide":10,"text":"Are later cases nested within earlier local diversity?","textPreview":"Are later cases nested within earlier local diversity?","textChars":54,"textLines":1,"bbox":[60,462,520,86]}
+{"kind":"textbox","id":"sh/0bit8b2d","slide":10,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[650,400,58,36]}
+{"kind":"shape","id":"sh/dwjqtcbu","slide":10,"bbox":[728,416,430,0]}
+{"kind":"textbox","id":"sh/e9gb61k7","slide":10,"text":"Does the pattern favour persistence, repeated introduction—or neither?","textPreview":"Does the pattern favour persistence, repeated introduction—or neither?","textChars":70,"textLines":1,"bbox":[650,462,520,86]}
+{"kind":"shape","id":"sh/fapcz6ls","slide":10,"bbox":[170,595,940,48]}
+{"kind":"textbox","id":"sh/ozitcv29","slide":10,"text":"Then interpret the tree alongside patient, place and sampling context.","textPreview":"Then interpret the tree alongside patient, place and sampling context.","textChars":70,"textLines":1,"bbox":[195,606,890,28]}
+{"kind":"notes","id":"nt/m90b6t0r","slide":10,"text":"Time does not answer these questions automatically, but it makes them testable. We can ask when a local group shared an ancestor, whether later isolates descend from diversity already seen locally, and whether the sampled pattern is more consistent with persistence or repeated introduction. Those remain hypotheses until combined with patient, place and contextual sampling. About 90 seconds.\n\n[Sources]\n- https://discovery.ucl.ac.uk/id/eprint/1483140/\n- https://academic.oup.com/ve/article/4/1/vex042/4794731"}
+{"kind":"slide","id":"sl/jetc3ut0","slide":11,"title":"Time-resolved phylogenetics sharpens decisions—but does not replace epidemiology","textShapes":8}
+{"kind":"textbox","id":"sh/mdobedg3","slide":11,"name":"slide-11-title","text":"Time-resolved phylogenetics sharpens decisions—but does not replace epidemiology","textPreview":"Time-resolved phylogenetics sharpens decisions—but does not replace epidemiology","textChars":80,"textLines":1,"bbox":[48,34,1130,74]}
+{"kind":"shape","id":"sh/nehs7iho","slide":11,"bbox":[48,126,1184,0]}
+{"kind":"textbox","id":"sh/wbih4b6d","slide":11,"text":"11","textPreview":"11","textChars":2,"textLines":1,"bbox":[1182,658,50,22]}
+{"kind":"textbox","id":"sh/n69grmpw","slide":11,"text":"ChronoClade · TGBIF · 28 August 2026","textPreview":"ChronoClade · TGBIF · 28 August 2026","textChars":36,"textLines":1,"bbox":[48,658,700,22]}
+{"kind":"textbox","id":"sh/250zy18b","slide":11,"text":"What it adds","textPreview":"What it adds","textChars":12,"textLines":1,"bbox":[60,185,520,42]}
+{"kind":"textbox","id":"sh/98rytw72","slide":11,"text":"• Places genetic divergence in calendar time\n• Tests whether the sampling dates are genuinely informative\n• Distinguishes persistence and repeated-introduction hypotheses\n• Focuses the next epidemiological investigation\n• Makes uncertainty and sampling limitations explicit","textPreview":"• Places genetic divergence in calendar time | • Tests whether the sampling dates are genuinely informative | • Distinguishes persistence...","textChars":273,"textLines":5,"bbox":[60,255,520,305]}
+{"kind":"shape","id":"sh/cn6t83y1","slide":11,"bbox":[625,180,0,390]}
+{"kind":"textbox","id":"sh/72t03qp0","slide":11,"text":"What it cannot claim","textPreview":"What it cannot claim","textChars":20,"textLines":1,"bbox":[680,185,500,42]}
+{"kind":"textbox","id":"sh/61kzalof","slide":11,"text":"• Direct transmission between people\n• An exact number of introduction events\n• A universal SNP threshold\n• Complete global context from incomplete public sampling\n• Reliable dates when temporal signal is absent","textPreview":"• Direct transmission between people | • An exact number of introduction events | • A universal SNP threshold | • Complete global context...","textChars":211,"textLines":5,"bbox":[680,255,500,305]}
+{"kind":"shape","id":"sh/ofqtgnyt","slide":11,"bbox":[60,590,1120,44]}
+{"kind":"textbox","id":"sh/9gza9sze","slide":11,"text":"Best used as a genomic evidence layer within public-health review.","textPreview":"Best used as a genomic evidence layer within public-health review.","textChars":66,"textLines":1,"bbox":[80,598,1080,28]}
+{"kind":"notes","id":"nt/jetc3ut0","slide":11,"text":"The benefit is not simply a prettier tree. It is a more disciplined question and a transparent chain from data to interpretation. It can focus epidemiological review and highlight where more sampling is worth doing. But it is not a transmission tree, it cannot count introductions directly and it remains sensitive to incomplete context and missing metadata. About 90 seconds.\n\n[Sources]\n- https://discovery.ucl.ac.uk/id/eprint/1483140/\n- https://github.com/ghruproject/chronoclade"}
+{"kind":"slide","id":"sl/8f2psfyx","slide":12,"title":"Three things to remember","textShapes":13}
+{"kind":"textbox","id":"sh/1oj61kn6","slide":12,"name":"slide-12-title","text":"Three things to remember","textPreview":"Three things to remember","textChars":24,"textLines":1,"bbox":[48,34,1130,74]}
+{"kind":"shape","id":"sh/hkbm5wzu","slide":12,"bbox":[48,126,1184,0]}
+{"kind":"textbox","id":"sh/0f2lgnmp","slide":12,"text":"12","textPreview":"12","textChars":2,"textLines":1,"bbox":[1182,658,50,22]}
+{"kind":"textbox","id":"sh/ra943il8","slide":12,"text":"Discussion","textPreview":"Discussion","textChars":10,"textLines":1,"bbox":[48,658,700,22]}
+{"kind":"shape","id":"sh/q903ad4n","slide":12,"bbox":[70,187,42,42]}
+{"kind":"textbox","id":"sh/dcbm583y","slide":12,"text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[78,194,26,26]}
+{"kind":"textbox","id":"sh/sb2lcnmd","slide":12,"text":"Relatedness is not time","textPreview":"Relatedness is not time","textChars":23,"textLines":1,"bbox":[145,185,470,42]}
+{"kind":"textbox","id":"sh/b6d4f2lc","slide":12,"text":"An ordinary phylogeny shows shared ancestry, but not when those ancestors existed.","textPreview":"An ordinary phylogeny shows shared ancestry, but not when those ancestors existed.","textChars":82,"textLines":1,"bbox":[650,187,520,64]}
+{"kind":"shape","id":"sh/a543mx4r","slide":12,"bbox":[70,327,42,42]}
+{"kind":"textbox","id":"sh/wvupgz6t","slide":12,"text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[78,334,26,26]}
+{"kind":"textbox","id":"sh/xw3q94ne","slide":12,"text":"Dates only help when evolution is measurable","textPreview":"Dates only help when evolution is measurable","textChars":44,"textLines":1,"bbox":[145,325,470,42]}
+{"kind":"textbox","id":"sh/atc7epon","slide":12,"text":"A two-year sampling window may—or may not—contain enough genetic change.","textPreview":"A two-year sampling window may—or may not—contain enough genetic change.","textChars":72,"textLines":1,"bbox":[650,327,520,64]}
+{"kind":"shape","id":"sh/bulo7u58","slide":12,"bbox":[70,467,42,42]}
+{"kind":"textbox","id":"sh/orapcf6h","slide":12,"text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[78,474,26,26]}
+{"kind":"textbox","id":"sh/9sj65kn2","slide":12,"text":"Test before dating","textPreview":"Test before dating","textChars":18,"textLines":1,"bbox":[145,465,470,42]}
+{"kind":"textbox","id":"sh/mps7a5or","slide":12,"text":"No temporal signal is a valid result; do not force a time tree.","textPreview":"No temporal signal is a valid result; do not force a time tree.","textChars":63,"textLines":1,"bbox":[650,467,520,64]}
+{"kind":"shape","id":"sh/nq1o3a5w","slide":12,"bbox":[145,610,1025,48]}
+{"kind":"textbox","id":"sh/0nap8f6l","slide":12,"text":"Which E. coli or Klebsiella ST do we have genomes and year/month dates for?","textPreview":"Which E. coli or Klebsiella ST do we have genomes and year/month dates for?","textChars":75,"textLines":1,"bbox":[170,620,975,28]}
+{"kind":"notes","id":"nt/8f2psfyx","slide":12,"text":"Close on three ideas. Relatedness alone does not supply a calendar. Sampling dates only help when sufficient change accumulated over the observed window. Temporal signal must therefore be tested before dating, and a negative result is scientifically useful. Then invite discussion about which E. coli or Klebsiella ST has the minimum data needed to try this. About one minute.\n\n[Sources]\n- https://discovery.ucl.ac.uk/id/eprint/1483140/\n- https://pubmed.ncbi.nlm.nih.gov/25771196/"}

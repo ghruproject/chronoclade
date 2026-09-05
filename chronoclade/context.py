@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pyarrow.parquet as pq
 
-from beyondmlst.metadata import Sample
+from chronoclade.metadata import Sample
 
 
 DEFAULT_CONTEXT_METADATA = Path(__file__).parent / "data" / "atb_context_202505.parquet"
@@ -153,7 +153,7 @@ def context_metadata_provenance(path: Path) -> dict[str, object]:
 
 
 def normalise_collection_date(value: str) -> str:
-    """Return a beyondMLST-compatible public collection date or an empty string."""
+    """Return a ChronoClade-compatible public collection date or an empty string."""
 
     value = value.strip()
     if not value:

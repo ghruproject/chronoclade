@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a deterministic two-lineage beyondMLST demonstration dataset."""
+"""Generate a deterministic two-lineage ChronoClade demonstration dataset."""
 
 from __future__ import annotations
 

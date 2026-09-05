@@ -1,4 +1,4 @@
-"""Metadata parsing and validation for beyondMLST."""
+"""Metadata parsing and validation for ChronoClade."""
 
 from __future__ import annotations
 

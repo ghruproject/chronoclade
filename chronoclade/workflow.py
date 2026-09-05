@@ -1,4 +1,4 @@
-"""Execution of the beyondMLST workflow."""
+"""Execution of the ChronoClade workflow."""
 
 from __future__ import annotations
 
@@ -12,19 +12,20 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
 
-from beyondmlst.evidence import EvidenceError, build_public_health_evidence
-from beyondmlst.metadata import (
+from chronoclade.evidence import EvidenceError, build_public_health_evidence
+from chronoclade.metadata import (
     Sample,
     group_samples,
     select_reference,
     slugify_lineage,
 )
-from beyondmlst.report import (
+from chronoclade.report import (
     assess_temporal_signal,
     write_lineage_report,
+    write_supporting_bundle,
     write_summary_report,
 )
-from beyondmlst.temporal import run_date_randomisation
+from chronoclade.temporal import run_date_randomisation
 
 REQUIRED_TOOLS = (
     "ska",
@@ -594,10 +595,18 @@ def _run_lineage(
             "recombination_importations": str(importations),
             "filtered_alignment": str(filtered_alignment),
             "root_to_tip_plot": str(clock_dir / "root_to_tip_regression.svg"),
+            "root_to_tip_png": str(lineage_dir / "root_to_tip.png"),
+            "root_to_tip_data": str(clock_dir / "rtt.csv"),
             "date_randomisation_plot": str(lineage_dir / "date_randomisation.svg"),
+            "date_randomisation_png": str(lineage_dir / "date_randomisation.png"),
+            "date_randomisation_csv": str(lineage_dir / "date_randomisation.csv"),
             "timetree": str(time_tree) if time_tree_available else None,
             "timetree_plot": (
                 str(lineage_dir / "timetree" / "timetree.svg") if time_tree_available else None
+            ),
+            "timetree_png": str(lineage_dir / "timetree.png") if time_tree_available else None,
+            "timetree_confidence_plot": (
+                str(lineage_dir / "timetree_with_confidence.svg") if time_tree_available else None
             ),
             "location_tree": str(location_output),
             "public_health_evidence": str(lineage_dir / "public_health_evidence.json"),
@@ -605,11 +614,18 @@ def _run_lineage(
             "clonal_snp_matrix": str(lineage_dir / "clonal_snp_matrix.tsv"),
             "pairwise_callable_sites": str(lineage_dir / "pairwise_callable_sites.tsv"),
             "clonal_snp_heatmap": str(lineage_dir / "clonal_snp_heatmap.svg"),
+            "clonal_snp_heatmap_png": str(lineage_dir / "clonal_snp_heatmap.png"),
+            "timetree_confidence": (
+                str(lineage_dir / "timetree_confidence.csv") if time_tree_available else None
+            ),
+            "node_dates": str(lineage_dir / "node_dates.csv") if time_tree_available else None,
+            "supporting_results": str(lineage_dir / "supporting_results.zip"),
             "html_report": str(lineage_dir / "report.html"),
         },
     }
-    write_lineage_report(report, directory=lineage_dir, p_value_threshold=temporal_p_value)
     (lineage_dir / "report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    write_lineage_report(report, directory=lineage_dir, p_value_threshold=temporal_p_value)
+    write_supporting_bundle(lineage_dir)
     return report
 
 
@@ -675,7 +691,7 @@ def run_workflow(
     ]
 
     summary = {
-        "workflow": "beyondmlst",
+        "workflow": "chronoclade",
         "resources": asdict(resources),
         "lineages": reports,
         "context_manifest": str(context_manifest.expanduser().resolve())

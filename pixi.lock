@@ -5467,8 +5467,10 @@ packages:
   size: 433687
   timestamp: 1786599629846
 - pypi: ./
-  name: beyondmlst
+  name: chronoclade
   requires_dist:
+  - biopython>=1.80,<2
+  - matplotlib>=3.8,<4
   - numpy>=1.26,<3
   - pyarrow>=14,<26
   - rich>=14,<15

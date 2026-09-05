@@ -14,23 +14,26 @@ The current MVP now provides the reproducible analytical foundation:
 - deterministic country/year-balanced context pooling, SKA screening and a
   frozen context manifest;
 - recombination-filtered pairwise SNP and callable-site matrices, longitudinal
-  distance summaries and an SVG heatmap;
+  distance summaries and SVG/PNG heatmaps;
 - topology-defined candidate local groups, final clonal contextual neighbours
   and one-isolate-per-patient distance sensitivity;
-- decision-first HTML and JSON reports with a transparent four-scenario evidence
-  ledger, recommended follow-up and explicit interpretation limits; and
+- stage-by-stage HTML and JSON reports with a visible root-to-tip diagnostic,
+  formal date-randomisation gate, TreeTime confidence evidence, transparent
+  four-scenario ledger, recommended follow-up and downloadable CSV/SVG/PNG
+  support files; and
 - Linux/macOS CI that executes the native time-tree and location-tree paths.
 
 This is sufficient to run and audit a provisional public-health scenario. Its
 confidence is deliberately capped until branch support, exhaustive neighbour
 retrieval and GHRU validation are complete.
 
-The report uses progressive disclosure: the initial page contains only the
-working interpretation, reasons, recommended follow-up and four headline
-facts. Trees, distance tables, temporal tests, provenance and downloads are in
-a collapsed technical evidence section. Four controlled synthetic scenario
-reports provide regression fixtures while suitable real validation datasets
-are being identified; they do not constitute biological validation.
+The report follows the inferential order rather than hiding it: root-to-tip
+exploration, date randomisation, conditional time scaling, then integration of
+topology, distance and public context. Every stage keeps its figure and source
+files beside the explanation. Four controlled synthetic scenario reports
+provide regression fixtures, while the public ST239 case under
+`validation/st239_baines2015/` validates the temporal gate and dated estimates;
+neither substitutes for validation on the intended GHRU lineages.
 
 ## Next release: decision evidence
 

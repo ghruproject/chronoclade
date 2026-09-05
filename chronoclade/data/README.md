@@ -24,6 +24,6 @@ Regenerate the snapshot with:
 pixi run python scripts/build_atb_context_snapshot.py \
   --sqlite ~/.atbfetcher/atb.metadata.202505.sqlite \
   --mlst ~/.atbfetcher/mlst.parquet \
-  --output beyondmlst/data/atb_context_202505.parquet \
-  --manifest beyondmlst/data/atb_context_202505.json
+  --output chronoclade/data/atb_context_202505.parquet \
+  --manifest chronoclade/data/atb_context_202505.json
 ```

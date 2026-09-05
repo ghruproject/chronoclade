@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
-from beyondmlst.metadata import Sample
+from chronoclade.metadata import Sample
 
 
 class EvidenceError(RuntimeError):
@@ -365,6 +365,32 @@ def write_distance_heatmap(
 </svg>
 """
     path.write_text(svg, encoding="utf-8")
+    import matplotlib
+
+    matplotlib.use("Agg")
+    from matplotlib import pyplot
+
+    figure_size = max(7.0, min(18.0, count * 0.22 + 3.0))
+    figure, axis = pyplot.subplots(figsize=(figure_size, figure_size), constrained_layout=True)
+    image = axis.imshow(matrix, cmap="Blues", vmin=0, vmax=maximum, interpolation="nearest")
+    axis.set_title("Recombination-filtered pairwise SNPs", loc="left", fontweight="bold")
+    if count <= 60:
+        axis.set_xticks(range(count), sample_ids, rotation=90, fontsize=6)
+        axis.set_yticks(range(count), sample_ids, fontsize=6)
+    else:
+        axis.set_xticks([])
+        axis.set_yticks([])
+    figure.colorbar(image, ax=axis, label="Clonal SNPs", shrink=0.72)
+    figure.savefig(
+        path.with_suffix(".png"),
+        dpi=220,
+        facecolor="white",
+        metadata={
+            "Title": "Recombination-filtered pairwise SNP heatmap",
+            "Author": "ChronoClade",
+        },
+    )
+    pyplot.close(figure)
     return path
 
 

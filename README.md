@@ -1,6 +1,6 @@
-# beyondMLST
+# ChronoClade
 
-`beyondmlst` is a reproducible bacterial genomic epidemiology workflow for
+`chronoclade` is a reproducible bacterial genomic epidemiology workflow for
 asking what happens **beyond an MLST assignment**: are closely related isolates
 consistent with sustained local circulation, or with repeated introductions?
 
@@ -15,7 +15,7 @@ diagnostics and audit files remain available in a collapsed technical section.
 > [!IMPORTANT]
 > A phylogeny is not a transmission tree. Location-state reconstruction is
 > exploratory and is sensitive to uneven or incomplete contextual sampling.
-> `beyondmlst` reports the evidence; it does not automatically label individual
+> `chronoclade` reports the evidence; it does not automatically label individual
 > transmission or introduction events.
 
 ## Workflow
@@ -67,10 +67,10 @@ tools together. The lock file covers Apple-silicon and Intel macOS plus x86_64
 and arm64 Linux, so Docker is not required.
 
 ```bash
-git clone https://github.com/ghruproject/beyondmlst.git
-cd beyondmlst
+git clone https://github.com/ghruproject/chronoclade.git
+cd chronoclade
 pixi install
-pixi run beyondmlst preflight
+pixi run chronoclade preflight
 ```
 
 The first install may take several minutes while SKA2, IQ-TREE, ClonalFrameML
@@ -116,20 +116,20 @@ sequence data to this repository.
 Validate metadata without running external tools:
 
 ```bash
-pixi run beyondmlst validate metadata.csv
+pixi run chronoclade validate metadata.csv
 ```
 
 Preview the planned lineage analyses:
 
 ```bash
-pixi run beyondmlst run metadata.csv --dry-run
+pixi run chronoclade run metadata.csv --dry-run
 ```
 
 Run the workflow:
 
 ```bash
-pixi run beyondmlst run metadata.csv \
-  --output beyondmlst_results \
+pixi run chronoclade run metadata.csv \
+  --output chronoclade_results \
   --threads 8 \
   --lineage-jobs 2 \
   --randomisation-jobs 4 \
@@ -139,7 +139,7 @@ pixi run beyondmlst run metadata.csv \
 ### Prepare public context genomes
 
 [`atbfetcher`](https://github.com/happykhan/atbfetcher) is installed in the
-same Pixi environment. beyondMLST includes a compact AllTheBacteria 2025-05
+same Pixi environment. ChronoClade includes a compact AllTheBacteria 2025-05
 metadata snapshot covering every bacterial species and MLST scheme with a
 high-quality, downloadable genome and a perfect ST assignment. Prepare a
 bounded same-ST context set directly:
@@ -148,7 +148,7 @@ The current snapshot is 32 MiB and contains 2,047,053 genomes across 942
 species and 146 MLST schemes.
 
 ```bash
-pixi run beyondmlst prepare-context focal_metadata.csv \
+pixi run chronoclade prepare-context focal_metadata.csv \
   --scheme ecoli_achtman_4 \
   --st 131 \
   --output context/ST131 \
@@ -170,9 +170,9 @@ and then retains nearest neighbours plus a stratified background. Continue the
 analysis using the exact generated inputs:
 
 ```bash
-pixi run beyondmlst run context/ST131/combined_metadata.csv \
+pixi run chronoclade run context/ST131/combined_metadata.csv \
   --context-manifest context/ST131/context_manifest.tsv \
-  --output beyondmlst_results
+  --output chronoclade_results
 ```
 
 The SKA distance is a fast candidate-selection measurement. It is not reported
@@ -217,20 +217,31 @@ Each lineage directory contains:
   longitudinal/patient comparison classes
 - `clonal_snp_matrix.tsv` and `pairwise_callable_sites.tsv`: exact square
   matrices for audit and reuse
-- `clonal_snp_heatmap.svg`: report-ready corrected-distance heatmap
+- `clonal_snp_heatmap.svg` and `.png`: corrected-distance heatmap for editing
+  or direct use
 - `public_health_evidence.json`: scenario, evidence ledger, candidate local
   groups, final contextual neighbours and patient sensitivity
 - `clock/`: observed root-to-tip analysis
 - `clock/root_to_tip_regression.svg`: TreeTime root-to-tip visual
+- `root_to_tip.png`: high-resolution root-to-tip visual
 - `temporal_signal.json`: observed and randomised temporal-signal statistics
-- `date_randomisation.svg`: observed R² and rate against permuted dates
+- `date_randomisation.csv`: tidy observed and per-permutation statistics
+- `date_randomisation.svg` and `.png`: observed R² and rate against permuted dates
 - `timetree/`: dated tree and uncertainty, when supported
+- `timetree_with_confidence.svg`: the dated phylogeny on a calendar axis with
+  90% confidence intervals for inferred internal-node dates
+- `timetree.png`: high-resolution raster companion to the confidence-interval
+  phylogeny
+- `timetree_confidence.csv` and `node_dates.csv`: clock-rate uncertainty,
+  inferred root date, interval-width summaries and per-node 90% intervals
 - `location/`: exploratory ancestral location-state reconstruction
 - `context_manifest.tsv`: selected public genomes and their acquisition and
   screening provenance, when supplied
 - `report.json`: machine-readable lineage report
-- `report.html`: decision-first working interpretation, recommended follow-up,
-  evidence tables, graphics, temporal diagnostics and caveats
+- `report.html`: a stage-by-stage walkthrough from root-to-tip exploration to
+  date randomisation, conditional time scaling and public-health interpretation
+- `supporting_results.zip`: one portable bundle of the CSV/TSV, JSON, SVG, PNG
+  and tree files used by the report
 
 The top-level `index.html` links all lineage reports. `summary.json` records
 every lineage, skipped analysis, command and output.
@@ -245,7 +256,7 @@ every lineage, skipped analysis, command and output.
 - `combined_metadata.csv`: focal plus selected context samples, ready for `run`
 - `context_selection.json`: metadata snapshot, filters, versions and attrition
 
-The bundled table and its source manifest are in `beyondmlst/data/`. Maintainers
+The bundled table and its source manifest are in `chronoclade/data/`. Maintainers
 can regenerate it with `scripts/build_atb_context_snapshot.py` when a new ATB
 release is adopted.
 
@@ -256,7 +267,7 @@ deliberately shuffled, then run the complete native Pixi workflow:
 
 ```bash
 pixi run python examples/demo/generate_demo.py --output demo_run/input
-pixi run beyondmlst run demo_run/input/metadata.csv \
+pixi run chronoclade run demo_run/input/metadata.csv \
   --output demo_run/results \
   --threads 8 \
   --lineage-jobs 2 \

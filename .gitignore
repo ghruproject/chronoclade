@@ -8,6 +8,6 @@ __pycache__/
 build/
 dist/
 site/
-beyondmlst_results/
+chronoclade_results/
 demo_run/
 tmp/
