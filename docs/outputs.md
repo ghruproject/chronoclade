@@ -21,6 +21,10 @@ completed stage can be reused.
 | `clonalframeml.labelled_tree.newick` | Recombination-corrected tree |
 | `clonalframeml.importation_status.txt` | Recombination intervals by branch |
 | `clonalframeml.filtered.fasta` | Alignment after recombination filtering |
+| `recombination_intervals.tsv` | Normalised branch-level calls with alignment and reference-record coordinates, including cross-record flags |
+| `recombination_genome_profile.csv` | Binned importation depth and filtering values used in the map |
+| `recombination_map.svg`, `.png` | Genome-wide recombination and alignment-filtering figure |
+| `recombination_summary.json` | Counts of inferred intervals and columns removed or retained |
 | `clonal_pairwise_distances.tsv` | Pairwise SNPs, callable sites and comparison classes |
 | `clonal_snp_matrix.tsv` | Square clonal SNP matrix |
 | `pairwise_callable_sites.tsv` | Square callable-site matrix |

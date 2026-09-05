@@ -13,6 +13,22 @@ and post-recombination distance screen completed before temporal testing. These
 checks detect grossly divergent genomes; they do not prove every accession or
 metadata value is correct.
 
+The same section maps the recombination filter across the reference-ordered
+alignment. The upper track counts how many tree branches have an inferred
+importation in each bin. The lower track separates columns removed because they
+fall within at least one inferred import from columns removed only because a
+genome has an ambiguous base there. Exact branch, start and end coordinates are
+provided beside the figure.
+
+For a multi-record reference, the interval table translates alignment positions
+back to record-local coordinates. The report explicitly flags any inferred tract
+that crosses a join between reference records because ClonalFrameML sees the
+concatenated alignment and may treat that artificial adjacency as continuous.
+
+ClonalFrameML's filtered FASTA is a shared alignment, not a sample-by-sample mask.
+If a column is inferred as imported on any branch, that column is removed from
+every sequence before clonal distances and temporal analysis.
+
 ## 2. Explore the clock relationship
 
 The root-to-tip plot places collection date on the horizontal axis and genetic

@@ -21,6 +21,7 @@ from chronoclade.report import (
     write_supporting_bundle,
 )
 from chronoclade.recombination import run_phipack_screen
+from chronoclade.recombination_report import write_recombination_evidence
 from chronoclade.temporal import file_sha256, run_date_randomisation, run_full_tree_date_randomisation
 
 
@@ -657,6 +658,7 @@ def _report_record(
     assessment: dict[str, object],
     context_summary: dict[str, object],
     public_health: dict[str, object],
+    recombination_masking: dict[str, object],
     time_tree_available: bool,
 ) -> dict[str, object]:
     def optional(path: Path) -> str | None:
@@ -679,6 +681,7 @@ def _report_record(
         "public_health_label": public_health["scenario"]["label"],
         "public_health_confidence": public_health["scenario"]["confidence"],
         "public_health": public_health,
+        "recombination_masking": recombination_masking,
         "outputs": {
             "alignment": str(files.alignment),
             "lineage_coherence": str(files.coherence_screen),
@@ -686,6 +689,11 @@ def _report_record(
             "starting_tree": str(files.starting_tree),
             "tree": str(files.tree),
             "recombination_importations": str(files.importations),
+            "recombination_intervals": str(files.directory / "recombination_intervals.tsv"),
+            "recombination_summary": str(files.directory / "recombination_summary.json"),
+            "recombination_profile": str(files.directory / "recombination_genome_profile.csv"),
+            "recombination_map": str(files.directory / "recombination_map.svg"),
+            "recombination_map_png": str(files.directory / "recombination_map.png"),
             "filtered_alignment": str(files.filtered_alignment),
             "root_to_tip_plot": str(files.clock_dir / "root_to_tip_regression.svg"),
             "root_to_tip_png": str(files.directory / "root_to_tip.png"),
@@ -789,6 +797,13 @@ def _run_lineage(
         write_supporting_bundle(files.directory)
         return report
     rooted_tree = files.clock_dir / "rerooted.newick"
+    recombination_masking = write_recombination_evidence(
+        alignment=files.alignment,
+        filtered_alignment=files.filtered_alignment,
+        importations=files.importations,
+        output_directory=files.directory,
+        reference=reference.assembly,
+    )
     public_health = build_public_health_evidence(
         filtered_alignment=filtered_alignment,
         rooted_tree=rooted_tree if rooted_tree.is_file() else files.tree,
@@ -813,6 +828,7 @@ def _run_lineage(
         assessment,
         context_summary,
         public_health,
+        recombination_masking,
         time_tree_available,
     )
     (files.directory / "report.json").write_text(

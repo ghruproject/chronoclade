@@ -517,6 +517,23 @@ def _report_downloads(directory: Path) -> tuple[str, str, str]:
                 "Recombination calls",
                 "ClonalFrameML importation output",
             ),
+            (
+                "recombination_intervals.tsv",
+                "Inferred importation intervals",
+                "Normalised branch and alignment coordinates",
+            ),
+            (
+                "recombination_genome_profile.csv",
+                "Genome filtering profile",
+                "Binned importation depth and removed columns",
+            ),
+            (
+                "recombination_summary.json",
+                "Recombination summary",
+                "Machine-readable filtering totals and coordinate definition",
+            ),
+            ("recombination_map.svg", "Recombination map", "Scalable vector figure"),
+            ("recombination_map.png", "Recombination map", "High-resolution raster figure"),
             ("clonal_snp_heatmap.svg", "Distance heatmap", "Scalable vector figure"),
             ("clonal_snp_heatmap.png", "Distance heatmap", "High-resolution raster figure"),
             (
@@ -537,6 +554,124 @@ def _report_downloads(directory: Path) -> tuple[str, str, str]:
         directory,
     )
     return root_to_tip, randomisation, audit
+
+
+def _recombination_visual(report: dict[str, object], directory: Path) -> str:
+    """Explain inferred importation intervals and the shared alignment filter."""
+
+    raw = report.get("recombination_masking")
+    if not isinstance(raw, dict):
+        return ""
+    interval_count = int(raw.get("inferred_importation_intervals", 0))
+    branch_count = int(raw.get("branches_with_inferred_importation", 0))
+    recombinant_sites = int(raw.get("recombination_removed_sites", 0))
+    recombinant_percent = float(raw.get("recombination_removed_percent", 0.0))
+    incomplete_sites = int(raw.get("incomplete_only_removed_sites", 0))
+    incomplete_percent = float(raw.get("incomplete_only_removed_percent", 0.0))
+    retained_sites = int(raw.get("retained_clonal_sites", 0))
+    retained_percent = float(raw.get("retained_clonal_percent", 0.0))
+    boundary_crossing = int(raw.get("boundary_crossing_intervals", 0))
+    longest = raw.get("longest_inferred_intervals", [])
+    interval_rows = []
+    if isinstance(longest, list):
+        for item in longest:
+            if not isinstance(item, dict):
+                continue
+            interval_rows.append(
+                "<tr>"
+                f"<td>{escape(str(item.get('node', '')))}</td>"
+                f"<td>{escape('; '.join(str(value) for value in item.get('reference_segments', [])) or '—')}</td>"
+                f"<td>{int(item.get('alignment_start', 0)):,}–{int(item.get('alignment_end', 0)):,}</td>"
+                f"<td>{int(item.get('length', 0)):,}</td>"
+                "</tr>"
+            )
+    interval_table = (
+        _table_region(
+            "<table><thead><tr><th>Tree branch</th><th>Reference coordinate</th><th>Alignment coordinates</th><th>Length</th></tr></thead>"
+            f"<tbody>{''.join(interval_rows)}</tbody></table>",
+            label="Longest inferred importation intervals",
+            compact=True,
+        )
+        if interval_rows
+        else "<p>ClonalFrameML inferred no importation intervals in this alignment.</p>"
+    )
+    boundary_note = (
+        f'<p class="guardrail"><strong>Reference-boundary review:</strong> {boundary_crossing} '
+        "inferred interval(s) cross a join between reference records. ClonalFrameML analysed "
+        "the concatenated alignment, so these calls may reflect the artificial adjacency and "
+        "should be reviewed before biological interpretation.</p>"
+        if boundary_crossing
+        else ""
+    )
+    figure = ""
+    if (directory / "recombination_map.svg").is_file():
+        figure = (
+            '<figure><a class="figure-expand" href="recombination_map.svg" '
+            'title="Open the full-resolution recombination map">'
+            '<img src="recombination_map.svg" alt="Genome-wide ClonalFrameML importation and alignment-filtering profile"></a>'
+            "<figcaption>The upper track counts branches with an inferred import in each "
+            "alignment bin. The lower track shows the percentage of columns removed for "
+            "recombination or, separately, for incomplete data.</figcaption></figure>"
+        )
+    downloads = _download_list(
+        [
+            ("recombination_map.svg", "Recombination map — SVG", "Scalable genome-wide figure"),
+            ("recombination_map.png", "Recombination map — PNG", "High-resolution raster figure"),
+            (
+                "recombination_intervals.tsv",
+                "Inferred importation intervals",
+                "Exact branch, start, end and interval length",
+            ),
+            (
+                "recombination_genome_profile.csv",
+                "Genome filtering profile",
+                "Binned values underlying the figure",
+            ),
+            (
+                "recombination_summary.json",
+                "Filtering summary",
+                "Machine-readable totals and coordinate definition",
+            ),
+            (
+                "clonalframeml.importation_status.txt",
+                "Original ClonalFrameML calls",
+                "Unmodified branch-level importation output",
+            ),
+            (
+                "clonalframeml.filtered.fasta",
+                "Filtered clonal alignment",
+                "Complete non-imported columns used downstream",
+            ),
+        ],
+        directory,
+    )
+    return f"""
+      <section class="card recombination-evidence">
+        <h3>Which parts of the alignment were inferred as recombinant?</h3>
+        <p>ClonalFrameML infers importation intervals on individual branches of the tree. For
+        the downstream clonal analysis, ChronoClade uses its shared filtered alignment: a column
+        is removed if it falls within an inferred import on any branch. Columns containing an
+        ambiguous base in any genome are also removed, but are counted separately below.</p>
+        {boundary_note}
+        <div class="confidence-grid recombination-measures">
+          <div><small>Importation intervals</small><b>{interval_count:,}</b><span>branch-specific calls</span></div>
+          <div><small>Branches affected</small><b>{branch_count:,}</b><span>unique tree branches</span></div>
+          <div><small>Recombination removed</small><b>{recombinant_sites:,}</b><span>{recombinant_percent:.2f}% of alignment columns</span></div>
+          <div><small>Incomplete-data removed</small><b>{incomplete_sites:,}</b><span>{incomplete_percent:.2f}% beyond the recombination mask</span></div>
+          <div><small>Retained clonal alignment</small><b>{retained_sites:,}</b><span>{retained_percent:.2f}% of original columns</span></div>
+        </div>
+        <div class="evidence-layout">{figure}
+          <section class="card rule"><h3>How to read this</h3><p>The interval table gives exact
+          1-based, closed coordinates in the reference-ordered alignment. A branch-level call
+          does not mean that every sampled genome acquired that segment. The shared filter is
+          deliberately conservative: the union of all inferred intervals is excluded before
+          distances, temporal testing and time scaling.</p></section>
+          <section class="card interval-summary"><h3>Longest inferred intervals</h3>
+          <p>Up to ten calls are shown here; the TSV preserves every interval.</p>{interval_table}</section>
+          <details class="evidence-files" open><summary>Map data and filtered alignment</summary>{downloads}</details>
+        </div>
+      </section>
+    """
 
 
 def write_lineage_report(
@@ -579,6 +714,7 @@ def write_lineage_report(
     )
     outlier_note = _outlier_note(directory)
     context_visual = _context_section(context, directory)
+    recombination_visual = _recombination_visual(report, directory)
 
     randomised_values = [
         value for value in temporal.get("randomised", []) if isinstance(value, dict)
@@ -699,6 +835,7 @@ def write_lineage_report(
     .measure-strip > div {{ padding:16px; border-right:1px solid var(--line); }} .measure-strip > div:last-child {{ border:0; }}
     .measure-strip b {{ display:block; font-size:21px; margin:4px 0 2px; font-variant-numeric:tabular-nums; }} .measure-strip span {{ color:var(--muted); font-size:12px; }}
     .confidence-grid {{ display:grid; grid-template-columns:repeat(3,1fr); border:1px solid var(--ink); margin:24px 0; }} .confidence-grid>div {{ padding:16px; border-right:1px solid var(--line); border-bottom:1px solid var(--line); }} .confidence-grid>div:nth-child(3n) {{ border-right:0; }} .confidence-grid>div:nth-last-child(-n+3) {{ border-bottom:0; }} .confidence-grid small {{ display:block; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); font-size:11px; font-weight:700; }} .confidence-grid b {{ display:block; font-size:21px; margin:4px 0 2px; font-variant-numeric:tabular-nums; }} .confidence-grid span {{ color:var(--muted); font-size:12px; }}
+    .recombination-measures {{ grid-template-columns:repeat(5,minmax(0,1fr)); }} .recombination-measures>div {{ border-bottom:0; }} .recombination-measures>div:nth-child(3n) {{ border-right:1px solid var(--line); }} .recombination-measures>div:last-child {{ border-right:0; }}
     .logic {{ display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:18px; margin:26px 0; }} .logic div {{ padding:20px; background:#f4f5f7; border:1px solid var(--line); }} .logic b {{ display:block; font-size:18px; }} .logic span {{ font-size:30px; color:var(--muted); }}
     details.evidence-files {{ margin-top:22px; border-top:1px solid var(--ink); border-bottom:1px solid var(--ink); }} details.evidence-files summary {{ padding:14px 0; cursor:pointer; font-weight:800; }}
     .downloads {{ list-style:none; margin:0 0 14px; padding:8px 12px 12px; border-top:1px solid var(--line); }} .download a {{ display:grid; grid-template-columns:minmax(180px,1fr) 2fr 54px; gap:14px; padding:11px 4px; border-bottom:1px solid var(--line); text-decoration:none; align-items:center; }} .download small {{ color:var(--muted); }} .download b {{ text-align:right; font-size:11px; letter-spacing:.08em; color:var(--muted); }}
@@ -708,7 +845,7 @@ def write_lineage_report(
     .report-close {{ display:grid; grid-template-columns:var(--rail) 1fr; background:var(--ink); color:#fff; }} .report-close b {{ padding:30px 24px; border-right:1px solid #555b67; }} .report-close div {{ padding:30px 42px; }} .report-close a {{ color:#fff; }}
     #root-to-tip .stage-body {{ display:grid; grid-template-columns:minmax(270px,.72fr) minmax(560px,1.55fr); column-gap:30px; align-items:start; }} #root-to-tip .stage-head,#root-to-tip .stage-body>p,#root-to-tip .measure-strip {{ grid-column:1; }} #root-to-tip .stage-head {{ display:block; }} #root-to-tip .decision {{ margin-top:18px; width:max-content; }} #root-to-tip .measure-strip {{ grid-template-columns:1fr; }} #root-to-tip .measure-strip>div {{ border-right:0; border-bottom:1px solid var(--line); }} #root-to-tip .evidence-layout {{ grid-column:2; grid-row:1/5; grid-template-columns:minmax(0,1fr) 210px; }} #root-to-tip .logic {{ grid-column:1; }}
     @media(max-width:1250px) {{ #root-to-tip .stage-body {{ display:block; }} .evidence-layout,#root-to-tip .evidence-layout {{ grid-template-columns:1fr; }} .evidence-layout .evidence-files {{ grid-column:1; grid-row:auto; margin-top:8px; }} }}
-    @media(max-width:800px) {{ :root {{ --rail:76px; }} .identity-copy {{ display:block; padding:22px 20px; }} .overall {{ margin-top:22px; }} .contents {{ padding-left:0; overflow:visible; }} .contents a {{ min-width:0; padding:12px 7px; text-align:center; font-size:11px; white-space:nowrap; }} .stage-index {{ padding:28px 10px; }} .stage-index span {{ font-size:48px; }} .stage-index b {{ writing-mode:vertical-rl; margin:18px auto 0; }} .stage-body {{ padding:30px 18px 38px; }} .stage-head {{ display:block; }} .decision {{ margin-top:18px; width:max-content; max-width:100%; }} .measure-strip,.confidence-grid {{ grid-template-columns:1fr; }} .measure-strip > div,.confidence-grid>div {{ border-right:0; border-bottom:1px solid var(--line); min-width:0; }} .confidence-grid b {{ overflow-wrap:anywhere; }} .confidence-grid>div:nth-child(3n) {{ border-right:0; }} .confidence-grid>div:nth-last-child(-n+3) {{ border-bottom:1px solid var(--line); }} .confidence-grid>div:last-child {{ border-bottom:0; }} .logic {{ grid-template-columns:1fr; }} .logic > span {{ transform:rotate(90deg); justify-self:center; }} .download a {{ grid-template-columns:minmax(0,1fr) 42px; }} .download span,.download small {{ overflow-wrap:anywhere; }} .download small {{ grid-column:1/-1; grid-row:2; }} .scroll-hint {{ display:block; position:sticky; left:0; width:max-content; max-width:100%; margin-top:12px; padding:9px 10px; background:#edf3ff; color:var(--blue); font-size:12px; font-weight:700; }} .table-scroll:not(.compact-table) table {{ min-width:680px; }} .table-scroll:not(.compact-table) th:first-child,.table-scroll:not(.compact-table) td:first-child {{ position:sticky; left:0; background:#fff; z-index:1; }} .compact-table .scroll-hint,.compact-table thead {{ display:none; }} .compact-table table,.compact-table tbody,.compact-table tr,.compact-table td {{ display:block; min-width:0; width:100%; }} .compact-table tr {{ padding:10px 0; border-bottom:1px solid var(--line); }} .compact-table td {{ padding:3px 0; border:0; }} .compact-table td:first-child {{ font-weight:700; }} .figure-scroll img {{ min-width:760px; }} }}
+    @media(max-width:800px) {{ :root {{ --rail:76px; }} .identity-copy {{ display:block; padding:22px 20px; }} .overall {{ margin-top:22px; }} .contents {{ padding-left:0; overflow:visible; }} .contents a {{ min-width:0; padding:12px 7px; text-align:center; font-size:11px; white-space:nowrap; }} .stage-index {{ padding:28px 10px; }} .stage-index span {{ font-size:48px; }} .stage-index b {{ writing-mode:vertical-rl; margin:18px auto 0; }} .stage-body {{ padding:30px 18px 38px; }} .stage-head {{ display:block; }} .decision {{ margin-top:18px; width:max-content; max-width:100%; }} .measure-strip,.confidence-grid {{ grid-template-columns:1fr; }} .measure-strip > div,.confidence-grid>div {{ border-right:0; border-bottom:1px solid var(--line); min-width:0; }} .confidence-grid b {{ overflow-wrap:anywhere; }} .confidence-grid>div:nth-child(3n),.recombination-measures>div:nth-child(3n) {{ border-right:0; }} .confidence-grid>div:nth-last-child(-n+3) {{ border-bottom:1px solid var(--line); }} .confidence-grid>div:last-child {{ border-bottom:0; }} .logic {{ grid-template-columns:1fr; }} .logic > span {{ transform:rotate(90deg); justify-self:center; }} .download a {{ grid-template-columns:minmax(0,1fr) 42px; }} .download span,.download small {{ overflow-wrap:anywhere; }} .download small {{ grid-column:1/-1; grid-row:2; }} .scroll-hint {{ display:block; position:sticky; left:0; width:max-content; max-width:100%; margin-top:12px; padding:9px 10px; background:#edf3ff; color:var(--blue); font-size:12px; font-weight:700; }} .table-scroll:not(.compact-table) table {{ min-width:680px; }} .table-scroll:not(.compact-table) th:first-child,.table-scroll:not(.compact-table) td:first-child {{ position:sticky; left:0; background:#fff; z-index:1; }} .compact-table .scroll-hint,.compact-table thead {{ display:none; }} .compact-table table,.compact-table tbody,.compact-table tr,.compact-table td {{ display:block; min-width:0; width:100%; }} .compact-table tr {{ padding:10px 0; border-bottom:1px solid var(--line); }} .compact-table td {{ padding:3px 0; border:0; }} .compact-table td:first-child {{ font-weight:700; }} .figure-scroll img {{ min-width:760px; }} }}
     @media(prefers-reduced-motion:reduce) {{ html {{ scroll-behavior:auto; }} }}
     @media print {{ .contents {{ display:none; }} body,.shell {{ background:#fff; }} .stage {{ break-inside:avoid-page; }} details {{ display:block; }} details > * {{ display:block; }} .report-close {{ color:#000; background:#fff; border-top:2px solid #000; }} .report-close a {{ color:#000; }} }}
   </style>
@@ -728,6 +865,7 @@ def write_lineage_report(
       <p>The workflow aligned the genomes to a lineage reference, screened raw pairwise distances for extreme outliers, inferred recombination with ClonalFrameML, and repeated the coherence screen using clonal distances. This report was generated only after both screens completed without a flagged genome.</p>
       <div class="measure-strip"><div><small>Genomes</small><b>{int(report["sample_count"])}</b><span>within this species and lineage</span></div><div><small>Sampling span</small><b>{escape(first_date)} – {escape(last_date)}</b><span>{int(report["distinct_dates"])} distinct collection dates</span></div><div><small>Clonal alignment</small><b>{clonal_sites_text} sites</b><span>complete A/C/G/T sites used for dating</span></div></div>
       <ul class="check-list"><li>Extreme raw-distance outliers were screened before the expensive recombination analysis.</li><li>ClonalFrameML was used to infer recombination and construct the corrected alignment and tree.</li><li>The post-recombination distance screen was repeated before temporal testing.</li></ul>
+      {recombination_visual}
       <p class="guardrail">These checks catch grossly divergent or mismatched genomes; they do not prove that every sample label is correct or that recombination has been reconstructed perfectly. Any biological anomaly should still be traced to its accession and metadata.</p>
       <details class="evidence-files" open><summary>Inputs, checks and corrected phylogeny</summary>{basis_downloads}</details>
     </div>
