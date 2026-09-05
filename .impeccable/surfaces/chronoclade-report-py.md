@@ -28,8 +28,8 @@ scatter occupies the majority of the view; a vertical stage rail makes the
 next gate unmistakable.
 
 FORM: Genomic case-conference evidence wall, fifth grounded direction; seed
-22ad0b43. Signature interaction: the stage rail marks the section currently
-under review while evidence manifests unfold beside each figure.
+22ad0b43. Signature interaction: the static stage rail keeps the analytical
+order visible while evidence manifests unfold beside each figure.
 
 FINISH: unreviewed and undocumented is unfinished; this build ends with the
 finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance

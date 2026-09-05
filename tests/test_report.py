@@ -180,6 +180,9 @@ def test_lineage_report_contains_visuals_verdict_and_guardrail(tmp_path: Path) -
     assert "Open the full-resolution dated phylogeny" in text
     assert 'role="region" aria-label="Evidence ledger"' in text
     assert "prefers-reduced-motion:reduce" in text
+    assert "IntersectionObserver" not in text
+    assert 'class="stage active"' not in text
+    assert ".stage.active" not in text
     assert text.index(
         "Temporal signal supported", text.index("date_randomisation.svg")
     ) < text.index("Evidence and downloads", text.index("date_randomisation.svg"))
