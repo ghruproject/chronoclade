@@ -10,6 +10,8 @@ from html import escape
 from pathlib import Path
 
 import numpy as np
+from Bio import Phylo
+from Bio.Phylo.BaseTree import Clade
 
 from chronoclade.metadata import Sample
 
@@ -23,86 +25,6 @@ class _EncodedSequence:
     valid: int
     low_bit: int
     high_bit: int
-
-
-@dataclass
-class _TreeNode:
-    name: str = ""
-    children: tuple[_TreeNode, ...] = ()
-
-    @property
-    def tips(self) -> set[str]:
-        if not self.children:
-            return {self.name}
-        return set().union(*(child.tips for child in self.children))
-
-
-class _NewickParser:
-    def __init__(self, text: str) -> None:
-        self.text = text.strip()
-        self.position = 0
-
-    def parse(self) -> _TreeNode:
-        node = self._subtree()
-        self._skip_space()
-        if self.position < len(self.text) and self.text[self.position] == ";":
-            self.position += 1
-        self._skip_space()
-        if self.position != len(self.text):
-            raise EvidenceError("Could not parse the recombination-corrected Newick tree")
-        return node
-
-    def _subtree(self) -> _TreeNode:
-        self._skip_space()
-        children: list[_TreeNode] = []
-        if self._peek() == "(":
-            self.position += 1
-            while True:
-                children.append(self._subtree())
-                self._skip_space()
-                token = self._peek()
-                if token == ",":
-                    self.position += 1
-                    continue
-                if token == ")":
-                    self.position += 1
-                    break
-                raise EvidenceError("Could not parse the recombination-corrected Newick tree")
-        name = self._label()
-        self._skip_branch_length()
-        return _TreeNode(name=name, children=tuple(children))
-
-    def _label(self) -> str:
-        self._skip_space()
-        if self._peek() in {"'", '"'}:
-            quote = self._peek()
-            self.position += 1
-            start = self.position
-            while self.position < len(self.text) and self.text[self.position] != quote:
-                self.position += 1
-            value = self.text[start : self.position]
-            if self.position < len(self.text):
-                self.position += 1
-            return value
-        start = self.position
-        while self.position < len(self.text) and self.text[self.position] not in ":,();":
-            self.position += 1
-        return self.text[start : self.position].strip()
-
-    def _skip_branch_length(self) -> None:
-        self._skip_space()
-        if self._peek() != ":":
-            return
-        self.position += 1
-        while self.position < len(self.text) and self.text[self.position] not in ",();":
-            self.position += 1
-
-    def _skip_space(self) -> None:
-        while self.position < len(self.text) and self.text[self.position].isspace():
-            self.position += 1
-
-    def _peek(self) -> str:
-        return self.text[self.position] if self.position < len(self.text) else ""
 
 
 def read_alignment(path: Path) -> dict[str, str]:
@@ -443,17 +365,17 @@ def patient_sensitivity(
     }
 
 
-def _candidate_groups(node: _TreeNode, focal_ids: set[str]) -> list[set[str]]:
-    tips = node.tips
+def _candidate_groups(node: Clade, focal_ids: set[str]) -> list[set[str]]:
+    tips = {str(tip.name) for tip in node.get_terminals() if tip.name}
     focal_tips = tips & focal_ids
     if not focal_tips:
         return []
     if tips <= focal_ids:
         return [focal_tips]
-    if not node.children:
-        return [{node.name}] if node.name in focal_ids else []
+    if not node.clades:
+        return [{str(node.name)}] if node.name in focal_ids else []
     groups: list[set[str]] = []
-    for child in node.children:
+    for child in node.clades:
         groups.extend(_candidate_groups(child, focal_ids))
     return groups
 
@@ -469,13 +391,17 @@ def topology_groups(
 ) -> dict[str, object]:
     """Describe maximal focal-only groups in the rooted corrected topology."""
 
-    root = _NewickParser(tree.read_text(encoding="utf-8")).parse()
+    try:
+        root = Phylo.read(tree, "newick").root
+    except (OSError, ValueError) as error:
+        raise EvidenceError(f"Could not parse recombination-corrected tree: {tree}") from error
     by_id = {sample.sample_id: sample for sample in samples}
     focal_ids = {sample.sample_id for sample in samples if not _is_context(sample)}
     context_ids = {sample.sample_id for sample in samples if _is_context(sample)}
-    if root.tips != set(by_id):
-        missing = sorted(set(by_id) - root.tips)
-        extra = sorted(root.tips - set(by_id))
+    tree_tips = {str(tip.name) for tip in root.get_terminals() if tip.name}
+    if tree_tips != set(by_id):
+        missing = sorted(set(by_id) - tree_tips)
+        extra = sorted(tree_tips - set(by_id))
         raise EvidenceError(f"Tree/metadata samples differ; missing={missing}, extra={extra}")
     raw_groups = _candidate_groups(root, focal_ids)
     lookup = _record_lookup(records)

@@ -21,10 +21,13 @@ chronoclade = "chronoclade"
 test = "python -m pytest -q"
 lint = "ruff check ."
 format = "ruff format ."
+docs = "python scripts/build_docs.py"
+docs-serve = "mkdocs serve"
 
 [feature.dev.pypi-dependencies]
 pytest = ">=8,<9"
 ruff = ">=0.12,<0.13"
+mkdocs-material = ">=9.6,<10"
 
 [environments]
 default = { features = ["dev"], solve-group = "default" }

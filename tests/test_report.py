@@ -3,6 +3,7 @@ from pathlib import Path
 from chronoclade.report import (
     assess_temporal_signal,
     write_lineage_report,
+    write_supporting_bundle,
     write_summary_report,
 )
 
@@ -179,9 +180,9 @@ def test_lineage_report_contains_visuals_verdict_and_guardrail(tmp_path: Path) -
     assert "Open the full-resolution dated phylogeny" in text
     assert 'role="region" aria-label="Evidence ledger"' in text
     assert "prefers-reduced-motion:reduce" in text
-    assert text.index("Temporal signal supported", text.index("date_randomisation.svg")) < text.index(
-        "Evidence and downloads", text.index("date_randomisation.svg")
-    )
+    assert text.index(
+        "Temporal signal supported", text.index("date_randomisation.svg")
+    ) < text.index("Evidence and downloads", text.index("date_randomisation.svg"))
     assert "ESS" not in text
     assert "Not applicable" not in text
 
@@ -201,6 +202,16 @@ def test_unsupported_report_omits_dated_tree_visual(tmp_path: Path) -> None:
     assert "Temporal signal not supported" in text
     assert "Time-scaled phylogeny" not in text
     assert "cannot distinguish" in text
+
+
+def test_supporting_bundle_is_reproducible(tmp_path: Path) -> None:
+    (tmp_path / "result.csv").write_text("sample,value\nS1,1\n", encoding="utf-8")
+
+    first = write_supporting_bundle(tmp_path).read_bytes()
+    (tmp_path / "result.csv").touch()
+    second = write_supporting_bundle(tmp_path).read_bytes()
+
+    assert first == second
 
 
 def test_summary_report_links_lineage_reports(tmp_path: Path) -> None:

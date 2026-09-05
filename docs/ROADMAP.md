@@ -105,7 +105,7 @@ request.
 
 ## Decisions to make with the first GHRU datasets
 
-- Define “local” for each analysis: facility, city, region or country.
+- Define "local" for each analysis: facility, city, region or country.
 - Confirm the species/ST combinations and whether any ST must be split into a
   narrower genomic lineage before analysis.
 - Decide which contextual locations and collection periods are essential,
@@ -115,7 +115,7 @@ request.
 - Choose the number of context genomes from runtime and sensitivity evidence,
   not an arbitrary fixed default.
 - Agree who signs off the four-scenario interpretation and how an
-  “indeterminate” result is communicated.
+  "indeterminate" result is communicated.
 
 ## Workflow-engine decision
 
