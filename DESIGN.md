@@ -74,11 +74,6 @@ components:
     textColor: "{colors.evidence-cobalt}"
     padding: "38px 24px"
     width: "248px"
-  stage-rail-active:
-    backgroundColor: "{colors.ink}"
-    textColor: "{colors.paper}"
-    padding: "38px 24px"
-    width: "248px"
   decision-review:
     backgroundColor: "transparent"
     textColor: "{colors.evidence-cobalt}"
@@ -130,7 +125,7 @@ Near-black ink supplies authority, cobalt marks evidence and continued investiga
 
 - White paper on a pale outer wash, divided by near-black and grey rules.
 - Embedded Archivo throughout, with italic spaced taxon names, oversized compact headings, and tabular numerals for measures.
-- A numbered four-stage rail whose active sheet reverses to near-black.
+- A static numbered four-stage rail that keeps the analytical sequence visible without tracking the reader.
 - Large figures—including dated phylogenies with visible 90% internal-node intervals—paired with open evidence manifests and downloadable source files.
 - Flat, square, print-capable surfaces without decorative chrome or shadow.
 
@@ -155,12 +150,12 @@ The palette separates evidence, decisions, supporting structure, and caution wit
 
 ### Neutral
 
-- **Case Ink** (`{colors.ink}`): Primary copy, strong rules, active stage sheets, identity blocks, and the report-completion footer.
+- **Case Ink** (`{colors.ink}`): Primary copy, strong rules, identity blocks, and the report-completion footer.
 - **Muted Ink** (`{colors.muted-ink}`): Questions, captions, units, metadata, and table labels.
 - **Hairline Grey** (`{colors.hairline}`): Internal dividers within measures, downloads, navigation, and tables.
 - **Paper White** (`{colors.paper}`): The report surface, figures, cards, and sticky table cells.
 - **Outer Wash** (`{colors.outer-wash}`): Separates the bounded report sheet from the browser viewport.
-- **Panel Wash** (`{colors.panel-wash}`): Inactive rail sheets and paired logic annotations.
+- **Panel Wash** (`{colors.panel-wash}`): Stage rail sheets and paired logic annotations.
 - **Evidence Hover** (`{colors.evidence-hover}`): Gives evidence navigation and the mobile table notice a quiet cobalt tint.
 - **Scroll Track** (`{colors.scroll-track}`): Keeps horizontal evidence-table scrolling visible but recessive.
 - **Footer Rule** (`{colors.footer-rule}`): Separates the label column inside the dark report-completion footer.
@@ -217,7 +212,7 @@ Print removes the sticky contents rail, returns the canvas and footer to white, 
 
 ## Elevation & Depth
 
-The system is entirely flat. It uses no shadows, gradients, blur, or simulated lift. Depth and grouping come from the contrast between the outer wash and paper, one- and two-pixel rules, reversed active sheets, and sticky positioning for the stage navigation and mobile table key.
+The system is entirely flat. It uses no shadows, gradients, blur, or simulated lift. Depth and grouping come from the contrast between the outer wash and paper, one- and two-pixel rules, and sticky positioning for the stage navigation and mobile table key.
 
 ### Named Rules
 
@@ -242,7 +237,7 @@ Sheets, verdicts, figures, manifests, measures, and tables are square. Borders a
 ### Stage Rail
 
 - **Default:** A pale square sheet with a 74px cobalt number and an uppercase 12px label.
-- **Active:** Intersection-based review state reverses the sheet to near-black with white number and label.
+- **Reading state:** The rail stays visually stable while scrolling; it does not highlight or track the section in view.
 - **Responsive behavior:** At 800px the rail becomes 76px wide, the number becomes 48px, and the label runs vertically.
 
 ### Stage Navigation
@@ -301,7 +296,7 @@ Sheets, verdicts, figures, manifests, measures, and tables are square. Borders a
 ### Motion
 
 - **Stage navigation:** Smooth anchored scrolling preserves orientation between the four stages.
-- **Reduced motion:** When the reader requests reduced motion, anchored scrolling switches to immediate movement; the active-stage state remains available without animation.
+- **Reduced motion:** When the reader requests reduced motion, anchored scrolling switches to immediate movement.
 
 ## Do's and Don'ts
 
