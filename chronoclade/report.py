@@ -568,6 +568,7 @@ def _recombination_visual(report: dict[str, object], directory: Path) -> str:
     recombinant_percent = float(raw.get("recombination_removed_percent", 0.0))
     incomplete_sites = int(raw.get("incomplete_only_removed_sites", 0))
     incomplete_percent = float(raw.get("incomplete_only_removed_percent", 0.0))
+    retained_ambiguous = int(raw.get("ambiguous_columns_retained_by_clonalframeml", 0))
     retained_sites = int(raw.get("retained_clonal_sites", 0))
     retained_percent = float(raw.get("retained_clonal_percent", 0.0))
     boundary_crossing = int(raw.get("boundary_crossing_intervals", 0))
@@ -601,6 +602,14 @@ def _recombination_visual(report: dict[str, object], directory: Path) -> str:
         "the concatenated alignment, so these calls may reflect the artificial adjacency and "
         "should be reviewed before biological interpretation.</p>"
         if boundary_crossing
+        else ""
+    )
+    retained_ambiguity_note = (
+        f'<p class="guardrail"><strong>Filtered-alignment detail:</strong> {retained_ambiguous:,} '
+        "multiallelic column(s) retain a gap or ambiguous character because ClonalFrameML stops "
+        "scanning a site after the third called allele. These columns are preserved here to match "
+        "its filtered alignment exactly; downstream distances compare only pair-specific A/C/G/T sites.</p>"
+        if retained_ambiguous
         else ""
     )
     figure = ""
@@ -651,8 +660,10 @@ def _recombination_visual(report: dict[str, object], directory: Path) -> str:
         <p>ClonalFrameML infers importation intervals on individual branches of the tree. For
         the downstream clonal analysis, ChronoClade uses its shared filtered alignment: a column
         is removed if it falls within an inferred import on any branch. Columns containing an
-        ambiguous base in any genome are also removed, but are counted separately below.</p>
+        ambiguous base that ClonalFrameML identifies during its ordered site scan are also removed,
+        but are counted separately below.</p>
         {boundary_note}
+        {retained_ambiguity_note}
         <div class="confidence-grid recombination-measures">
           <div><small>Importation intervals</small><b>{interval_count:,}</b><span>branch-specific calls</span></div>
           <div><small>Branches affected</small><b>{branch_count:,}</b><span>unique tree branches</span></div>

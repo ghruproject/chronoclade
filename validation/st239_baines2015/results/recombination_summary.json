@@ -1,0 +1,30 @@
+{
+  "coordinate_system": "1-based closed positions in the reference-ordered alignment",
+  "alignment_sites": 2989168,
+  "sequences": 72,
+  "inferred_importation_intervals": 1,
+  "branches_with_inferred_importation": 1,
+  "recombination_removed_sites": 76,
+  "recombination_removed_percent": 0.0025425135020848613,
+  "incomplete_only_removed_sites": 526415,
+  "incomplete_only_removed_percent": 17.61075322631582,
+  "ambiguous_columns_retained_by_clonalframeml": 3,
+  "retained_clonal_sites": 2462677,
+  "retained_clonal_percent": 82.3867042601821,
+  "filtered_alignment_sites": 2462677,
+  "reference_records": 69,
+  "boundary_crossing_intervals": 0,
+  "longest_inferred_intervals": [
+    {
+      "node": "SAMEA3212896",
+      "alignment_start": 2517589,
+      "alignment_end": 2517664,
+      "length": 76,
+      "reference_segments": [
+        "SAMEA3212902.contig00018:33957-34032"
+      ],
+      "crosses_reference_record_boundary": false
+    }
+  ],
+  "filtering_rule": "ClonalFrameML removed every column inferred as imported on any branch and every column that its ordered site scan flagged as containing an ambiguous base. At multiallelic sites, that scan stops after the third called allele; any ambiguity in a later sequence remains in the filtered alignment and is reported separately."
+}

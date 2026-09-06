@@ -1,15 +1,15 @@
 metric,value
 method,TreeTime maximum likelihood
 interval_level,90% max-posterior region
-rate,1.706e-06
-rate_std_dev,9.07e-08
-r_squared,0.95
-chi_squared,5463.72
+rate,1.703e-06
+rate_std_dev,9.06e-08
+r_squared,0.94
+chi_squared,5462.92
 root_node,NODE_0000000
-root_date,1946-01-07
-root_numeric_date,1946.017238
-root_lower_bound,1939.489408
-root_upper_bound,1949.711439
+root_date,1945-10-24
+root_numeric_date,1945.81223
+root_lower_bound,1938.962295
+root_upper_bound,1949.448458
 internal_nodes,71
-median_internal_interval_width_years,2.9192400000001726
-maximum_internal_interval_width_years,12.617533000000094
+median_internal_interval_width_years,2.911681999999928
+maximum_internal_interval_width_years,12.664592999999968
