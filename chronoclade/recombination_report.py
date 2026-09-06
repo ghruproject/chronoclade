@@ -57,10 +57,21 @@ def read_importation_intervals(path: Path) -> list[ImportationInterval]:
     return intervals
 
 
-def _alignment_incomplete_mask(path: Path) -> tuple[np.ndarray, int]:
-    """Return sites with an ambiguous base in any sequence and the sequence count."""
+def _alignment_incomplete_masks(path: Path) -> tuple[np.ndarray, np.ndarray, int]:
+    """Return ClonalFrameML's mask, a strict ambiguity mask and sequence count.
+
+    ClonalFrameML scans taxa in alignment order and stops examining a site as soon
+    as it encounters a third called allele. An ambiguous base in a later taxon is
+    therefore retained at that site. Reproducing that behaviour is necessary to
+    reconcile the program's filtered FASTA exactly; ``strict_mask`` records the
+    affected columns separately rather than silently calling them complete.
+    """
 
     mask: np.ndarray | None = None
+    strict_mask: np.ndarray | None = None
+    first_allele: np.ndarray | None = None
+    second_allele: np.ndarray | None = None
+    incompatible: np.ndarray | None = None
     position = 0
     sequences = 0
     with path.open("rb") as handle:
@@ -76,21 +87,54 @@ def _alignment_incomplete_mask(path: Path) -> tuple[np.ndarray, int]:
                 continue
             if not sequences:
                 raise RecombinationReportError(f"Sequence data precede the FASTA header in {path}")
-            bases = np.frombuffer(line.upper(), dtype=np.uint8)
+            bases = np.frombuffer(line, dtype=np.uint8)
             if mask is None:
                 mask = np.zeros(len(bases), dtype=np.bool_)
+                strict_mask = np.zeros(len(bases), dtype=np.bool_)
+                first_allele = np.full(len(bases), -1, dtype=np.int16)
+                second_allele = np.full(len(bases), -1, dtype=np.int16)
+                incompatible = np.zeros(len(bases), dtype=np.bool_)
             elif position + len(bases) > mask.size:
                 if sequences == 1:
                     mask.resize(position + len(bases), refcheck=False)
+                    assert strict_mask is not None
+                    assert first_allele is not None
+                    assert second_allele is not None
+                    assert incompatible is not None
+                    strict_mask.resize(position + len(bases), refcheck=False)
+                    first_allele.resize(position + len(bases), refcheck=False)
+                    second_allele.resize(position + len(bases), refcheck=False)
+                    incompatible.resize(position + len(bases), refcheck=False)
+                    first_allele[position:] = -1
+                    second_allele[position:] = -1
                 else:
                     raise RecombinationReportError(f"Unequal sequence lengths in {path}")
-            mask[position : position + len(bases)] |= ~np.isin(bases, (65, 67, 71, 84))
+            assert strict_mask is not None
+            assert first_allele is not None
+            assert second_allele is not None
+            assert incompatible is not None
+            site = slice(position, position + len(bases))
+            strict_mask[site] |= ~np.isin(bases, (65, 67, 71, 84))
+
+            active = ~incompatible[site]
+            ambiguous = np.isin(bases, (78, 45, 88, 63))  # N, -, X, ?
+            mask[site] |= active & ambiguous
+            called = active & ~ambiguous
+            first = first_allele[site]
+            second = second_allele[site]
+            new_first = called & (first == -1)
+            first[new_first] = bases[new_first]
+            new_second = called & ~new_first & (bases != first) & (second == -1)
+            second[new_second] = bases[new_second]
+            third = called & ~new_first & (bases != first) & (bases != second)
+            incompatible[site] |= third
             position += len(bases)
     if mask is None or not sequences:
         raise RecombinationReportError(f"Alignment contains no sequences: {path}")
     if position != mask.size:
         raise RecombinationReportError(f"Unequal sequence lengths in {path}")
-    return mask, sequences
+    assert strict_mask is not None
+    return mask, strict_mask, sequences
 
 
 def _fasta_alignment_length(path: Path) -> int:
@@ -289,7 +333,7 @@ def write_recombination_evidence(
     """Write exact interval tables, a genome profile, figures and a compact summary."""
 
     intervals = read_importation_intervals(importations)
-    incomplete, sequences = _alignment_incomplete_mask(alignment)
+    incomplete, strict_incomplete, sequences = _alignment_incomplete_masks(alignment)
     length = incomplete.size
     records = _reference_records(reference, length)
     recombinant = np.zeros(length, dtype=np.bool_)
@@ -313,6 +357,7 @@ def write_recombination_evidence(
 
     incomplete_only = incomplete & ~recombinant
     retained = ~(recombinant | incomplete)
+    retained_ambiguous = retained & strict_incomplete
     filtered_length = _fasta_alignment_length(filtered_alignment)
     retained_sites = int(retained.sum())
     if filtered_length != retained_sites:
@@ -347,6 +392,7 @@ def write_recombination_evidence(
         "recombination_removed_percent": 100.0 * recombinant_sites / length,
         "incomplete_only_removed_sites": incomplete_only_sites,
         "incomplete_only_removed_percent": 100.0 * incomplete_only_sites / length,
+        "ambiguous_columns_retained_by_clonalframeml": int(retained_ambiguous.sum()),
         "retained_clonal_sites": retained_sites,
         "retained_clonal_percent": 100.0 * retained_sites / length,
         "filtered_alignment_sites": filtered_length,
@@ -365,7 +411,9 @@ def write_recombination_evidence(
         ],
         "filtering_rule": (
             "ClonalFrameML removed every column inferred as imported on any branch and every "
-            "column containing an ambiguous base in any sequence."
+            "column that its ordered site scan flagged as containing an ambiguous base. At "
+            "multiallelic sites, that scan stops after the third called allele; any ambiguity "
+            "in a later sequence remains in the filtered alignment and is reported separately."
         ),
     }
     (output_directory / "recombination_summary.json").write_text(

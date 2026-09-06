@@ -109,3 +109,23 @@ def test_filtered_alignment_must_match_the_documented_filter(tmp_path: Path) -> 
             importations=importations,
             output_directory=tmp_path,
         )
+
+
+def test_multiallelic_site_with_late_gap_matches_clonalframeml_scan(tmp_path: Path) -> None:
+    alignment = tmp_path / "alignment.fasta"
+    alignment.write_text(">A\nA\n>B\nC\n>C\nG\n>D\n-\n", encoding="utf-8")
+    filtered = tmp_path / "filtered.fasta"
+    filtered.write_text(alignment.read_text(encoding="utf-8"), encoding="utf-8")
+    importations = tmp_path / "imports.txt"
+    importations.write_text("Node\tBeg\tEnd\n", encoding="utf-8")
+
+    summary = write_recombination_evidence(
+        alignment=alignment,
+        filtered_alignment=filtered,
+        importations=importations,
+        output_directory=tmp_path,
+    )
+
+    assert summary["incomplete_only_removed_sites"] == 0
+    assert summary["retained_clonal_sites"] == 1
+    assert summary["ambiguous_columns_retained_by_clonalframeml"] == 1

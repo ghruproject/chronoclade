@@ -4,6 +4,8 @@
   "slug": "Staphylococcus_aureus__ST239",
   "sample_count": 72,
   "distinct_dates": 17,
+  "first_collection_date": "1980",
+  "last_collection_date": "2012",
   "locations": [
     "Australia",
     "Hungary",
@@ -12,9 +14,11 @@
   ],
   "reference": "SAMEA3212902",
   "status": "ready",
-  "reference_path": "/private/tmp/chronoclade-baines-st239-20260905/assemblies/SAMEA3212902.fa",
+  "analysis_mode": "full",
+  "date_randomisation_method": "root_to_tip",
+  "reference_path": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/SAMEA3212902.fa.gz",
   "alignment_length": 2989168,
-  "complete_alignment_sites": 2462750,
+  "complete_alignment_sites": 2462674,
   "resources": {
     "threads": 8,
     "date_randomisation_jobs": 4
@@ -23,6 +27,11 @@
   "temporal_signal_reason": "The lineage has a positive estimated rate and its observed root-to-tip fit was stronger than expected after randomly permuting sampling dates.",
   "temporal_signal_supported": true,
   "temporal_signal": {
+    "method": "root_to_tip",
+    "test_label": "Root-to-tip date-permutation screen",
+    "seed": 20260818,
+    "sequence_length": 2462674,
+    "tree_sha256": "dde3428aa6d54aca5dfd63c66e28c5c087b1e901176c657b74fb01e1e7be1871",
     "observed": {
       "rate": 1.693e-06,
       "r_squared": 0.94
@@ -461,7 +470,7 @@
       "provisional": true,
       "decision_rule": "At least two separated focal-only topology groups are present and at least one contains multiple focal genomes spanning sampling dates.",
       "reasons": [
-        "The local isolates form 2 separate groups in the recombination-corrected tree.",
+        "The focal isolates form 2 separate groups in the recombination-corrected tree.",
         "2 local groups contain isolates collected on more than one date.",
         "The comparison includes 2 public context genomes.",
         "Median clonal distance was 124 SNPs within candidate groups and 454 SNPs between them."
@@ -1359,28 +1368,75 @@
       }
     ],
     "outputs": {
-      "pairwise_distances": "/private/tmp/chronoclade-baines-st239-20260905/results/Staphylococcus_aureus__ST239/clonal_pairwise_distances.tsv",
-      "snp_matrix": "/private/tmp/chronoclade-baines-st239-20260905/results/Staphylococcus_aureus__ST239/clonal_snp_matrix.tsv",
-      "callable_sites_matrix": "/private/tmp/chronoclade-baines-st239-20260905/results/Staphylococcus_aureus__ST239/pairwise_callable_sites.tsv",
-      "heatmap": "/private/tmp/chronoclade-baines-st239-20260905/results/Staphylococcus_aureus__ST239/clonal_snp_heatmap.svg"
+      "pairwise_distances": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/clonal_pairwise_distances.tsv",
+      "snp_matrix": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/clonal_snp_matrix.tsv",
+      "callable_sites_matrix": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/pairwise_callable_sites.tsv",
+      "heatmap": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/clonal_snp_heatmap.svg"
     }
   },
+  "recombination_masking": {
+    "coordinate_system": "1-based closed positions in the reference-ordered alignment",
+    "alignment_sites": 2989168,
+    "sequences": 72,
+    "inferred_importation_intervals": 1,
+    "branches_with_inferred_importation": 1,
+    "recombination_removed_sites": 76,
+    "recombination_removed_percent": 0.0025425135020848613,
+    "incomplete_only_removed_sites": 526415,
+    "incomplete_only_removed_percent": 17.61075322631582,
+    "ambiguous_columns_retained_by_clonalframeml": 3,
+    "retained_clonal_sites": 2462677,
+    "retained_clonal_percent": 82.3867042601821,
+    "filtered_alignment_sites": 2462677,
+    "reference_records": 69,
+    "boundary_crossing_intervals": 0,
+    "longest_inferred_intervals": [
+      {
+        "node": "SAMEA3212896",
+        "alignment_start": 2517589,
+        "alignment_end": 2517664,
+        "length": 76,
+        "reference_segments": [
+          "SAMEA3212902.contig00018:33957-34032"
+        ],
+        "crosses_reference_record_boundary": false
+      }
+    ],
+    "filtering_rule": "ClonalFrameML removed every column inferred as imported on any branch and every column that its ordered site scan flagged as containing an ambiguous base. At multiallelic sites, that scan stops after the third called allele; any ambiguity in a later sequence remains in the filtered alignment and is reported separately."
+  },
   "outputs": {
-    "alignment": "/private/tmp/chronoclade-baines-st239-20260905/results/Staphylococcus_aureus__ST239/core_alignment.fasta",
-    "starting_tree": "/private/tmp/chronoclade-baines-st239-20260905/results/Staphylococcus_aureus__ST239/iqtree.treefile",
-    "tree": "/private/tmp/chronoclade-baines-st239-20260905/results/Staphylococcus_aureus__ST239/clonalframeml.labelled_tree.newick",
-    "recombination_importations": "/private/tmp/chronoclade-baines-st239-20260905/results/Staphylococcus_aureus__ST239/clonalframeml.importation_status.txt",
-    "filtered_alignment": "/private/tmp/chronoclade-baines-st239-20260905/results/Staphylococcus_aureus__ST239/clonalframeml.filtered.fasta",
-    "root_to_tip_plot": "/private/tmp/chronoclade-baines-st239-20260905/results/Staphylococcus_aureus__ST239/clock/root_to_tip_regression.svg",
-    "date_randomisation_plot": "/private/tmp/chronoclade-baines-st239-20260905/results/Staphylococcus_aureus__ST239/date_randomisation.svg",
-    "timetree": "/private/tmp/chronoclade-baines-st239-20260905/results/Staphylococcus_aureus__ST239/timetree/timetree.nexus",
-    "timetree_plot": "/private/tmp/chronoclade-baines-st239-20260905/results/Staphylococcus_aureus__ST239/timetree/timetree.svg",
-    "location_tree": "/private/tmp/chronoclade-baines-st239-20260905/results/Staphylococcus_aureus__ST239/location/annotated_tree.nexus",
-    "public_health_evidence": "/private/tmp/chronoclade-baines-st239-20260905/results/Staphylococcus_aureus__ST239/public_health_evidence.json",
-    "clonal_pairwise_distances": "/private/tmp/chronoclade-baines-st239-20260905/results/Staphylococcus_aureus__ST239/clonal_pairwise_distances.tsv",
-    "clonal_snp_matrix": "/private/tmp/chronoclade-baines-st239-20260905/results/Staphylococcus_aureus__ST239/clonal_snp_matrix.tsv",
-    "pairwise_callable_sites": "/private/tmp/chronoclade-baines-st239-20260905/results/Staphylococcus_aureus__ST239/pairwise_callable_sites.tsv",
-    "clonal_snp_heatmap": "/private/tmp/chronoclade-baines-st239-20260905/results/Staphylococcus_aureus__ST239/clonal_snp_heatmap.svg",
-    "html_report": "/private/tmp/chronoclade-baines-st239-20260905/results/Staphylococcus_aureus__ST239/report.html"
+    "alignment": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/core_alignment.fasta",
+    "lineage_coherence": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/lineage_coherence.tsv",
+    "clonal_lineage_coherence": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/clonal_lineage_coherence.tsv",
+    "starting_tree": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/iqtree.treefile",
+    "tree": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/clonalframeml.labelled_tree.newick",
+    "recombination_importations": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/clonalframeml.importation_status.txt",
+    "recombination_intervals": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/recombination_intervals.tsv",
+    "recombination_summary": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/recombination_summary.json",
+    "recombination_profile": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/recombination_genome_profile.csv",
+    "recombination_map": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/recombination_map.svg",
+    "recombination_map_png": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/recombination_map.png",
+    "filtered_alignment": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/clonalframeml.filtered.fasta",
+    "root_to_tip_plot": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/clock/root_to_tip_regression.svg",
+    "root_to_tip_png": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/root_to_tip.png",
+    "root_to_tip_data": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/clock/rtt.csv",
+    "date_randomisation_plot": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/date_randomisation.svg",
+    "date_randomisation_png": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/date_randomisation.png",
+    "date_randomisation_csv": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/date_randomisation.csv",
+    "timetree": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/timetree/timetree.nexus",
+    "timetree_plot": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/timetree/timetree.svg",
+    "timetree_png": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/timetree.png",
+    "timetree_confidence_plot": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/timetree_with_confidence.svg",
+    "location_tree": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/location/annotated_tree.nexus",
+    "public_health_evidence": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/public_health_evidence.json",
+    "clonal_pairwise_distances": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/clonal_pairwise_distances.tsv",
+    "clonal_snp_matrix": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/clonal_snp_matrix.tsv",
+    "pairwise_callable_sites": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/pairwise_callable_sites.tsv",
+    "clonal_snp_heatmap": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/clonal_snp_heatmap.svg",
+    "clonal_snp_heatmap_png": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/clonal_snp_heatmap.png",
+    "timetree_confidence": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/timetree_confidence.csv",
+    "node_dates": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/node_dates.csv",
+    "supporting_results": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/supporting_results.zip",
+    "html_report": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/report.html"
   }
 }

@@ -1,4 +1,9 @@
 {
+  "method": "root_to_tip",
+  "test_label": "Root-to-tip date-permutation screen",
+  "seed": 20260818,
+  "sequence_length": 2462674,
+  "tree_sha256": "dde3428aa6d54aca5dfd63c66e28c5c087b1e901176c657b74fb01e1e7be1871",
   "observed": {
     "rate": 1.693e-06,
     "r_squared": 0.94

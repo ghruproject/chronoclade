@@ -62,6 +62,17 @@ clear, but the regression alone does not establish temporal signal. Genetic
 structure can produce a strong relationship between sampling time and
 root-to-tip distance.
 
+## Recombination filtering
+
+![ST239 recombination and alignment filtering](assets/st239/recombination_map.png)
+
+ClonalFrameML inferred one 76-base importation interval. Its shared filter
+retained 2,462,677 of 2,989,168 reference-ordered alignment columns. Most
+removed columns reflected incomplete mapping rather than recombination. Three
+multiallelic columns retained a later gap because ClonalFrameML stops scanning a
+site after finding a third called allele; ChronoClade records this explicitly
+and uses pair-specific A/C/G/T sites for downstream SNP distances.
+
 ## Date randomisation
 
 ![ST239 date-randomisation test](assets/st239/date_randomisation.png)

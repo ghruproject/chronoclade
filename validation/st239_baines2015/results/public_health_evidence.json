@@ -6,7 +6,7 @@
     "provisional": true,
     "decision_rule": "At least two separated focal-only topology groups are present and at least one contains multiple focal genomes spanning sampling dates.",
     "reasons": [
-      "The local isolates form 2 separate groups in the recombination-corrected tree.",
+      "The focal isolates form 2 separate groups in the recombination-corrected tree.",
       "2 local groups contain isolates collected on more than one date.",
       "The comparison includes 2 public context genomes.",
       "Median clonal distance was 124 SNPs within candidate groups and 454 SNPs between them."
@@ -904,9 +904,9 @@
     }
   ],
   "outputs": {
-    "pairwise_distances": "/private/tmp/chronoclade-baines-st239-20260905/results/Staphylococcus_aureus__ST239/clonal_pairwise_distances.tsv",
-    "snp_matrix": "/private/tmp/chronoclade-baines-st239-20260905/results/Staphylococcus_aureus__ST239/clonal_snp_matrix.tsv",
-    "callable_sites_matrix": "/private/tmp/chronoclade-baines-st239-20260905/results/Staphylococcus_aureus__ST239/pairwise_callable_sites.tsv",
-    "heatmap": "/private/tmp/chronoclade-baines-st239-20260905/results/Staphylococcus_aureus__ST239/clonal_snp_heatmap.svg"
+    "pairwise_distances": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/clonal_pairwise_distances.tsv",
+    "snp_matrix": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/clonal_snp_matrix.tsv",
+    "callable_sites_matrix": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/pairwise_callable_sites.tsv",
+    "heatmap": "/Users/nfareed/Documents/ChatGPT/chronoclade/validation/st239_baines2015/assemblies/run-results/Staphylococcus_aureus__ST239/clonal_snp_heatmap.svg"
   }
 }
