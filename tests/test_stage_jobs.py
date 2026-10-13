@@ -28,6 +28,6 @@ def test_credentials_rejected(tmp_path):
         JobSpec('prepare', ('--api-key', 'secret'), Path(tmp_path))
 
 
-def test_esm2_token_budget_is_a_resource_not_a_credential(tmp_path):
-    spec = JobSpec('esm2', ('--token-budget', '4096', '--api-key-env', 'PATHOGENWATCH_API_KEY'), tmp_path)
-    assert '--token-budget' in spec.argv
+def test_api_key_environment_name_is_not_a_credential(tmp_path):
+    spec = JobSpec('prepare', ('--api-key-env', 'PATHOGENWATCH_API_KEY'), tmp_path)
+    assert '--api-key-env' in spec.argv

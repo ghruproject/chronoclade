@@ -42,6 +42,66 @@ def _json(path: Path):
         raise DatasetError(f"Cannot read preparation JSON {path}: {error}") from error
 
 
+def _merge_frozen_metadata(dataset, path):
+    """Apply exact-ID descriptive metadata without changing typing or membership."""
+    from chronoclade.datasets.adapters import samples_from_records
+    from chronoclade.profile_inputs import _csv
+
+    allowed = {
+        "country", "region", "nuts2", "host", "isolation_source", "collection_date",
+        "hospital", "hospital_code", "publication_isolate_id", "specimen_type",
+        "clinical_specimen", "study_accession", "patient_id", "location",
+    }
+    identity = {"accession", "source_genome_id", "sample_id"}
+    crosswalk = {r["sample_id"]: r for r in dataset.crosswalk}
+    samples = [dict(r) for r in dataset.samples]
+    provenance = [dict(r) for r in dataset.provenance]
+    conflicts = list(dataset.conflicts)
+    for override in _csv(path):
+        unknown = set(override) - allowed - identity
+        if unknown:
+            raise DatasetError(f"Unsupported metadata override fields: {sorted(unknown)}")
+        identifiers = {override[k] for k in identity if override.get(k)}
+        identifier = ", ".join(sorted(identifiers)) or None
+        matches = []
+        for row in samples:
+            evidence = crosswalk.get(row["sample_id"], {})
+            aliases = {row["sample_id"], row.get("source_genome_id"), evidence.get("source_genome_id")}
+            for source in (row, evidence):
+                for key in ("aliases", "run_accessions", "biosample_accessions", "assembly_accessions"):
+                    aliases.update(source.get(key) or [])
+                for key in ("accession", "biosample", "sample_accession", "run_accession", "assembly_accession"):
+                    if source.get(key):
+                        aliases.add(source[key])
+            if identifiers and identifiers <= aliases:
+                matches.append(row)
+        if len(matches) != 1:
+            raise DatasetError(f"Metadata override {identifier!r} does not match exactly one sample")
+        row = matches[0]
+        for field in sorted(allowed & set(override)):
+            value = override[field]
+            if not value:
+                continue
+            if row.get(field) not in (None, "", value):
+                conflicts.append({"sample_id": row["sample_id"], "field": field,
+                                  "source": "prepared_metadata", "value": row[field]})
+            row[field] = value
+            for previous in provenance:
+                if previous.get("sample_id") == row["sample_id"] and previous.get("field") == field and previous.get("selected"):
+                    previous.update(selected=False, superseded_by="user_metadata_override")
+            provenance.append({"sample_id": row["sample_id"], "field": field,
+                               "source": "user", "value": value, "selected": True,
+                               "metadata_sha256": file_sha256(path)})
+        if override.get("collection_date"):
+            for field in ("date_start", "date_end", "date_precision", "date_raw"):
+                row.pop(field, None)
+            normalized = samples_from_records([row])[0]
+            for field in ("date_start", "date_end", "date_precision", "date_raw"):
+                row[field] = normalized[field]
+    return replace(dataset, samples=tuple(samples), provenance=tuple(provenance),
+                   conflicts=tuple(conflicts), dataset_id=None)
+
+
 def _catalogues(path: Path) -> tuple[LocusCatalogue, ...]:
     raw = _json(path)
     if isinstance(raw, dict):
@@ -513,6 +573,9 @@ def run_prepare(
                 "Frozen profiles require --catalogues with an explicit locus catalogue"
             )
         dataset = _frozen_dataset(raw, _catalogues(catalogue_path), species)
+    metadata_path = Path(metadata).expanduser().resolve() if metadata else None
+    if metadata_path:
+        dataset = _merge_frozen_metadata(dataset, metadata_path)
     target.parent.mkdir(parents=True, exist_ok=True)
     scratch = Path(tempfile.mkdtemp(prefix=f".{target.name}.prepare-", dir=target.parent))
     try:
@@ -533,6 +596,10 @@ def run_prepare(
                 "path": "sources/catalogues.json",
                 "sha256": file_sha256(catalogue_path),
             }
+        if metadata_path:
+            parameters["prepare"]["metadata"] = {
+                "path": "sources/metadata.csv", "sha256": file_sha256(metadata_path),
+            }
         dataset = replace(dataset, parameters=parameters, dataset_id=None)
         bundle = scratch / "bundle"
         manifest = write_dataset(dataset, bundle)
@@ -541,6 +608,8 @@ def run_prepare(
         shutil.copyfile(source, sources / "input.json")
         if catalogue_path:
             shutil.copyfile(catalogue_path, sources / "catalogues.json")
+        if metadata_path:
+            shutil.copyfile(metadata_path, sources / "metadata.csv")
         if (assembly_staging / "assemblies").exists():
             shutil.move(str(assembly_staging / "assemblies"), bundle / "assemblies")
         if _provider_sources:

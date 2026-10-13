@@ -8,21 +8,61 @@ move their common parent together to preserve relative source references.
 from __future__ import annotations
 
 import json
+import csv
+import hashlib
 import os
 from pathlib import Path, PurePosixPath
 import re
 import shutil
 import tempfile
+import sys
+from collections import Counter
 
 from chronoclade import __version__
 from chronoclade.artifacts import file_sha256, write_json
 from chronoclade.datasets import DatasetError, load_dataset
 from chronoclade.errors import WorkflowError
-from chronoclade.selections import read_distance_evidence, select_context_ensemble
+from chronoclade.selections import (
+    read_distance_evidence,
+    representative_coverage,
+    select_context_ensemble,
+)
 
 SCHEMA_VERSION = 1
 SELECTION_SCHEMA = "chronoclade.selection"
 ENSEMBLE_SCHEMA = "chronoclade.selection-ensemble"
+
+
+def _clone_file(source: Path, destination: Path) -> bool:
+    """Try an independent copy-on-write snapshot on supported filesystems."""
+    try:
+        if sys.platform == "darwin":
+            import ctypes
+
+            clonefile = ctypes.CDLL(None, use_errno=True).clonefile
+            clonefile.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int]
+            clonefile.restype = ctypes.c_int
+            return clonefile(os.fsencode(source), os.fsencode(destination), 0) == 0
+        if sys.platform.startswith("linux"):
+            import fcntl
+
+            with source.open("rb") as original, destination.open("xb") as cloned:
+                fcntl.ioctl(cloned.fileno(), 0x40049409, original.fileno())  # FICLONE
+            return True
+    except (OSError, AttributeError):
+        pass
+    return False
+
+
+def copy_evidence_snapshot(source: Path, destination: Path) -> str:
+    """Copy evidence cheaply where possible, never sharing mutable inodes."""
+    if destination.exists():
+        raise WorkflowError(f"Evidence destination already exists: {destination}")
+    if _clone_file(source, destination):
+        return "copy_on_write"
+    destination.unlink(missing_ok=True)
+    shutil.copyfile(source, destination)
+    return "copy"
 
 
 def _read(path):
@@ -92,7 +132,7 @@ def _ids(manifest, field):
 def _partition_block(path, dataset_id, dataset_hash, block_id, pool=None):
     partition = _read(path)
     if (
-        partition.get("schema") not in {"chronoclade.cgmlst.partitions", "chronoclade.esm2.partitions"}
+        partition.get("schema") != "chronoclade.cgmlst.partitions"
         or partition.get("schema_version") != 1
         or partition.get("dataset_id") != dataset_id
         or partition.get("dataset_sha256") != dataset_hash
@@ -257,7 +297,13 @@ def load_selection_manifest(path: str | Path) -> dict:
     expected_overrun = max(0, len(set(mandatory) - set(query)) - budget)
     if manifest.get("budget_overrun") != expected_overrun:
         raise WorkflowError("budget_overrun does not match mandatory contexts and budget")
-    if len(contexts) > budget + expected_overrun:
+    reserve = manifest.get("representative_reserve", 0)
+    if type(reserve) is not int or reserve < 0:
+        raise WorkflowError("representative_reserve must be a non-negative integer")
+    effective_budget = max(budget, len(set(mandatory) - set(query)) + reserve)
+    if manifest.get("effective_context_budget", budget + expected_overrun) != effective_budget:
+        raise WorkflowError("effective_context_budget disagrees with the explicit representative reserve")
+    if len(contexts) > effective_budget:
         raise WorkflowError("Selected optional contexts exceed context_budget")
     if manifest.get("selected_contexts") != len(contexts) or manifest.get(
         "available_contexts"
@@ -265,6 +311,50 @@ def load_selection_manifest(path: str | Path) -> dict:
         raise WorkflowError("Selection context counts disagree with exact identifiers")
     if type(manifest.get("seed")) is not int:
         raise WorkflowError("Selection seed must be an integer")
+    coverage = manifest.get("representative_coverage")
+    if coverage is not None:
+        expected_ids = sorted(query + pool)
+        expected_hash = hashlib.sha256(
+            json.dumps(expected_ids, separators=(",", ":")).encode()
+        ).hexdigest()
+        if (
+            not isinstance(coverage, dict)
+            or coverage.get("schema") != "chronoclade.selection-representative-coverage"
+            or coverage.get("schema_version") != 1
+            or coverage.get("status") != "complete"
+            or coverage.get("scope") != "full_available_selection_pool"
+            or coverage.get("sample_count") != len(expected_ids)
+            or coverage.get("scope_sample_ids_sha256") != expected_hash
+            or coverage.get("selected_sample_ids") != selected
+            or coverage.get("selected_count") != len(selected)
+        ):
+            raise WorkflowError("representative_coverage provenance disagrees with the full selection pool")
+        coverage_path = _resolve(path.parent, coverage.get("artifact"), "representative_coverage.artifact")
+        try:
+            with coverage_path.open(encoding="utf-8", newline="") as stream:
+                reader = csv.DictReader(stream)
+                if reader.fieldnames != [
+                    "sample_id", "selected", "candidate_representatives", "comparable_representatives",
+                    "coverage_status", "ranking_metric", "nearest_value", "nearest_tie_count",
+                    "nearest_selected_ids", "nearest_tie_evidence", "nearest_distance",
+                ]:
+                    raise WorkflowError("representative_coverage artifact has an unsupported column schema")
+                coverage_rows = list(reader)
+        except OSError as error:
+            raise WorkflowError(f"Cannot read representative_coverage artifact: {error}") from error
+        row_ids = [row["sample_id"] for row in coverage_rows]
+        if row_ids != expected_ids:
+            raise WorkflowError("representative_coverage artifact must cover every pool ID exactly once in sorted order")
+        for row in coverage_rows:
+            if row["selected"] not in {"True", "False"} or (row["selected"] == "True") != (
+                row["sample_id"] in selected
+            ):
+                raise WorkflowError("representative_coverage selected labels disagree with the manifest")
+        status_counts = dict(sorted(Counter(row["coverage_status"] for row in coverage_rows).items()))
+        if coverage.get("coverage_status_counts") != status_counts:
+            raise WorkflowError("representative_coverage status counts disagree with its artifact")
+        if coverage.get("comparable_sample_count") != sum(row["nearest_value"] != "" for row in coverage_rows):
+            raise WorkflowError("representative_coverage comparable count disagrees with its artifact")
     return manifest
 
 
@@ -325,6 +415,7 @@ def write_selection_ensemble(
     replicates: int = 1,
     size: int = 50,
     nearest_per_query: int = 3,
+    representative_reserve: int = 0,
     include: list[str] | None = None,
     seed: int = 42,
     partition_manifest: Path | None = None,
@@ -350,6 +441,7 @@ def write_selection_ensemble(
         replicates=replicates,
         size=size,
         nearest_per_query=nearest_per_query,
+        representative_reserve=representative_reserve,
         include=include,
         seed=seed,
     )
@@ -381,7 +473,7 @@ def write_selection_ensemble(
             copied_paths = {}
             for kind, spec in evidence.paths.items():
                 filename = kind + ".npy"
-                shutil.copyfile(evidence.manifest_path.parent / spec["path"], staging / filename)
+                copy_evidence_snapshot(evidence.manifest_path.parent / spec["path"], staging / filename)
                 copied_paths[kind] = {"path": filename, "sha256": file_sha256(staging / filename)}
             descriptor["paths"] = copied_paths
             write_json(evidence_path, descriptor)
@@ -397,6 +489,7 @@ def write_selection_ensemble(
         parameters = {
             "size": size,
             "nearest_per_query": nearest_per_query,
+            "representative_reserve": representative_reserve,
             "include": include or [],
             "seed": seed,
             "replicates": replicates,
@@ -418,11 +511,40 @@ def write_selection_ensemble(
         runs = []
         for selection in selections:
             relative = Path("selections") / f"{selection['selection_id']}.json"
+            coverage_summary, coverage_rows = representative_coverage(
+                queries,
+                context,
+                selection["selected_sample_ids"],
+                evidence,
+                ranking_metric=selection["nearest_ranking"],
+            )
+            coverage_filename = f"{selection['selection_id']}_coverage.csv"
+            coverage_path = staging / relative.parent / coverage_filename
+            coverage_path.parent.mkdir(parents=True, exist_ok=True)
+            coverage_fields = [
+                "sample_id", "selected", "candidate_representatives", "comparable_representatives",
+                "coverage_status", "ranking_metric", "nearest_value", "nearest_tie_count",
+                "nearest_selected_ids", "nearest_tie_evidence", "nearest_distance",
+            ]
+            with coverage_path.open("w", encoding="utf-8", newline="") as stream:
+                writer = csv.DictWriter(stream, fieldnames=coverage_fields)
+                writer.writeheader()
+                for row in coverage_rows:
+                    writer.writerow({
+                        **row,
+                        "nearest_selected_ids": json.dumps(row["nearest_selected_ids"], separators=(",", ":")),
+                        "nearest_tie_evidence": json.dumps(row["nearest_tie_evidence"], separators=(",", ":")),
+                    })
+            coverage_summary["artifact"] = {
+                "path": coverage_filename,
+                "sha256": file_sha256(coverage_path),
+            }
             selection.update(
                 header,
                 schema=SELECTION_SCHEMA,
                 parameters=parameters,
                 source=source((output / relative).parent),
+                representative_coverage=coverage_summary,
             )
             write_json(staging / relative, selection)
             runs.append(

@@ -104,9 +104,9 @@ def test_offline_assets_expose_repulsion_navigation_and_cleanup_api():
     assert 'abort.abort()' in assets
     assert 'Math.max(edge.minimum,edge.maximum)>0' in assets
     assert 'element.textContent=text' in assets  # Tooltips are safe DOM text, never HTML metadata.
-    assert 'new Option(node.country,node.id)' in assets
+    assert 'new Option(node.state || node.country,node.id)' in assets
     assert 'new vis.Network' in assets
-    assert assets.count('data-cc-network-library') == 1
+    assert assets.count('<script data-cc-network-library>') == 1
     assert '<script src=' not in assets  # No runtime CDN or other network dependency.
     vendor = Path(__file__).resolve().parents[1] / 'chronoclade' / 'vendor'
     assert 'Permission is hereby granted' in (vendor / 'vis-network.LICENSE-MIT').read_text()

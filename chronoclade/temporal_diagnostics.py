@@ -1,4 +1,4 @@
-"""Descriptive date diagnostics shared by embedding and categorical-profile routes.
+"""Descriptive collection-date diagnostics for genetic-distance analyses.
 
 Date interval midpoints are an explicit approximation. Neither a regression nor
 an arbitrary, date-independent NJ root establishes temporal signal or a clock.

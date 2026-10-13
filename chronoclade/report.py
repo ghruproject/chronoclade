@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from chronoclade.report_components.tables import write_report_html
 from chronoclade.report_components.styles import embedded_font_css, report_styles
 
 from chronoclade.sample_labels import read_sample_labels as _sample_labels
@@ -1065,7 +1066,7 @@ def write_lineage_report(
         else "Available genetic evidence, country tables and date-test results are preserved in the supporting-results bundle. No dated-tree result is reported."
     )
     output = directory / "report.html"
-    output.write_text(
+    write_report_html(output,
         _clean_html(f"""<!doctype html>
 <html lang="en">
 <head>
@@ -1079,7 +1080,7 @@ def write_lineage_report(
 <body>
 <main class="shell">
   <header class="identity">
-    <div class="identity-mark">ChronoClade · ANALYSIS REPORT</div>
+    <div class="identity-mark">ChronoClade · {"TIME TREE" if timing_supported else "TREE"} ANALYSIS REPORT</div>
     <div class="identity-copy"><h1><i>{escape(species_display)}</i><span>{escape(lineage_display)}</span></h1><p>{int(report["sample_count"])} genomes · {int(report["distinct_dates"])} distinct collection dates</p></div>
   </header>
   <nav class="contents" aria-label="Report topics"><a href="#overview">Overview</a><a href="#countries">Countries</a><a href="#relatives">Closest relatives</a><a href="#country-network">Country network</a><a href="#interpretation">Interpretation</a><a href="#dating">Dating</a><a href="#prepare">Methods &amp; files</a></nav>
@@ -1233,7 +1234,7 @@ def write_fast_lineage_report(
         else f"{successful} of {requested} requested permutations completed."
     )
     output = directory / "report.html"
-    output.write_text(
+    write_report_html(output,
         _clean_html(f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ChronoClade fast screen — {species} {lineage}</title><style>{embedded_font_css()}
@@ -1320,7 +1321,7 @@ def write_summary_report(summary: dict[str, object], *, output: Path) -> Path:
         )
 
     report_path = output / "index.html"
-    report_path.write_text(
+    write_report_html(report_path,
         _clean_html(f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ChronoClade analysis report</title>

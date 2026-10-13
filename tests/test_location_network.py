@@ -23,11 +23,11 @@ def records():
     ]
 
 
-def test_tree_provenance_is_required_and_embedding_distances_are_rejected():
+def test_tree_provenance_is_required_and_unknown_distances_are_rejected():
     with pytest.raises(TypeError, match="tree_basis"):
         build_location_network(biological_tree(), records())
-    for basis in ("esm2", "embedding", "embedding_distances", None):
-        with pytest.raises(ValueError, match="biological tree, not embedding distances"):
+    for basis in ("unknown", "distance_matrix", None):
+        with pytest.raises(ValueError, match="declared biological tree basis"):
             build_location_network(biological_tree(), records(), tree_basis=basis)
     with pytest.raises(TypeError, match="Bio.Phylo biological tree"):
         build_location_network([[0, 1], [1, 0]], records(), tree_basis="sequence")

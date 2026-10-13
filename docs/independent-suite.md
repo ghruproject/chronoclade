@@ -1,9 +1,11 @@
 # Independent analysis modules
 
-ChronoClade saves each stage separately. Choose **cgmlst** or the optional
-**esm2** route after preparation, then pass one saved selection to **tree** and
-its saved phylogeny to **time**. The commands retain the established report style
-and share the country state-change network component.
+ChronoClade saves four independent modules: **prepare**, **cgmlst**, **tree** and
+**time**. The cgMLST module uses allele profiles by default. You can choose direct
+DNA comparisons over the same cgMLST genes when an allele sequence catalogue is
+available. Both modes produce saved selections that pass to **tree**, followed
+by **time**. Reports retain the established style and identify the input method
+and distance units.
 
 ## Prepare inputs
 
@@ -33,6 +35,29 @@ pixi run -e cgmlst chronoclade cgmlst prepared/dataset.json --out cgmlst \
   --lin-level 5 --subsamples 5 --context-size 50
 ```
 
+The default distance is categorical allele mismatch. To compare DNA sequences
+for those called cgMLST alleles instead, provide a compatible sequence catalogue:
+
+```bash
+pixi run -e cgmlst chronoclade cgmlst prepared/dataset.json --out cgmlst-dna \
+  --distance-method direct-dna --allele-catalogue catalogue/catalogue.json \
+  --distance-threshold 0.00001
+```
+
+This mode compares equal-length, homologous allele sequences sitewise within each locus, counts
+sitewise A/C/G/T differences and divides by the jointly compared nucleotide
+sites. Missing calls, missing sequences and unequal-length loci are excluded for that pair. Catalogue sequences with non-ACGT bases are rejected;
+the minimum overlap and coverage audit remain explicit. Nearest relatives rank
+by raw SNP count, with ties retained. These are SNP comparisons within the
+cgMLST genes, not genome-wide or recombination-corrected SNP distances.
+A direct-DNA run requires an explicit distance cutoff in nucleotide mismatch
+fraction; the example is an exploratory setting, not a validated cluster boundary.
+
+The cgMLST report uses the chosen distance consistently and adjusts the labels
+and evidence tables to match the input. Allele mode reports raw allele
+mismatches, shared called loci and mismatch fractions. Direct DNA mode reports
+raw SNP counts, jointly compared nucleotide sites and normalized DNA distances.
+
 Use `--fetch-context` to discover and retrieve compatible public profiles and
 metadata first. The initial pool uses species/ST, followed by the explicitly
 requested LIN depth (5, 6 or 7) or HierCC level. Context assemblies are not
@@ -40,20 +65,52 @@ requested at this stage. The retrieval audit distinguishes discovered,
 retrieved and usable records; an observed export is not a complete reference
 locus catalogue.
 
-The partition index links each disjoint block report and its selections. Trees
-and ordination use the complete comparable profile block. Ordination views switch
-between dataset, country, host, genetic-group and date colours without changing coordinates; marker
-shape distinguishes input from public comparison genomes in every view.
+The partition index links each disjoint block report and its selections.
+Each block report states its share of the original inputs, leads with the saved
+SNP-tree selection counts, and includes one-row-per-input closest-relative and
+genetic-group summaries. The group table uses the same names as the ordination
+legend and reports input/public counts, countries, hosts and collection years.
+Detailed comparisons and selection evidence remain expandable.
 
-Local groups use an explicit complete-linkage distance threshold, with threshold
-sensitivity and optional locus-resampling support. These are descriptive genetic
-groups, not automatic outbreak or expanding-clone classifications. Nearest
-neighbours report raw allele differences, compared loci and ties.
+Trees and ordination use the complete comparable profile block. Ordination defaults to
+classical MDS (PCoA) of NJ patristic distances, summed along the branches between
+tips. Negative branches are set to zero for this distance calculation only; the
+saved NJ tree remains unchanged, and the count and total magnitude are audited.
+A coordinate selector retains direct profile-distance PCoA for comparison.
+The two-dimensional projection is approximate in both views.
+
+Colour controls show dataset, country, region, host, cgLIN group or collection
+date without changing coordinates within the chosen distance basis. Triangles
+mark inputs and circles mark public comparisons. Hover, focus or select a point
+to inspect accession and metadata, including overlapping genomes. Click a legend
+entry to highlight its members. For cgLIN organisms, displayed groups use the
+reported level-7 prefixes within each analysis block, using the same typing scheme.
+Missing codes remain unassigned. Changing coordinates does not change membership.
+
+Separate complete-linkage distance-cutoff diagnostics remain in the expandable
+methods section. Those exploratory cuts do not define the displayed cgLIN groups.
+Nearest neighbours report raw allele mismatches
+or raw SNP counts, the matching shared-locus or callable-site denominator, and
+all ties.
+
+The report shows the cgLIN grouping level beside the ordination. Full prefixes
+identify the groups, using the prepared typing assignments. The complete
+NJ tree uses the same group colours; selecting a group in either the tree or the
+ordination highlights its genomes in both. Groups need not be single tree clades.
+The same reported groups supply selection strata. The tree offers a full overview and a separate label-reading mode, while keeping
+the saved topology and signed branch lengths unchanged.
 
 Multiple selections are alternative representative sets from the same block.
 Every input, pinned context and required closest relative is retained, including
 ties that exceed the requested context budget. Duplicate alternatives are labelled
 when the pool offers insufficient choice.
+
+Each selection also carries a checksummed coverage CSV for every available
+genome in its block. It reports the nearest selected representative using the
+chosen method's raw distance, retains shared-locus or callable-site denominators
+and all boundary ties, and marks genomes with no comparable representative. The manifest
+summarises the full-block nearest-distance distribution and records the exact
+scope by sample count and ID checksum.
 
 ## Build a selected assembly tree and date it
 
@@ -84,14 +141,9 @@ shared-anchor ancestor date from whole-selection roots, which may describe
 different ancestors. Between-selection ranges measure sampling sensitivity;
 they are not confidence intervals or proof of convergence.
 
-## Optional embeddings
-
-The ESM2 route requires genuine scoped allele sequences, a validated mapping and
-an explicitly acquired checkpoint or explicitly permitted model download. Protein
-embeddings cannot observe synonymous changes. Distances and date slopes have
-embedding units, not substitutions/site or mutation-rate units. The conventional
-cgMLST baseline supplies the biological guide tree and country reconstruction.
-See [ESM2](esm2.md) and [sequence inputs](esm2-sequence-input.md).
+The earlier sequence-embedding work is parked in the
+[research notes](research/parked-sequence-embeddings.md), with its evidence and
+revisit criteria.
 
 ## Local and SLURM jobs
 
@@ -108,3 +160,29 @@ Set the executable to an installed stage environment's `chronoclade` path when
 necessary. Transfer the dataset, selections and their referenced files together,
 and configure site resources and credentials independently. Script generation
 and local testing do not establish successful execution on a real SLURM cluster.
+
+## Execute alternative selections together
+
+```bash
+pixi run -e tree chronoclade tree \
+  cgmlst/BLOCK/selection_bundle/ensemble.json --out tree-ensemble --ensemble-jobs 1
+
+pixi run -e time chronoclade time \
+  tree-ensemble/tree_ensemble.json --out time-ensemble --ensemble-jobs 1
+```
+
+Each selection has an independent run, fingerprint and saved status. A failed
+selection does not erase successful alternatives. Increase `--ensemble-jobs`
+only when resources support multiple native runs; each run also uses its own
+thread setting. Tree ensembles share a validated assembly cache.
+
+Time automatically writes the comparison report. Its shared-anchor forest shows
+within-run dating regions separately from the between-selection range, with
+actual descendant membership, coverage and descriptive topology agreement.
+These alternatives measure sensitivity to selection, not statistical bootstrap
+support or proof of convergence.
+
+For already completed runs, repeat `--reuse-run PATH/time.json` on the time
+ensemble command. Each result must pass artifact checks and match its selection,
+source tree and dating-gate parameters. Reuse does not rerun dating; changed
+inputs or parameters reject an existing output rather than mixing analyses.

@@ -512,6 +512,7 @@ def test_reader_order_focused_geography_and_opt_in_demonstration(tmp_path: Path)
     (geography / "focused_fragment.html").write_text(
         '<p>Focused country result</p><img src="focused_country_counts.svg">'
     )
+    (geography / "focused_country_counts.svg").write_text('<svg xmlns="http://www.w3.org/2000/svg"/>')
     (geography / "fragment.html").write_text("<p>Huge complete atlas</p>")
     (geography / "index.html").write_text("Full atlas")
     report = {
@@ -528,7 +529,7 @@ def test_reader_order_focused_geography_and_opt_in_demonstration(tmp_path: Path)
     }
     text = write_lineage_report(report, directory=tmp_path, p_value_threshold=0.05).read_text()
     assert "Focused country result" in text and "Huge complete atlas" not in text
-    assert 'src="context_geography/focused_country_counts.svg"' in text
+    assert 'data-source-asset="context_geography/focused_country_counts.svg"' in text
     assert 'href="context_geography/index.html"' in text
     assert "Public records &lt;not patient isolates&gt;" in text
     assert "Demonstration only; no epidemiological confidence is assigned" in text

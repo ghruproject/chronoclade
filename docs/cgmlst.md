@@ -33,9 +33,8 @@ a neighbour's label is never copied to an input genome.
 Every comparable profile remains in the NJ/ordination analysis and downloadable
 tree. Selection does not prune this guide tree. The approved location network and
 report presentation are reused. Ordination controls show dataset, country, host,
-date and genetic-group colours on the same coordinates. Genetic groups use
-explicit distance cuts with threshold sensitivity; they are exploratory genetic
-partitions rather than outbreak labels.
+date and genetic-group colours on the same coordinates. Displayed genetic groups use compatible reported cgLIN prefixes. Optional distance-cut
+diagnostics remain exploratory and do not replace lineage assignments.
 
 Blocks above 1,500 records use [compiled distances and RapidNJ](cgmlst-scale.md),
 disk-backed checked distance evidence, leading-axis PCoA and a collapsible full
@@ -43,13 +42,70 @@ NJ tree. Default bootstrap counts are 30 for dense blocks and zero for large blo
 recorded separately for each block. Large-block bootstrapping is not implemented;
 requesting it fails explicitly. A 10,000 × 629 synthetic full analysis was tested.
 
+## Distance modes
+
+Each NJ cohort includes a comparison of the existing root with a date-optimised
+clock-compatible root. ChronoClade searches continuous positions on nonnegative
+edges of the fixed tree, minimising ordinary least-squares residual mean squared
+using collection-date interval midpoints. This is an independent implementation
+of the minimum-residual criterion described in the
+[TempEst tutorial](https://beast.community/tempest_tutorial), not a TempEst run.
+Negative branches are retained and audited; they are excluded as candidate root
+edges. Both regressions use the same dated records. Reports show slope, R²,
+residual mean squared, slope change and paired plots; JSON and an alternative
+rooted Newick preserve the evidence. The main tree and location network keep
+their existing root. Optimisation uses dates and can improve a fit without
+establishing temporal signal; the later tree/time assessment remains separate.
+Exact comparison currently runs for cohorts of at most 1,500 genomes; larger
+cohorts explicitly report it as unavailable rather than silently sampling tips.
+
+Categorical allele-profile mismatch is the default. An allele number is a label,
+not a numeric measurement: two different called alleles count as one locus
+mismatch. Missing calls never count as matches.
+
+For direct nucleotide differences within the cgMLST genes:
+
+```bash
+chronoclade cgmlst prepared/dataset.json --out cgmlst-dna \
+  --distance-method direct-dna --allele-catalogue catalogue/catalogue.json \
+  --distance-threshold 0.00001
+```
+
+Supply a complete `chronoclade.allele-sequence-catalogue` version 1 JSON manifest
+referencing a checksummed CSV with exactly `locus,allele,dna` columns. Its species,
+scheme ID/version and database version/fingerprint must match the prepared bundle.
+The command validates the catalogue locally; it does not fetch assemblies or
+infer sequences from allele numbers. Ambiguous DNA bases and duplicate catalogue
+entries are rejected.
+
+Equal-length homologous allele sequences are compared sitewise. Missing calls,
+missing sequences and unequal-length loci are excluded and recorded in
+`sequence_comparison_audit.json`. Minimum overlap applies to compared loci.
+Distance is raw nucleotide differences divided by jointly compared nucleotide
+sites; the nearest-relative ranking uses raw differences and retains ties.
+These are gene-panel SNP comparisons, not genome-wide or recombination-adjusted
+SNP distances. Positional comparison assumes the same locus coordinates;
+compensating indels or misaligned alleles require separate alignment work.
+
+Direct DNA requires an explicit cutoff in nucleotide mismatch fraction. The
+example cutoff is descriptive, not a validated epidemiological boundary. Allele
+mode retains its default cutoff of 0.02. Reports reuse the same style and views,
+with mode-specific labels, counts, coverage and temporal units. Bootstrap
+replicates resample whole loci in both modes. Direct DNA currently supports up to
+1,500 records per block; larger blocks fail explicitly and remain supported by
+the allele-profile backend.
+
 ## Representative alternatives
 
 `--subsamples N` requests alternative representative sets from each block.
 All input genomes, explicit pins (`--include ID`) and declared nearest neighbours,
 including ties at the requested boundary, are mandatory. The context-size budget
 excludes input genomes. Mandatory contexts can exceed it: `budget_overrun`
-records the excess rather than dropping required samples.
+records the excess rather than dropping required samples. To retain optional representatives
+even when nearest-neighbour ties exhaust the budget, use `--representative-reserve 50`.
+The effective context budget is the larger of `--context-size` and the mandatory
+context count plus this reserve; the available pool can limit the result. This is
+explicitly recorded in each selection rather than silently dropping ties.
 
 Nonmandatory representatives vary across reproducible seeds while retaining the
 selection strata and quota policy. Every selection records IDs, per-ID reasons,
@@ -71,5 +127,36 @@ These manifests feed the independent [tree](tree-stage.md) and [time](time-stage
 
 `cgmlst.json` is published after all requested blocks finish. It references each
 report and ensemble, the prepared dataset, partition evidence and exact analysis
-settings. Existing nonempty output directories are rejected. A failed stage does
-not publish a completed manifest. Use a new output directory for a revised cgMLST run. The shared `job` command can execute the saved command locally or generate a SLURM script; it never submits automatically. Tree/time stages provide their own checked resume.
+settings. Existing nonempty output directories are rejected unless `--resume` is supplied.
+A failed stage does not publish a completed manifest. Repeat the same command with
+`--resume` to reuse hash-validated retrieval and numerical checkpoints. Changed
+source data or analysis settings are rejected. A revised analysis needs a new output directory. The shared `job` command can execute the saved command locally or generate a SLURM script; it never submits automatically. Tree/time stages provide their own checked resume.
+
+
+## Command-driven study workflow
+
+Descriptive study metadata can be supplied during live preparation or added to an
+existing frozen bundle with exact accession/sample IDs. Typing and membership are
+preserved; changed descriptive values retain their previous value as a conflict
+and their user-supplied provenance. Hospital, NUTS2 and specimen fields are retained.
+
+```bash
+chronoclade prepare accessions.csv --species "Klebsiella pneumoniae" \
+  --metadata study-metadata.csv --out prepared
+chronoclade cgmlst prepared/dataset.json --fetch-context --lin-level 5 \
+  --subsamples 5 --context-size 50 --representative-reserve 50 --out cgmlst
+# If interrupted, repeat the cgmlst command with --resume.
+```
+
+Public context is deduplicated after compatible profile retrieval using exact
+BioSample/run/assembly-linked sample units. Every input remains present; duplicate
+source IDs and representative decisions remain in the preparation audit. No
+genetic-distance collapsing is performed. Public catalogue snapshots and completed
+scope exports are retained in the sibling `_context_retrieval` directory; incomplete
+exports are not reused.
+
+Selection evidence uses independent filesystem copy-on-write snapshots where
+supported, with a regular-copy fallback. It never uses mutable hardlinks. Retaining
+many completed runs still consumes space; copy-on-write reduces duplicate matrix
+storage within a run. Exact outgroup discovery is not automated by these commands;
+the declared root and the available clock-compatible comparison remain explicit.

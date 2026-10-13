@@ -41,7 +41,7 @@ class JobSpec:
     executable: str = "chronoclade"
 
     def __post_init__(self):
-        if self.stage not in {"prepare", "cgmlst", "esm2", "tree", "time", "time-compare"}:
+        if self.stage not in {"prepare", "cgmlst", "tree", "time", "time-compare"}:
             raise ValueError("Unknown analysis stage")
         if not self.working_directory.is_dir():
             raise ValueError("Job working directory does not exist")

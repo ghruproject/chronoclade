@@ -42,7 +42,7 @@ def local_assembly(row, dataset_path):
     return path.resolve() if path.is_file() else None
 
 
-def acquire_assemblies(rows, dataset_path, job, *, api_key, base_url, threads):
+def acquire_assemblies(rows, dataset_path, job, *, api_key, base_url, threads, cache_dir=None):
     from chronoclade.pathogenwatch_download import download_assemblies, validate_fasta
 
     directory = job / "assemblies"
@@ -88,7 +88,7 @@ def acquire_assemblies(rows, dataset_path, job, *, api_key, base_url, threads):
             downloaded, download_audit = download_assemblies(
                 pending,
                 output=directory,
-                cache_dir=job / "assembly_cache",
+                cache_dir=Path(cache_dir) if cache_dir is not None else job / "assembly_cache",
                 api_key=api_key,
                 base_url=base_url,
                 workers=threads,
@@ -120,6 +120,7 @@ def run_tree(
     api_key="",
     base_url="https://pathogen.watch",
     force=False,
+    assembly_cache=None,
 ):
     if threads < 1 or randomisation_jobs < 1 or randomisations < 0 or not 0 < temporal_p_value <= 1:
         raise WorkflowError("Invalid tree resource or temporal parameters")
@@ -181,7 +182,8 @@ def run_tree(
         from chronoclade.tree_stage.temporal import run_clustered_assessment
 
         paths, audit = acquire_assemblies(
-            rows, dataset_path, job, api_key=api_key, base_url=base_url, threads=threads
+            rows, dataset_path, job, api_key=api_key, base_url=base_url, threads=threads,
+            cache_dir=assembly_cache,
         )
         members = [
             Sample(

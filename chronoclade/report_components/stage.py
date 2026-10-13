@@ -5,12 +5,13 @@ from html import escape
 from pathlib import Path
 import json
 
+from chronoclade.report_components.tables import write_report_html
 from chronoclade.report_components.styles import report_styles
 from chronoclade.location_network.widget import interactive_network_html, widget_assets
 
 
 def write_report(
-    path, *, title, result, rows=(), network=None, figures=(), extra="", overview=None
+    path, *, title, result, rows=(), network=None, figures=(), extra="", overview=None, report_label="TREE ANALYSIS REPORT"
 ):
     path = Path(path)
     counts = "".join(
@@ -119,8 +120,8 @@ def write_report(
         f'<section class="stage"><div class="stage-index"><span>{index}</span></div><div class="stage-body"><h2>{escape(label)}</h2>{content}</div></section>'
         for index, (label, content) in enumerate(sections, 1)
     )
-    path.write_text(
-        f'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{escape(title)}</title><style>{report_styles()}pre{{white-space:pre-wrap;overflow-wrap:anywhere;max-height:500px;overflow:auto}}</style></head><body><main class="shell"><header class="identity"><div class="identity-mark">CHRONOCLADE</div><div class="identity-copy"><h1>{escape(title)}</h1><p>{escape(overview)}</p>{verdict}</div></header>{body}</main>{assets}</body></html>',
+    write_report_html(path,
+        f'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{escape(title)}</title><style>{report_styles()}pre{{white-space:pre-wrap;overflow-wrap:anywhere;max-height:500px;overflow:auto}}</style></head><body><main class="shell"><header class="identity"><div class="identity-mark">ChronoClade · {escape(report_label)}</div><div class="identity-copy"><h1>{escape(title)}</h1><p>{escape(overview)}</p>{verdict}</div></header>{body}</main>{assets}</body></html>',
         encoding="utf-8",
     )
     return path

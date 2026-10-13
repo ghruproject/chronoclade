@@ -26,6 +26,11 @@ def test_accessions_label_tree_but_preserve_distance_and_tree_identity(tmp_path)
     assert result["sample_labels"]["PW_public"] == "SRR32641190"
     assert result["nearest_neighbours"][0]["context_id"] == "PW_public"
     tree = result["cohorts"][0]
+    assert tree['ordination_default_basis'] == 'nj_tree'
+    assert Path(tree['direct_pcoa_csv']).exists()
+    viewer = Path(tree['pcoa_views_html']).read_text()
+    assert '"default_basis":"nj_tree"' in viewer
+    assert '"default_view":"group"' in viewer
     assert "PW_public" in Path(tree["tree_path"]).read_text()
     assert "SRR32641190" in Path(tree["tree_figure"]).read_text()
     svg = Path(tree["tree_figure"]).read_text()

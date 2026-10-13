@@ -7,10 +7,7 @@ from html import escape
 from pathlib import Path
 from typing import Any
 
-from chronoclade.report_components.styles import report_styles
-from chronoclade.sample_labels import label_analysis, read_sample_labels
 from chronoclade.location_network.widget import interactive_network_html, widget_assets
-
 from chronoclade.report import (
     _context_geography_visual,
     _context_selection_summary,
@@ -19,6 +16,9 @@ from chronoclade.report import (
     _public_health_visual,
     _recombination_visual,
 )
+from chronoclade.report_components.styles import report_styles
+from chronoclade.report_components.tables import write_report_html
+from chronoclade.sample_labels import label_analysis, read_sample_labels
 
 
 def _profile_styles() -> str:
@@ -123,7 +123,8 @@ def _asset(directory: Path, paths: dict[str, Any], keys: tuple[str, ...], label:
 
 def _cohort_figures(value: object, directory: Path, field: str, label: str) -> str:
     figures = []
-    for row in _records(value):
+    rows = _records(value)
+    for row in rows:
         sample_ids = row.get("sample_ids")
         if field == "pcoa_figure" and isinstance(sample_ids, list) and len(sample_ids) < 2:
             continue
@@ -133,7 +134,7 @@ def _cohort_figures(value: object, directory: Path, field: str, label: str) -> s
         path = _path_file(directory, {field: raw}, field)
         if path is None:
             continue
-        cohort = _text(row.get("cohort_id", "Cohort"))
+        cohort = _text(row.get("cohort_id", "Cohort")) if len(rows) > 1 else ""
         if path.suffix.casefold() == ".html":
             rel = escape(path.as_posix(), quote=True)
             figures.append(f'<iframe src="{rel}" title="{escape(label, quote=True)}" '
@@ -147,8 +148,8 @@ def _cohort_figures(value: object, directory: Path, field: str, label: str) -> s
             continue
         figures.append(
             f'<figure><a href="{escape(path.as_posix(), quote=True)}"><img loading="lazy" '
-            f'src="{escape(path.as_posix(), quote=True)}" alt="{escape(cohort + " " + label, quote=True)}"></a>'
-            f"<figcaption>{escape(cohort)} · {escape(label)} · "
+            f'src="{escape(path.as_posix(), quote=True)}" alt="{escape((cohort + " " + label).strip(), quote=True)}"></a>'
+            f"<figcaption>{escape(cohort + ' · ' if cohort else '')}{escape(label)} · "
             f'<a href="{escape(path.as_posix(), quote=True)}">Open full size</a></figcaption></figure>'
         )
     return "".join(figures)
@@ -157,7 +158,7 @@ def _cohort_figures(value: object, directory: Path, field: str, label: str) -> s
 def _root_to_tip(value: object) -> str:
     rows = _records(value)
     if not rows:
-        return '<p class="empty">An allele-unit root-to-tip screen was not available.</p>'
+        return '<p class="empty">A distance-based root-to-tip screen was not available.</p>'
     content = []
     for row in rows:
         content.append(
@@ -183,7 +184,9 @@ def _range_text(low: object, high: object) -> str:
 
 def _network_tables(row: dict[str, Any], *, focus_inputs: bool) -> str:
     edges = _records(row.get("directed_edges", row.get("edges")))
-    countries = set(_items(row.get("input_countries")))
+    state = row.get("state_label", "country")
+    row.get("state_plural", "countries")
+    countries = set(_items(row.get("input_states", row.get("input_countries"))))
     if focus_inputs:
         edges = [edge for edge in edges if _edge_countries(edge)[0] in countries or _edge_countries(edge)[1] in countries]
     edges = [{**edge,
@@ -192,27 +195,29 @@ def _network_tables(row: dict[str, Any], *, focus_inputs: bool) -> str:
         "minimum_changes": edge.get("min_changes"), "maximum_changes": edge.get("max_changes"),
     } for edge in edges]
     directed = "directed_edges" in row
-    table = _table(edges, [("country_a", "From ancestral country" if directed else "Country A"),
-        ("country_b", "To descendant country" if directed else "Country B"),
+    table = _table(edges, [("country_a", f"From ancestral {state}" if directed else f"{state.title()} A"),
+        ("country_b", f"To descendant {state}" if directed else f"{state.title()} B"),
         ("displayed_changes", "Changes in displayed reconstruction"),
         ("minimum_changes", "Minimum changes"), ("maximum_changes", "Maximum changes")],
-        empty="No inferred country connections are available for this view.")
+        empty=f"No inferred {state} connections are available for this view.")
     nearest = []
-    for edge in _records(row.get("nearest_edges", row.get("nearest_country_connections"))):
+    nearest_edges = _records(row.get("nearest_edges", row.get("nearest_country_connections")))
+    direct_dna = any(edge.get("snp_differences_min") is not None for edge in nearest_edges)
+    for edge in nearest_edges:
         item = dict(edge)
-        item["mismatches"] = _range_text(edge.get("allele_mismatches_min"), edge.get("allele_mismatches_max"))
-        item["shared_loci"] = _range_text(edge.get("shared_loci_min"), edge.get("shared_loci_max"))
+        item["mismatches"] = _range_text(edge.get("snp_differences_min" if direct_dna else "allele_mismatches_min"), edge.get("snp_differences_max" if direct_dna else "allele_mismatches_max"))
+        item["shared_loci"] = _range_text(edge.get("shared_sites_min" if direct_dna else "shared_loci_min"), edge.get("shared_sites_max" if direct_dna else "shared_loci_max"))
         nearest.append(item)
     return (
-        '<h4>Closest-relative country connections</h4>'
+        f'<details class="coverage-details"><summary>Closest-relative {state} connections</summary>'
         '<p>These connections come from actual nearest-neighbour cgMLST comparisons, including all distance ties. Subgroup views select input genomes while retaining their closest matches across the complete selected CG pool. '
-        'They do not infer movement between countries. Missing country metadata is retained as Unknown.</p>'
-        + _table(nearest, [("source", "Input country"), ("target", "Nearest-relative country"),
+        f'These are profile comparisons, not inferred state changes. Missing {state} metadata is retained as Unknown.</p>'
+        + _table(nearest, [("source", f"Input {state}"), ("target", f"Nearest-relative {state}"),
             ("query_count", "Input genomes"), ("context_count", "Public relatives"),
             ("comparison_count", "Comparisons, including ties"),
-            ("mismatches", "Allele differences"), ("shared_loci", "Jointly compared loci")],
-            empty="No closest-relative country connections are available for this view.")
-        + f'<details class="coverage-details"><summary>Inferred country connections ({len(edges)} pairs)</summary>'
+            ("mismatches", "SNP differences" if direct_dna else "Allele differences"), ("shared_loci", "Jointly compared nucleotide sites" if direct_dna else "Jointly compared loci")],
+            empty=f"No closest-relative {state} connections are available for this view.") + '</details>'
+        + f'<details class="coverage-details"><summary>Inferred {state} connections ({len(edges)} pairs)</summary>'
         '<p class="muted">Ranges count changes across all equally optimal parsimony assignments on the fixed rooted NJ tree. '
         'They are exact conditional counts, not confidence or probabilities. A pair can have zero changes in the '
         'displayed representative reconstruction and still have a non-zero maximum. Ranges are calculated '
@@ -222,17 +227,18 @@ def _network_tables(row: dict[str, Any], *, focus_inputs: bool) -> str:
 
 
 def _network_metrics(row: dict[str, Any]) -> str:
+    state = row.get("state_label", "country")
     metrics = _records(row.get("network_metrics"))
     if not metrics:
         return ""
-    metrics = [{**item, **{key: f"{item[key]:.3f}" if item.get(key) is not None else "Undefined"
+    metrics = [{**item, "display_state": item.get("state", item.get("country")), **{key: f"{item[key]:.3f}" if item.get(key) is not None else "Undefined"
                           for key in ("source_hub_ratio", "betweenness", "closeness")}}
                for item in metrics]
-    return ('<details class="coverage-details"><summary>Country network metrics</summary>'
-            '<p>Incoming and outgoing links count distinct country connections in the displayed history. '
+    return (f'<details class="coverage-details"><summary>{state.title()} network metrics</summary>'
+            f'<p>Incoming and outgoing links count distinct {state} connections in the displayed history. '
             'Incoming and outgoing changes count tree branches. As in StrainHub, the source/hub ratio is outgoing links '
             'divided by incoming plus outgoing links. Centralities use unweighted links in the displayed rooted reconstruction.</p>'
-            + _table(metrics, [("country", "Country"), ("in_degree", "Incoming links"),
+            + _table(metrics, [("display_state", state.title()), ("in_degree", "Incoming links"),
                 ("out_degree", "Outgoing links"), ("in_changes", "Incoming changes"),
                 ("out_changes", "Outgoing changes"), ("degree", "Degree"),
                 ("betweenness", "Betweenness"), ("closeness", "Closeness"),
@@ -246,11 +252,6 @@ def _edge_countries(edge: dict[str, Any]) -> tuple[object, object]:
 
 
 def _network_view(row: dict[str, Any], directory: Path, *, focus_inputs: bool) -> str:
-    tree = ('<details class="coverage-details"><summary>Country-coloured NJ tree</summary>'
-            + _figure_asset(directory, row, "country_tree_figure", "Representative country states on NJ tree")
-            + '</details>')
-    representative = "network_figure" if focus_inputs else "full_network_figure"
-    possible = "possible_input_network_figure" if focus_inputs else "possible_network_figure"
     reconstruction = _mapping(row.get("reconstruction"))
     nodes = _records(reconstruction.get("nodes"))
     ambiguous = row.get("ambiguous_internal_node_count")
@@ -260,7 +261,7 @@ def _network_view(row: dict[str, Any], directory: Path, *, focus_inputs: bool) -
                         and len(node["allowed_states"]) > 1)
     metric_values = [("Minimum total changes", reconstruction.get("optimum_changes", row.get("minimum_total_changes"))),
                      ("Ambiguous internal nodes", ambiguous),
-                     ("Unknown-country samples", row.get("unknown_country_count"))]
+                     (f"Unknown-{row.get('state_label', 'country')} samples", row.get("unknown_state_count", row.get("unknown_country_count")))]
     metrics = _metric_cards([(label, value) for label, value in metric_values if value is not None])
     roots = row.get("root_count", row.get("tested_roots"))
     roots = len(roots) if isinstance(roots, list) else roots
@@ -270,16 +271,12 @@ def _network_view(row: dict[str, Any], directory: Path, *, focus_inputs: bool) -
         if roots is not None:
             root_note += '. Separate possible-link diagnostic: ' + escape(_text(roots)) + ' roots checked'
         root_note += '.</p>'
-    default_asset = _figure_asset(directory, row, representative, "Country-state transition network")
-    possible_asset = _figure_asset(directory, row, possible, "Representative network with alternative possible links")
     identity = f"{row.get('cohort_id', 'cohort')}-{row.get('id', 'all')}-{'input' if focus_inputs else 'all'}"
-    static = '<details class="coverage-details"><summary>Static network figure</summary>' + default_asset + '</details>'
-    alternative_static = '<details class="coverage-details"><summary>Static network figure</summary>' + possible_asset + '</details>'
     return metrics + root_note + '<div data-network-representative>' + \
-        interactive_network_html(row, identity + '-representative', focus_inputs=focus_inputs) + tree + static + '</div>' + \
+        interactive_network_html(row, identity + '-representative', focus_inputs=focus_inputs) + '</div>' + \
         '<div data-network-possible hidden>' + \
         interactive_network_html(row, identity + '-possible', focus_inputs=focus_inputs, include_possible=True) + \
-        tree + alternative_static + '</div>' + _network_tables(row, focus_inputs=focus_inputs)
+        '</div>' + _network_tables(row, focus_inputs=focus_inputs)
 
 
 def _figure_asset(directory: Path, row: dict[str, Any], field: str, alt: str) -> str:
@@ -290,7 +287,7 @@ def _figure_asset(directory: Path, row: dict[str, Any], field: str, alt: str) ->
     return _asset(directory, safe_row, (field,), alt)
 
 
-def _location_network(value: object, directory: Path, cohorts: object = None) -> str:
+def _location_network(value: object, directory: Path, cohorts: object = None, *, state_field="country", include_assets=True) -> str:
     rows = _records(value)
     if not rows:
         return '<p class="empty">No location network reconstruction was reported.</p>'
@@ -304,10 +301,10 @@ def _location_network(value: object, directory: Path, cohorts: object = None) ->
             "input": _network_view(view, directory, focus_inputs=True),
             "all": _network_view(view, directory, focus_inputs=False)} for view in options]
         payload = json.dumps(rendered, ensure_ascii=True).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
-        identifier = f"network-viewer-{index}"
+        identifier = f"network-viewer-{state_field}-{index}"
         subgroup_options = "".join(f'<option value="{number}">{escape(view["label"])}</option>' for number, view in enumerate(rendered))
         panels.append(
-            f'<div id="{identifier}" class="network-viewer"><h3>{escape(_text(row.get("cohort_id", "Cohort")))}</h3>'
+            f'<div id="{identifier}" class="network-viewer">'
             + '<div class="network-controls" hidden>'
             f'<label for="{identifier}-group">Input subgroup </label>'
             f'<select id="{identifier}-group" data-network-group>{subgroup_options}</select> '
@@ -322,18 +319,54 @@ def _location_network(value: object, directory: Path, cohorts: object = None) ->
             'Arrows follow ancestral-to-descendant state changes on the displayed rooted tree. '
             'Link thickness counts these changes; dashed links mark variation across optimal assignments.</p>'
             + '<div data-network-output>' + rendered[0]["all"] + '</div>'
-            + '<noscript><style>.cc-network-widget{display:none}</style><p>Open the static network figure above. Enable JavaScript for the interactive network.</p></noscript>'
+            + '<noscript><style>.cc-network-widget{display:none}</style><p>Enable JavaScript to view and export the interactive network.</p></noscript>'
             + f'<script type="application/json" data-network-views>{payload}</script></div>'
         )
     script = """<script>
-(function(){document.querySelectorAll('.network-viewer').forEach(function(viewer){
+(function(){document.querySelectorAll('.network-viewer:not([data-network-ready])').forEach(function(viewer){
+viewer.dataset.networkReady='true';
 var data=JSON.parse(viewer.querySelector('[data-network-views]').textContent);
 var group=viewer.querySelector('[data-network-group]');var scope=viewer.querySelector('[data-network-scope]');
 var reconstruction=viewer.querySelector('[data-network-reconstruction]');var output=viewer.querySelector('[data-network-output]');
 function update(){var chosen=data[Number(group.value)];if(chosen&&(scope.value==='input'||scope.value==='all')){if(window.ChronoCladeNetworks)window.ChronoCladeNetworks.destroy(output);output.innerHTML=chosen[scope.value];var possible=reconstruction.value==='possible';output.querySelectorAll('div[data-network-representative]').forEach(function(el){el.hidden=possible;});output.querySelectorAll('div[data-network-possible]').forEach(function(el){el.hidden=!possible;});if(window.ChronoCladeNetworks)window.ChronoCladeNetworks.mount(output);}}
 group.addEventListener('change',update);scope.addEventListener('change',update);reconstruction.addEventListener('change',update);viewer.querySelector('.network-controls').hidden=false;
 });})();</script>"""
-    return "".join(panels) + widget_assets() + script
+    output = "".join(panels)
+    if state_field == "host":
+        for old, new in (("Country links", "Host links"), ("All country links", "All host links"),
+                         ("Input-country links", "Input-host links"),
+                         ("The complete country network", "The complete host network"),
+                         ("Select a country to", "Select a host to"),
+                         ("drag countries to", "drag hosts to"),
+                         ("Node colours show country states", "Node colours show host states"),
+                         ("mark countries with input genomes", "mark hosts with input genomes"),
+                         ("country-state changes on", "host-state changes on")):
+            output = output.replace(old, new)
+    return output + (widget_assets() if include_assets else "") + script
+
+
+def _state_network_views(data, directory):
+    states = _mapping(data.get("state_networks"))
+    country = states.get("country", data.get("location_network"))
+    hosts = _records(states.get("host"))
+    country_panel = _location_network(country, directory, data.get("cohorts"))
+    if not hosts:
+        host_panel = '<p class="empty">Host-state reconstruction is unavailable for this saved analysis. Host metadata coverage is shown in the dataset summary when available.</p>'
+    elif all(row.get("status") == "insufficient_metadata" for row in hosts):
+        total = sum(row.get("sample_count", 0) for row in hosts)
+        missing = sum(row.get("unknown_state_count", 0) for row in hosts)
+        host_panel = (f'<p class="empty">Host metadata is recorded for {total - missing} of {total} genomes. '
+                      f'This analysis has {hosts[0].get("known_state_count", 0)} distinct known host state(s). '
+                      'At least two distinct known hosts are required to reconstruct host changes.</p>')
+    else:
+        host_panel = _location_network(hosts, directory, state_field="host", include_assets=False)
+    return (
+        '<label for="network-state-field">Reconstruct state </label>'
+        '<select id="network-state-field" data-network-state><option value="country">Location (country)</option><option value="host">Host</option></select>'
+        '<div data-state-panel="country">' + country_panel + '</div>'
+        '<div data-state-panel="host" hidden>' + host_panel + '</div>'
+        '<script data-state-network-switch>(function(){const select=document.querySelector("[data-network-state]");select.addEventListener("change",()=>{document.querySelectorAll("[data-state-panel]").forEach(panel=>{panel.hidden=panel.dataset.statePanel!==select.value;});if(window.ChronoCladeNetworks)window.ChronoCladeNetworks.mount(document);});})();</script>'
+    )
 
 
 def _download_links(directory: Path, paths: dict[str, Any]) -> str:
@@ -643,7 +676,7 @@ def _geography_table(value: object, *, label: str, include_origin: bool) -> str:
     return table
 
 
-def _nearest_neighbour_table(rows: list[dict[str, Any]]) -> str:
+def _nearest_neighbour_table(rows: list[dict[str, Any]], *, direct_dna: bool = False) -> str:
     normalized = []
     for row in rows:
         item = dict(row)
@@ -651,7 +684,7 @@ def _nearest_neighbour_table(rows: list[dict[str, Any]]) -> str:
         item["cohort_id"] = row.get("cohort_id") or row.get("cohort")
         try:
             item["allele_comparison"] = (
-                f"{int(row.get('allele_differences')):,} / {int(row.get('shared_called_loci')):,}"
+                f"{int(row.get('snp_differences' if direct_dna else 'allele_differences')):,} / {int(row.get('shared_called_sites' if direct_dna else 'shared_called_loci')):,}"
             )
         except (TypeError, ValueError):
             item["allele_comparison"] = "Not reported"
@@ -659,7 +692,7 @@ def _nearest_neighbour_table(rows: list[dict[str, Any]]) -> str:
     return _table(
         normalized,
         [("query_id", "Query"), ("context_id", "Nearest relative"),
-         ("distance", "Normalized distance"), ("allele_comparison", "Allele differences / shared loci"),
+         ("distance", "Normalized distance"), ("allele_comparison", "SNP differences / compared sites" if direct_dna else "Allele differences / shared loci"),
          ("call_overlap", "Call overlap"), ("cohort_id", "Comparison group"), ("country", "Country"), ("year", "Year")],
         empty="No nearest relatives were reported.",
     )
@@ -844,6 +877,7 @@ def _available_neighbours(
     paths: dict[str, Any],
     *,
     public_context_count: object = None,
+    direct_dna: bool = False,
 ) -> str:
     if isinstance(value, (str, Path)):
         path = _path_file(directory, {"neighbours": str(value)}, "neighbours")
@@ -888,7 +922,7 @@ def _available_neighbours(
                 + "</details>"
             )
         return result
-    result = _nearest_neighbour_table(matched)
+    result = _nearest_neighbour_table(matched, direct_dna=direct_dna)
     if unmatched:
         query_count = len({row.get("query_id") for row in unmatched if row.get("query_id")})
         result += (
@@ -907,6 +941,7 @@ def write_profile_report(
     stage: str = "fast",
     provenance: dict | None = None,
     report_label: str = "Fast profile report",
+    group_index_href: str | None = None,
 ) -> Path:
     """Write an offline HTML report, with the profile summary before relatives."""
 
@@ -915,6 +950,18 @@ def write_profile_report(
     data = label_analysis(_mapping(analysis), _mapping(analysis.get("sample_labels")))
     prov = _mapping(provenance)
     paths = _mapping(data.get("paths"))
+    direct_dna = data.get("distance_method") == "direct-dna"
+    distance_label = "Direct SNP differences within cgMLST genes" if direct_dna else "cgMLST allele-profile differences"
+    distance_explanation = (
+        "Each compared nucleotide site contributes one difference when its bases differ. Only jointly called, equal-length gene sequences are compared; missing and unequal-length loci are excluded. This is a gene-panel analysis, not a recombination-adjusted whole-genome SNP tree."
+        if direct_dna else
+        "Each jointly called core gene contributes one difference when its allele identifiers differ, regardless of the number of DNA changes within that gene. Missing calls are excluded."
+    )
+    nearest_explanation = (
+        "Nearest relatives are ranked by raw nucleotide differences within sufficiently covered, equal-length cgMLST gene sequences; all ties are retained. Compared nucleotide sites and normalized distances are shown alongside that ranking."
+        if direct_dna else
+        "Nearest relatives are ranked by actual allele differences among profiles with sufficient shared-locus coverage; all ties are retained. The normalized distance and compared-locus counts are shown alongside that ranking."
+    )
     focal = data.get("records_count", data.get("sample_count", "Not reported"))
     heading = _text(data.get("title", "Genome comparison"))
     species = data.get("species")
@@ -975,13 +1022,25 @@ def write_profile_report(
         "Your input genomes are the samples being investigated. Public comparison genomes "
         "are additional records selected from the source database to provide context."
     )
+    from chronoclade.report_components.profile_overview import (
+        genetic_group_summary,
+        grouping_rule,
+        input_scope,
+        nearest_summary,
+        selection_handoff,
+    )
+    from chronoclade.report_components.group_tree import tree_viewer, linked_group_highlights
+    scope_description = input_scope(analysis, {**prov, 'input_partition':
+                                   prov.get('input_partition', analysis.get('input_partition'))})
+    if scope_description:
+        input_description = scope_description
     hero_scope = (
         f"{query_count} input genomes · {public_context_count} public comparisons · {report_label}"
         if query_count is not None and public_context_count is not None else
         f"{focal} genomes · Profile comparison"
     )
     adaptive_selection = bool(_records(_mapping(prov.get("adaptive_context_selection")).get("datasets")))
-    comparison_scope = (
+    (
         "All public genomes in the chosen LIN context groups, before tree subsampling."
         if adaptive_selection else (
             "Compatible public profiles in this lineage block, before assembly subsampling."
@@ -989,15 +1048,6 @@ def write_profile_report(
         )
     )
     catalogue_heading = "Full public clonal-group pool" if adaptive_selection else "Frozen public catalogue"
-    figure_scope = (
-        "Country and collection-year tables describe the complete chosen context pool, including records without usable profiles. "
-        "PCoA and nearest-neighbour comparisons use usable profiles; the displayed NJ tree uses the shared full/finish genome selection. "
-        "The full public clonal-group pool has a separate denominator. Unknown countries and regions remain visible."
-        if adaptive_selection else
-        "Country figures show profile-available members of each complete-comparability cohort and combine query and public context records. "
-        "The tables above separately summarize input and comparison metadata, including rows without profiles. "
-        "These pools have different denominators. Unknown country and region values remain visible."
-    )
     catalogue_geography = (
         f'<h3>{escape(catalogue_heading)}</h3>'
         + _geography_table(data.get("public_catalogue_geography"), label=catalogue_heading, include_origin=False)
@@ -1005,7 +1055,7 @@ def write_profile_report(
     )
     metadata_geography = _records(data.get("metadata_geography"))
     input_geography = [row for row in metadata_geography if row.get("origin") in {"local", "query", "focal"}]
-    comparison_geography = [row for row in metadata_geography if row not in input_geography]
+    [row for row in metadata_geography if row not in input_geography]
     geography = _mapping(data.get("geography", data.get("country_breakdown")))
     geography_rows = _records(geography) or _records(data.get("country_breakdown"))
     nearest = data.get("nearest_neighbours", data.get("nearest_relative"))
@@ -1020,7 +1070,9 @@ def write_profile_report(
         empty="Threshold sensitivity is unavailable.") if sensitivity_rows else ""
     concentration = data.get("time_place_concentration")
     root_tip = data.get("root_to_tip")
-    root_tip_text = "Allele-distance root-to-tip is exploratory and does not pass the final clock gate."
+    from chronoclade.report_components.root_comparison import root_comparison_html
+    root_comparison = root_comparison_html(data.get('root_comparisons'), directory, _asset)
+    root_tip_text = ("Gene-panel SNP-distance" if direct_dna else "Allele-distance") + " root-to-tip is exploratory and does not pass the final clock gate."
     if isinstance(root_tip, dict):
         root_tip_text += " " + _text(root_tip.get("interpretation", root_tip.get("summary", "")), "")
     from chronoclade.report_components.ordination import ordination_viewer
@@ -1029,7 +1081,9 @@ def write_profile_report(
         pcoa_figures = _cohort_figures(data.get("cohorts"), directory, "pcoa_figure", "Profile PCoA")
     if not pcoa_figures:
         pcoa_figures = _asset(directory, paths, ("pcoa", "pcoa_svg", "pcoa_png"), "Profile PCoA")
-    tree_figures = _cohort_figures(data.get("cohorts"), directory, "tree_figure", "Neighbour-joining tree")
+    tree_figures = tree_viewer(data.get("cohorts"), directory)
+    if not tree_figures:
+        tree_figures = _cohort_figures(data.get("cohorts"), directory, "tree_figure", "Neighbour-joining tree")
     if not tree_figures:
         tree_figures = _asset(directory, paths, ("nj_tree", "nj_tree_svg", "nj_tree_png", "tree"), "Neighbour-joining tree")
     country_figures = _cohort_figures(data.get("cohorts"), directory, "country_figure", "Country composition")
@@ -1045,41 +1099,66 @@ def write_profile_report(
         if geography_rows
         else ""
     )
+    group_link = (
+        f'<a href="{escape(group_index_href, quote=True)}">← All groups</a>'
+        if group_index_href else ""
+    )
+    from chronoclade.report_components.profile_summary import (
+        combined_dataset_summary,
+        subsample_summary,
+    )
+
+    diagnostics = (
+        '<details class="coverage-details" id="groups"><summary>Optional distance-cutoff clusters and sensitivity</summary>'
+        f'<p>{escape(_text(_mapping(groups).get("interpretation", "Groups are descriptive summaries of the reported profile distances.")))}</p>'
+        '<p>These exploratory distance-cutoff groups are separate from the LIN groups used to select public context. '
+        'Thresholds are not biologically validated.</p>'
+        f'{sensitivity_table}{_group_cards(groups, kind="general", bootstrap_requested=data.get("bootstrap_replicates"))}'
+        f'<div id="concentration"><h3>Concentration in time and place</h3>{_group_cards(concentration, kind="concentration")}</div></details>'
+        '<details class="coverage-details" id="coverage"><summary>Coverage, exclusions and context selection</summary>'
+        f'{_provenance_notes(prov)}{_input_coverage(prov)}{_context_funnel(prov)}{_coverage(data)}'
+        f'{_adaptive_context_summary(prov)}{_adaptive_context_metadata(prov)}{catalogue_geography}</details>'
+        '<details class="coverage-details" id="cohorts"><summary>Profile comparability and tree diagnostics</summary>'
+        '<p>A comparability cohort contains genomes with sufficiently comparable profiles. '
+        'It is a technical analysis set, not an inferred genetic cluster.</p>'
+        f'{_cohorts(data.get("cohorts"), directory)}</details>'
+    )
     sections = [
-        '<main class="shell"><header class="identity"><div class="identity-mark">ChronoClade · ANALYSIS REPORT</div>'
+        ('<main class="shell"><header class="identity"><div class="identity-mark">ChronoClade · cgMLST ANALYSIS REPORT</div>'
         f'<div class="identity-copy"><h1>{identity_heading}</h1><p>{escape(hero_scope)}</p></div></header>'
-        '<nav class="contents" aria-label="Report topics"><a href="#summary">Overview</a><a href="#geography">Countries</a><a href="#nearest">Closest relatives</a><a href="#network">Country network</a><a href="#groups">Groups</a><a href="#root-to-tip">Dates</a><a href="#downloads">Methods &amp; files</a></nav>',
-        f'<section class="stage" id="summary"><div class="stage-body"><h2>Your results at a glance</h2>{message}{warnings}{_metric_cards(summary_values)}'
-        f'<p>{escape(input_description)}</p><p>Public comparison typing: {escape(context_description)}.</p>'
-        f'{_adaptive_context_summary(prov)}'
-        f'{_shared_tree_selection_summary(data)}'
-        '<p>Start with the countries and closest relatives below. The comparison uses differences in shared core genes (cgMLST). Genetic relationships and concentration in time and place are reported separately.</p></div></section>',
-        f'<section class="stage" id="geography"><div class="stage-body"><h2>Collection locations</h2>'
-        f'{_adaptive_context_metadata(prov)}'
-        f'<h3>Your input genomes</h3><p>The samples you supplied for investigation.</p>{_geography_table(input_geography, label="Your input genomes", include_origin=True)}'
-        f'<h3>Public comparison genomes</h3><p>{escape(comparison_scope)}</p>{_geography_table(comparison_geography, label="Public comparison genomes", include_origin=True)}'
-        f'{catalogue_geography}'
-        f'{legacy_geography}'
-        f'{country_figures}'
-        f'<p class="muted">{escape(figure_scope)}</p></div></section>',
-        f'<section class="stage" id="nearest"><div class="stage-body"><h2>Closest relatives</h2><p>Nearest relatives are ranked by actual allele differences among profiles with sufficient shared-locus coverage; all ties are retained. The normalized distance and compared-locus counts are shown alongside that ranking.</p>{_available_neighbours(nearest, directory, paths, public_context_count=public_context_count)}</div></section>',
-        '<section class="stage" id="figures"><div class="stage-body"><h2>Genetic relationships</h2><div class="figures">'
-        + pcoa_figures
-        + tree_figures
-        + "</div><p class=\"muted\">The neighbour-joining tree is a profile-distance view. Branches do not represent time or prove transmission.</p></div></section>",
-        f'<section class="stage" id="network"><div class="stage-body"><h2>Country connections</h2><p>Country reconstruction depends on the rooted tree and supplied metadata. This network describes the selected LIN context pool. It uses all usable profiles, before tree-display subsampling. Input subgroups can have different context breadth, so the network does not describe the distribution of the complete ST.</p>{_location_network(data.get("location_network"), directory, data.get("cohorts"))}</div></section>',
-        f'<section class="stage" id="groups"><div class="stage-body"><h2>Genetic groups</h2><p>{escape(_text(_mapping(groups).get("interpretation", "Groups are descriptive summaries of the reported profile distances.")))}</p>'
-        f'<p class="muted">Groups use the explicit distance cutoff. Threshold sensitivity and locus resampling describe grouping consistency; thresholds are not biologically validated.</p>{sensitivity_table}'
-        '<details class="evidence-files"><summary>Inspect genetic groups and bootstrap results</summary>'
-        f'{_group_cards(groups, kind="general", bootstrap_requested=data.get("bootstrap_replicates"))}</details></div></section>',
-        f'<section class="stage" id="concentration"><div class="stage-body"><h2>Concentration in time and place</h2><p>Groups concentrated in a particular time window and location are described here. These observations do not establish an outbreak.</p>{_group_cards(concentration, kind="concentration")}</div></section>',
-        f'<section class="stage" id="root-to-tip"><div class="stage-body"><h2>Exploratory root-to-tip screen</h2><p>{escape(root_tip_text.strip())}</p>{_root_to_tip(root_tip)}{_cohort_figures(data.get("cohorts"), directory, "root_to_tip_figure", "Collection date versus root-to-tip distance")}</div></section>',
-        f'<section class="stage" id="coverage"><div class="stage-body"><h2>Coverage and exclusions</h2>{_provenance_notes(prov)}<h3>Query and context inputs</h3>{_input_coverage(prov)}'
-        f'<h3>Public context selection</h3>{_context_funnel(prov)}'
-        f'<h3>Profile analysis</h3>{_coverage(data)}</div></section>',
-        f'<section class="stage" id="cohorts"><div class="stage-body"><h2>Cohort trees</h2>{_cohorts(data.get("cohorts"), directory)}</div></section>',
-        f'<section class="stage" id="downloads"><div class="stage-body"><h2>Available evidence files</h2>{_download_links(directory, paths)}</div></section>',
-        '<footer class="report-close"><div>Generated by ChronoClade. Profile distances, group summaries and source tables are preserved in the supporting files.</div></footer></main>',
+        f'<nav class="contents" aria-label="Report topics">{group_link}<a href="#summary">Dataset</a><a href="#figures">Genetic relationships</a><a href="#network">State network</a><a href="#subsamples">Subsamples</a><a href="#downloads">Methods &amp; files</a></nav>'),
+        (f'<section class="stage" id="summary"><div class="stage-body"><h2>The combined dataset</h2>{message}{warnings}{_metric_cards(summary_values)}'
+        f'<p>{escape(input_description)}</p>'
+        f'{selection_handoff(directory, analysis)}'
+        '<p>The tables and figures below describe input and public comparison genomes together, before assembly subsampling.</p>'
+        f'<div id="geography">{combined_dataset_summary(data)}{legacy_geography}{country_figures}<p class="muted">Country figures use genomes with usable profiles; the combined metadata table also includes records without usable profiles.</p></div>'
+        '<details class="coverage-details"><summary>Distance definition and profile availability</summary>'
+        f'<p><strong>{escape(distance_label)}</strong>. {escape(distance_explanation)}</p>'
+        f'<p>Public comparison typing: {escape(context_description)}.</p></details></div></section>'),
+        '<section class="stage" id="figures"><div class="stage-body"><h2>Genetic relationships</h2>'
+        '<p>The NJ tree and ordination use all usable profiles in this block. Input and comparison genomes are distinguished throughout.</p>'
+        + nearest_summary(analysis)
+        +
+        '<h3>Neighbour-joining tree</h3><div class="figures">' + tree_figures + '</div>'
+        '<h3>NJ-tree distance ordination (MDS)</h3><p>The default view projects distances along the NJ tree into two dimensions. Choose direct profile distances for comparison. Hover over a point to identify its genomes; colour by genetic group, location, host or collection date. Marker shapes distinguish inputs and public comparisons.</p>'
+        + grouping_rule(analysis)
+        +
+        '<div class="figures">' + pcoa_figures + '</div>'
+        + genetic_group_summary(directory, analysis)
+        +
+        '<details class="coverage-details" id="nearest"><summary>Closest relatives</summary>'
+        f'<p>{escape(nearest_explanation)}</p>{_available_neighbours(nearest, directory, paths, public_context_count=public_context_count, direct_dna=direct_dna)}</details>'
+        '<details class="coverage-details" id="root-to-tip"><summary>Exploratory distance versus collection date</summary>'
+        f'<p>{escape(root_tip_text.strip())}</p>{_root_to_tip(root_tip)}{_cohort_figures(data.get("cohorts"), directory, "root_to_tip_figure", "Collection date versus root-to-tip distance")}{root_comparison}</details>'
+        '<p class="muted">The neighbour-joining tree is a profile-distance view. Branches do not represent time or prove transmission.</p></div></section>',
+        ('<section class="stage" id="network"><div class="stage-body"><h2>State-change network</h2>'
+        '<p>State changes are reconstructed on the rooted tree of profile distances using the available metadata. The network uses the complete usable profile pool, before assembly subsampling.</p>'
+        f'{_state_network_views(data, directory)}</div></section>'),
+        ('<section class="stage" id="subsamples"><div class="stage-body"><h2>Subsamples for SNP-tree analysis</h2>'
+        f'{subsample_summary(directory, data)}</div></section>'),
+        ('<section class="stage" id="downloads"><div class="stage-body"><h2>Methods and evidence files</h2>'
+        f'{diagnostics}<details class="coverage-details"><summary>Download analysis evidence</summary>{_download_links(directory, paths)}</details></div></section>'),
+        '<footer class="report-close"><div>Generated by ChronoClade. Supporting files preserve profile distances, selections and analysis diagnostics.</div></footer></main>' + linked_group_highlights(),
     ]
     document = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light">
@@ -1087,7 +1166,7 @@ def write_profile_report(
 """ + _profile_styles() + """
 </style></head><body>""" + "\n".join(sections) + "</body></html>"
     output = directory / "profile_report.html"
-    output.write_text(document, encoding="utf-8")
+    write_report_html(output, document, encoding="utf-8")
     return output
 
 
@@ -1140,7 +1219,7 @@ def write_fast_group_index(
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
         '<title>ChronoClade fast group reports</title><style>' + _profile_styles() + '</style></head>'
         '<body><main class="shell"><header class="identity">'
-        '<div class="identity-mark">ChronoClade · ANALYSIS REPORT</div>'
+        '<div class="identity-mark">ChronoClade · cgMLST ANALYSIS REPORT</div>'
         '<div class="identity-copy"><h1>Fast profile results</h1>'
         '<p>Choose an input dataset to explore its context.</p></div></header>'
         '<section class="stage" id="summary"><div class="stage-body">'
@@ -1153,7 +1232,7 @@ def write_fast_group_index(
         'collection-year breakdowns.</p></div></section></main></body></html>'
     )
     output = directory / "profile_report.html"
-    output.write_text(document, encoding="utf-8")
+    write_report_html(output, document, encoding="utf-8")
     return output
 
 
@@ -1192,7 +1271,7 @@ def write_stage_index(output: Path, stages: dict) -> Path:
         '<section class="stage"><div class="stage-body"><ul>' + links + '</ul></div></section></main></body></html>'
     )
     index = output / "index.html"
-    index.write_text(page, encoding="utf-8")
+    write_report_html(index, page, encoding="utf-8")
     return index
 
 
@@ -1280,7 +1359,7 @@ def write_corrected_report(report: dict, *, directory: Path) -> Path:
 <meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light">
 <title>ChronoClade corrected report — {escape(species)} {escape(lineage)}</title><style>
 {_profile_styles()}
-</style></head><body><main class="shell"><header class="identity"><div class="identity-mark">ChronoClade · ANALYSIS REPORT</div><div class="identity-copy">
+</style></head><body><main class="shell"><header class="identity"><div class="identity-mark">ChronoClade · TREE ANALYSIS REPORT</div><div class="identity-copy">
 <h1><i>{escape(species.replace("_", " "))}</i><span>{escape(lineage)}</span></h1><p>{escape(_text(count))} genomes · Recombination-adjusted analysis</p>{stage_link}</div></header>
 <nav class="contents" aria-label="Report topics"><a href="#summary">Overview</a><a href="#countries">Countries</a><a href="#relationships">Closest relatives</a><a href="#network">Country network</a><a href="#interpretation">Interpretation</a><a href="#dating">Dating</a><a href="#outputs">Methods &amp; files</a></nav>
 <section class="stage" id="summary"><div class="stage-body"><h2>Your results at a glance</h2>{_metric_cards(context_values)}<p class="muted">Country composition and corrected-tree counts use the records available to this analysis. Public-catalogue totals, where reported, have a separate denominator.</p></div></section>
@@ -1292,5 +1371,5 @@ def write_corrected_report(report: dict, *, directory: Path) -> Path:
 {temporal_section}
 <section class="stage" id="outputs"><div class="stage-body"><h2>Available files</h2>{links_section}</div></section><footer class="report-close"><div>Generated by ChronoClade. The supporting files preserve the corrected tree and comparison results.</div></footer></main></body></html>"""
     output = directory / "corrected_report.html"
-    output.write_text(document, encoding="utf-8")
+    write_report_html(output, document, encoding="utf-8")
     return output

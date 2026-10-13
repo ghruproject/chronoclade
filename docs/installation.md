@@ -34,8 +34,7 @@ development and verification tools.
 On Linux, the cgMLST environment includes RapidNJ. On Apple Silicon, install the
 pinned macOS backend with `pixi run chronoclade setup-scale`; the installer records
 its revision, binary checksum and compiler. The upstream backend currently runs
-through Rosetta on arm64. ESM2 remains optional, with an isolated worker environment,
-explicit model acquisition and CPU/MPS support; see [ESM2](esm2.md).
+through Rosetta on arm64.
 
 ## Updating an installation
 

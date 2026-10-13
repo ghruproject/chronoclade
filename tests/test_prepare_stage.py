@@ -404,3 +404,44 @@ def test_live_modes_reject_wrong_input_contract(frozen, tmp_path, input_kind):
     source, _, _ = frozen
     with pytest.raises(DatasetError, match="short UUID|Metadata has no samples|Assembly metadata"):
         run_prepare(source, tmp_path / "prepared", input_kind=input_kind)
+
+
+def test_frozen_metadata_overlay_preserves_typing_and_records_field_provenance(frozen, tmp_path):
+    source, catalogues, _ = frozen
+    baseline = run_prepare(source, tmp_path / 'baseline', catalogues=catalogues)
+    overrides = tmp_path / 'study.csv'
+    overrides.write_text('sample_id,nuts2,hospital_code,publication_isolate_id,collection_date\nquery,EL30,H14,K001,2019-05-01\n')
+    result = run_prepare(baseline.dataset_manifest, tmp_path / 'enriched', metadata=overrides)
+    before, after = load_dataset(baseline.dataset_manifest), load_dataset(result.dataset_manifest)
+    query = next(r for r in after.samples if r['sample_id'] == 'query')
+    assert query['nuts2'] == 'EL30' and query['hospital_code'] == 'H14'
+    assert query['publication_isolate_id'] == 'K001'
+    assert query['date_start'] == query['date_end'] == '2019-05-01'
+    assert after.lineages == before.lineages
+    assert after.profiles[0].sample_ids == before.profiles[0].sample_ids
+    assert (after.profiles[0].codes == before.profiles[0].codes).all()
+    assert any(r['field'] == 'hospital_code' and r['source'] == 'user' for r in after.provenance)
+    assert any(r['field'] == 'collection_date' for r in after.conflicts)
+    assert (result.dataset_manifest.parent / 'sources/metadata.csv').read_text() == overrides.read_text()
+    overrides.write_text('sample_id,mlst_st\nquery,258\n')
+    with pytest.raises(DatasetError, match='Unsupported metadata'):
+        run_prepare(baseline.dataset_manifest, tmp_path / 'invalid', metadata=overrides)
+
+
+def test_metadata_override_supersedes_selected_evidence_and_rejects_conflicting_ids(frozen, tmp_path):
+    from dataclasses import replace
+    from chronoclade.datasets import write_dataset
+    source, catalogues, _ = frozen
+    baseline = run_prepare(source, tmp_path / 'baseline', catalogues=catalogues)
+    ds = load_dataset(baseline.dataset_manifest)
+    ds = replace(ds, provenance=ds.provenance + ({'sample_id': 'query', 'field': 'country', 'value': 'Greece', 'selected': True},), dataset_id=None)
+    manifest = write_dataset(ds, tmp_path / 'source')
+    metadata = tmp_path / 'override.csv'
+    metadata.write_text('sample_id,country\nquery,France\n')
+    result = run_prepare(manifest, tmp_path / 'changed', metadata=metadata)
+    after = load_dataset(result.dataset_manifest)
+    selected = [r['value'] for r in after.provenance if r.get('sample_id') == 'query' and r.get('field') == 'country' and r.get('selected')]
+    assert selected == ['France']
+    metadata.write_text('sample_id,accession,country\nquery,missing,France\n')
+    with pytest.raises(DatasetError, match='exactly one sample'):
+        run_prepare(manifest, tmp_path / 'contradictory', metadata=metadata)

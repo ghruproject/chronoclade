@@ -181,6 +181,8 @@ def test_scale_end_to_end_ids_ties_network_and_tree_view(tmp_path):
     assert result["root_to_tip"][0]["root_sensitivity"]
     assert not (tmp_path / "pairwise_distances.csv").exists()
     assert len(Path(result["cohorts"][0]["pcoa_csv"]).read_text().splitlines()) == 4
+    assert result['cohorts'][0]['ordination_default_basis'] == 'nj_tree'
+    assert Path(result['cohorts'][0]['direct_pcoa_csv']).exists()
 
 
 def test_nearest_uses_raw_mismatch_ties_with_variable_denominators(tmp_path):
