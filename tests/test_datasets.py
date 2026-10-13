@@ -20,6 +20,7 @@ from chronoclade.datasets import (
     write_dataset,
 )
 from chronoclade.datasets import storage
+from chronoclade.datasets.adapters import _record_crosswalk
 
 
 @pytest.fixture
@@ -293,6 +294,33 @@ def test_missing_dates_and_locations_are_not_invented():
     sample = dataset.samples[0]
     assert sample["date_precision"] == "missing"
     assert sample["date_start"] is sample["date_end"] is sample["country"] is sample["host"] is None
+
+
+def test_pathogenwatch_source_identity_survives_dataset_adapters():
+    record = {
+        "sample_id": "PW_source",
+        "source_genome_id": "source-id",
+        "numeric_source_id": 417,
+        "source_checksum": "a" * 40,
+        "source_length": 5,
+        "source_n50": 4,
+        "source_contigs": 2,
+        "qc_pass": True,
+        "source_qc": True,
+    }
+    sample = samples_from_records([record])[0]
+    crosswalk = _record_crosswalk([record])[0]
+    for field in (
+        "source_genome_id",
+        "numeric_source_id",
+        "source_checksum",
+        "source_length",
+        "source_n50",
+        "source_contigs",
+        "qc_pass",
+        "source_qc",
+    ):
+        assert sample[field] == crosswalk[field] == record[field]
 
 
 def test_unversioned_lineage_is_retained_without_inventing_database_version(catalogue, records):

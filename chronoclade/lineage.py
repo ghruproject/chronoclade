@@ -453,7 +453,11 @@ def _run_core_phylogeny(
     threads: int,
     force: bool,
     mode: str,
+    coherence_policy: str = "strict",
+    seed: int | None = None,
 ) -> tuple[Path, Path, dict[str, object] | None]:
+    if coherence_policy not in {"strict", "diagnostic"}:
+        raise WorkflowError("Coherence policy must be strict or diagnostic")
     mapping_stages = [
         (
             [
@@ -503,12 +507,13 @@ def _run_core_phylogeny(
         members,
         output=files.coherence_screen,
     )
-    if coherence["flagged_samples"]:
+    if coherence["flagged_samples"] and coherence_policy == "strict":
         names = ", ".join(str(name) for name in coherence["flagged_samples"])
         raise WorkflowError(
             "Lineage-coherence screen found extreme raw-distance outlier(s): "
-            f"{names}. Verify their accessions, species and lineage assignment, or split the "
-            f"input lineage. Evidence: {files.coherence_screen}"
+            f"{names}. Relative-distance flags can reflect legitimate cohort diversity and "
+            f"do not establish incorrect genome identity. Review the cohort or explicitly "
+            f"choose diagnostic policy. Evidence: {files.coherence_screen}"
         )
 
     if mode == "fast":
@@ -524,6 +529,7 @@ def _run_core_phylogeny(
         _run_command(
             [
                 "iqtree",
+                *(["-seed", str(seed)] if seed is not None else []),
                 "-s",
                 str(files.alignment),
                 "-m",
@@ -547,6 +553,7 @@ def _run_core_phylogeny(
         (
             [
                 "iqtree",
+                *(["-seed", str(seed)] if seed is not None else []),
                 "-s",
                 str(files.alignment),
                 "-m",
@@ -594,12 +601,13 @@ def _run_core_phylogeny(
         members,
         output=files.clonal_coherence_screen,
     )
-    if clonal_coherence["flagged_samples"]:
+    if clonal_coherence["flagged_samples"] and coherence_policy == "strict":
         names = ", ".join(str(name) for name in clonal_coherence["flagged_samples"])
         raise WorkflowError(
             "Lineage-coherence screen found extreme recombination-filtered distance "
-            f"outlier(s): {names}. Verify their accessions and lineage assignment before "
-            f"temporal analysis. Evidence: {files.clonal_coherence_screen}"
+            f"outlier(s): {names}. Relative-distance flags can reflect legitimate cohort "
+            f"diversity and do not establish incorrect genome identity. Review the cohort "
+            f"or explicitly choose diagnostic policy. Evidence: {files.clonal_coherence_screen}"
         )
     return files.tree, files.filtered_alignment, None
 

@@ -10,6 +10,7 @@ import pytest
 from chronoclade.pathogenwatch import PathogenwatchClient
 from chronoclade.profile_inputs import (
     ProfileInputError,
+    _canonical,
     collection_id,
     materialise_assemblies,
     parse_cgmlst_export,
@@ -17,6 +18,26 @@ from chronoclade.profile_inputs import (
 )
 
 UUID = "jX5cwsoyJ1KDquMqssUzAD"
+
+
+def test_canonical_adapter_preserves_public_assembly_identity_metadata():
+    checksum = "a" * 40
+    row = _canonical(
+        {
+            "source_genome_id": "public-id",
+            "id": 42,
+            "mlst_st": "147",
+            "checksum": checksum,
+            "length": 1234,
+            "qc": True,
+        },
+        origin="context",
+        species="Klebsiella pneumoniae",
+    )
+    assert row["numeric_source_id"] == 42
+    assert row["source_checksum"] == checksum
+    assert row["source_length"] == 1234
+    assert row["qc_pass"] is True
 
 
 def client_fixture(members, *, api_key="", downloads=None, size=None):

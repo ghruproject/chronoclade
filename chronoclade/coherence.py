@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import math
 import statistics
 from pathlib import Path
@@ -24,8 +25,8 @@ def screen_alignment(
     """Identify isolated, extreme raw-distance outliers in a mapped alignment.
 
     This is deliberately a relative cohort check rather than a bacterial SNP
-    cutoff. It is intended to catch accession, species or lineage mistakes,
-    not to define transmission clusters.
+    cutoff. A flag may reflect legitimate cohort diversity; it does not
+    establish incorrect genome identity or define transmission clusters.
     """
 
     sequences = read_alignment(alignment)
@@ -67,10 +68,10 @@ def screen_alignment(
             {
                 "sample_id": sample_id,
                 "median_raw_snps": statistics.median(pair[0] for pair in by_sample[sample_id]),
-                "median_snp_proportion": f"{value:.8g}",
-                "cohort_median_snp_proportion": f"{centre:.8g}",
-                "ratio_to_cohort_median": f"{ratio:.4g}",
-                "robust_z": f"{robust_z:.4g}",
+                "median_snp_proportion": value,
+                "cohort_median_snp_proportion": centre,
+                "ratio_to_cohort_median": ratio if math.isfinite(ratio) else "Infinity",
+                "robust_z": robust_z if math.isfinite(robust_z) else "Infinity",
                 "flagged": str(is_outlier).lower(),
             }
         )
@@ -80,7 +81,10 @@ def screen_alignment(
         writer = csv.DictWriter(handle, fieldnames=list(rows[0]), delimiter="\t")
         writer.writeheader()
         writer.writerows(rows)
-    return {
+    result = {
+        "thresholds": {"minimum_robust_z": MIN_ROBUST_Z, "minimum_median_ratio": MIN_MEDIAN_RATIO, "rule": "both thresholds must be met"},
+        "sample_statistics": rows,
+        "flagged_statistics": [row for row in rows if row["flagged"] == "true"],
         "status": "failed" if flagged else "passed",
         "sample_count": len(samples),
         "flagged_samples": flagged,
@@ -88,3 +92,6 @@ def screen_alignment(
         "median_absolute_deviation": mad,
         "output": str(output),
     }
+
+    output.with_suffix(".json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+    return result

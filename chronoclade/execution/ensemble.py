@@ -112,9 +112,13 @@ def run_tree_ensemble(ensemble_manifest, *, output, ensemble_jobs=1, force=False
         raise WorkflowError("Ensemble jobs must be positive")
     source = Path(ensemble_manifest).expanduser().resolve()
     ensemble = load_selection_ensemble(source)
+    options.setdefault("coherence_policy", "strict")
     safe_parameters = {key: str(value) if isinstance(value, Path) else value
                        for key, value in options.items() if key != "api_key"}
     safe_parameters["ensemble_jobs"] = ensemble_jobs
+    safe_parameters["phylogeny_seed"] = options.get("seed", 42)
+    safe_parameters["phylogeny_seed_policy"] = "explicit_IQ_TREE"
+    safe_parameters["reference_selection_policy"] = "highest_N50_common_input"
     output, manifest, result = _initial(
         output, source, "tree", [s["selection_id"] for s in ensemble["selections"]], safe_parameters, force,
     )

@@ -464,6 +464,10 @@ def test_lineage_and_crosswalk_cannot_overwrite_authoritative_identity(tmp_path)
                         "role": "context",
                         "country": "intruder",
                         "source_genome_id": "source",
+                        "numeric_source_id": 83,
+                        "source_checksum": "a" * 40,
+                        "source_length": 12345,
+                        "qc_pass": True,
                     }
                 ],
             }
@@ -478,3 +482,6 @@ def test_lineage_and_crosswalk_cannot_overwrite_authoritative_identity(tmp_path)
     assert adapted["cgmlst_profile"] == {"a": "1"}
     assert adapted["cglin_database_version"] == "canonical"
     assert adapted["source_genome_id"] == "source"
+    assert adapted["numeric_source_id"] == 83
+    assert adapted["source_checksum"] == "a" * 40
+    assert adapted["source_length"] == 12345 and adapted["qc_pass"] is True

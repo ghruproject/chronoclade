@@ -67,6 +67,12 @@ def write_report(
         if p.is_file() and p != path and p.name != "job.json"
     )
     assessment = result["temporal_assessment"]
+    coherence = result.get("coherence_screening") or {}
+    coherence_warning = (
+        '<p role="alert"><strong>Coherence warning:</strong> '
+        + escape(coherence["warning"]) + "</p>"
+        if coherence.get("warning") else ""
+    )
     network_html = ""
     assets = ""
     if network is not None:
@@ -88,7 +94,7 @@ def write_report(
                 "Ensemble assessment"
                 if assessment["code"] == "sensitivity"
                 else "Temporal assessment",
-                f"<p><strong>{escape(assessment['code'])}</strong>: {escape(assessment['reason'])}</p><details><summary>Saved assessment</summary><pre>{escape(json.dumps(assessment, indent=2))}</pre></details>"
+                coherence_warning + f"<p><strong>{escape(assessment['code'])}</strong>: {escape(assessment['reason'])}</p><details><summary>Saved assessment</summary><pre>{escape(json.dumps(assessment, indent=2))}</pre></details>"
                 + extra,
             ),
             ("Downloads", "<ul>" + downloads + "</ul>"),

@@ -68,6 +68,7 @@ def run_time(tree_manifest, *, output, force=False, allow_unsupported=False):
             "selection_id": tree["selection_id"],
             "selected_sample_ids": tree["selected_sample_ids"],
             "temporal_assessment": assessment,
+            "coherence_screening": tree.get("coherence_screening"),
             "parameters": {"allow_unsupported": allow_unsupported},
             "tools": tool_evidence,
             "dating_status": "unsupported",

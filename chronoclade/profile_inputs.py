@@ -140,6 +140,22 @@ def _canonical(raw: dict, *, origin: str, species: str = "", base: Path | None =
         geography_raw=raw.get("geography_raw", {"country": country_raw, "region": region}),
         aliases=list(raw.get("aliases") or []),
     )
+    for target, raw_field in (
+        ("source_checksum", "source_checksum"),
+        ("source_length", "source_length"),
+        ("source_n50", "source_n50"),
+        ("source_contigs", "source_contigs"),
+        ("qc_pass", "qc_pass"),
+    ):
+        value = raw.get(raw_field)
+        if value is not None:
+            row[target] = value
+    if row.get("source_checksum") is None and raw.get("checksum") is not None:
+        row["source_checksum"] = raw["checksum"]
+    if row.get("source_length") is None and raw.get("length") is not None:
+        row["source_length"] = raw["length"]
+    if row.get("qc_pass") is None and raw.get("qc") is not None:
+        row["qc_pass"] = raw["qc"]
     row.update(normalize_dates(raw, {"collection_date": date}, raw))
     # Empty or partial dates remain explicit, never replaced by upload dates.
     if raw.get("date_precision"):

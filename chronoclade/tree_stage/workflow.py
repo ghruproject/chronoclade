@@ -1,6 +1,8 @@
 """Execute assembly phylogeny from a validated immutable selection."""
 
 from pathlib import Path
+import json
+from html import escape
 
 from Bio import Phylo
 
@@ -44,6 +46,7 @@ def local_assembly(row, dataset_path):
 
 def acquire_assemblies(rows, dataset_path, job, *, api_key, base_url, threads, cache_dir=None):
     from chronoclade.pathogenwatch_download import download_assemblies, validate_fasta
+    from chronoclade.file_snapshots import copy_evidence_snapshot
 
     directory = job / "assemblies"
     directory.mkdir(exist_ok=True)
@@ -51,16 +54,25 @@ def acquire_assemblies(rows, dataset_path, job, *, api_key, base_url, threads, c
     for row in rows:
         local = local_assembly(row, dataset_path)
         if local:
-            content = local.read_bytes()
-            content = validate_fasta(content)
+            original = local.read_bytes()
+            content = validate_fasta(original)
             destination = directory / (fingerprint(row["sample_id"]) + ".fasta")
-            destination.write_bytes(content)
+            if destination.exists() and destination.read_bytes() == content:
+                copy_method = "existing_verified"
+            else:
+                destination.unlink(missing_ok=True)
+                if content == original:
+                    copy_method = copy_evidence_snapshot(local, destination)
+                else:
+                    destination.write_bytes(content)
+                    copy_method = "decompressed_copy"
             paths[row["sample_id"]] = destination
             audit.append(
                 {
                     "sample_id": row["sample_id"],
                     "status": "ready",
                     "method": "linked_local_assembly",
+                    "copy_method": copy_method,
                     "sha256": file_sha256(destination),
                 }
             )
@@ -92,6 +104,7 @@ def acquire_assemblies(rows, dataset_path, job, *, api_key, base_url, threads, c
                 api_key=api_key,
                 base_url=base_url,
                 workers=threads,
+                require_public_identity=True,
             )
             by_source = {entry["source_genome_id"]: entry for entry in download_audit}
             for row in pending:
@@ -121,14 +134,19 @@ def run_tree(
     base_url="https://pathogen.watch",
     force=False,
     assembly_cache=None,
+    coherence_policy="strict",
 ):
     if threads < 1 or randomisation_jobs < 1 or randomisations < 0 or not 0 < temporal_p_value <= 1:
         raise WorkflowError("Invalid tree resource or temporal parameters")
+    if coherence_policy not in {"strict", "diagnostic"}:
+        raise WorkflowError("Coherence policy must be strict or diagnostic")
     selection_path = Path(selection_manifest).expanduser().resolve()
     selection = load_selection_manifest(selection_path)
     dataset_path, rows = selection_rows(selection_path, selection)
     if len(rows) < 3:
         raise WorkflowError("Tree needs at least three exact selected genomes")
+    if not any(row["role"] == "input" for row in rows):
+        raise WorkflowError("Native tree requires input genomes for its common reference")
     if len({row["species"] for row in rows}) != 1:
         raise WorkflowError("Tree selection spans incompatible species")
     tool_evidence = tools(
@@ -140,8 +158,12 @@ def run_tree(
         randomisation_jobs=randomisation_jobs,
         temporal_p_value=temporal_p_value,
         seed=seed,
+        phylogeny_seed=seed,
+        phylogeny_seed_policy="explicit_IQ_TREE",
+        reference_selection_policy="highest_N50_common_input",
         assess_temporal=assess_temporal,
         base_url=base_url,
+        coherence_policy=coherence_policy,
     )
     local_hashes = {
         row["sample_id"]: file_sha256(local_assembly(row, dataset_path))
@@ -159,8 +181,6 @@ def run_tree(
     output = Path(output).expanduser().resolve()
     saved = output / "tree.json"
     if saved.is_file() and not force:
-        import json
-
         previous = json.loads(saved.read_text())
         if previous.get("fingerprint") == digest:
             return load_tree_result(saved)
@@ -199,10 +219,17 @@ def run_tree(
         ]
         files = LineageFiles.in_directory(job)
         _write_lineage_inputs(job, members)
-        selected_reference = select_reference(members)
+        input_members = [sample for sample in members if sample.origin == "local"]
+        selected_reference = select_reference(input_members)
         tree_path, alignment, _ = _run_core_phylogeny(
-            files, members, selected_reference, threads, force, "corrected"
+            files, members, selected_reference, threads, force, "corrected", coherence_policy=coherence_policy, seed=seed
         )
+        coherence = {"policy": coherence_policy}
+        for label, audit_path in (("raw", files.coherence_screen), ("corrected", files.clonal_coherence_screen)):
+            coherence[label] = json.loads(audit_path.with_suffix(".json").read_text())
+        flagged = sorted(set(coherence["raw"]["flagged_samples"]) | set(coherence["corrected"]["flagged_samples"]))
+        labels = {row["sample_id"]: row.get("label") or row.get("accession") or row["sample_id"] for row in rows}
+        coherence["warning"] = ("Diagnostic policy retained all selected genomes despite relative-distance flags. These can reflect legitimate cohort diversity and do not establish incorrect genome identity. Review raw and corrected statistics. Flagged genomes: " + ", ".join(labels[ident] for ident in flagged)) if flagged else None
         ids = selection["selected_sample_ids"]
         for actual, name in (
             (
@@ -301,6 +328,7 @@ def run_tree(
             "selection_id": selection["selection_id"],
             "selected_sample_ids": ids,
             "parameters": parameters,
+            "coherence_screening": coherence,
             "tools": tool_evidence,
             "reference_sample_id": selected_reference.sample_id,
             "recombination": recombination,
@@ -331,8 +359,10 @@ def run_tree(
                         "temporal_assessment": assessment,
                         "branch_units": "substitutions/site",
                         "nearest_contexts_by_corrected_snps": nearest,
+                        "coherence_screening": coherence,
                     },
                     rows=rows,
+                    extra="<details><summary>Raw and corrected coherence audits</summary><pre>" + escape(json.dumps(coherence, indent=2)) + "</pre></details>",
                     network=network,
                     figures=[
                         (

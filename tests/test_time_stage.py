@@ -86,8 +86,8 @@ def test_native_treetime_dating_saved_tree_without_phylogeny_rebuild(
 
     original = lineage._run_core_phylogeny
 
-    def synthetic_tree(files, members, *args):
-        result = original(files, members, *args)
+    def synthetic_tree(files, members, *args, **kwargs):
+        result = original(files, members, *args, **kwargs)
         newick = (
             "("
             + ",".join(
@@ -136,3 +136,18 @@ def test_new_tree_invalidates_time_but_preserves_previous_time_evidence(tmp_path
     second = run_time(tmp_path / "tree/tree.json", output=tmp_path / "time")
     assert second["fingerprint"] != first["fingerprint"]
     assert second["source"]["tree"]["sha256"] != first["source"]["tree"]["sha256"]
+
+
+def test_time_preserves_tree_coherence_review(tmp_path, native_stubs):
+    selection, _ = selection_fixture(tmp_path, dates=("", "", ""))
+    tree = run_tree(selection, output=tmp_path / "tree", coherence_policy="diagnostic")
+    tree["coherence_screening"]["warning"] = "Review retained <genome> in the broad cohort."
+    source = tmp_path / "tree/tree.json"
+    source.write_text(json.dumps(tree))
+    result = run_time(source, output=tmp_path / "time")
+    assert result["coherence_screening"] == tree["coherence_screening"]
+    report = (tmp_path / "time" / result["report"]["path"]).read_text()
+    assert "Coherence warning:" in report
+    assert "Review retained &lt;genome&gt;" in report
+    assert "Review retained <genome>" not in report
+    assert result["dating_status"] == "unsupported"
