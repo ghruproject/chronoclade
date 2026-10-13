@@ -725,6 +725,8 @@ def _run_dated_tree(
     tree: Path | None = None,
     *,
     reroot: bool = False,
+    seed: int | None = None,
+    keep_polytomies: bool = False,
 ) -> None:
     rooted_tree = files.clock_dir / "rerooted.newick"
     input_tree = tree if tree is not None else files.tree
@@ -753,6 +755,10 @@ def _run_dated_tree(
         "--outdir",
         str(files.directory / "timetree"),
     ]
+    if seed is not None:
+        command.extend(["--rng-seed", str(seed)])
+    if keep_polytomies:
+        command.append("--keep-polytomies")
     if reroot:
         command.extend(["--reroot", "least-squares"])
     else:

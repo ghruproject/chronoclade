@@ -102,7 +102,21 @@ def test_native_treetime_dating_saved_tree_without_phylogeny_rebuild(
     monkeypatch.setattr(lineage, "_run_core_phylogeny", synthetic_tree)
     selection, _ = selection_fixture(tmp_path)
     run_tree(selection, output=tmp_path / "tree", assess_temporal=False)
+    original_dating = lineage._run_dated_tree
+    observed_dating = []
+    def dating(*args, **kwargs):
+        observed_dating.append(kwargs)
+        return original_dating(*args, **kwargs)
+    monkeypatch.setattr(lineage, "_run_dated_tree", dating)
     result = run_time(tmp_path / "tree/tree.json", output=tmp_path / "time", allow_unsupported=True)
+    assert observed_dating == [{"seed": 42, "keep_polytomies": True}]
+    from Bio import Phylo
+    dated = Phylo.read(tmp_path / "time" / result["dated_tree"]["path"], "nexus")
+    assert len(dated.root.clades) == 3
+    assert result["topology_preservation"] == {
+        "method": "rooted_nontrivial_internal_leafsets_root_excluded",
+        "source_clade_count": 0, "dated_clade_count": 0, "preserved": True,
+    }
     assert result["dating_status"] == "dated" and result["dating_override"]
     assert result["clock_confidence"]["rate"] > 0
     assert load_result(tmp_path / "time/time.json", "time") == result
@@ -151,3 +165,81 @@ def test_time_preserves_tree_coherence_review(tmp_path, native_stubs):
     assert "Review retained &lt;genome&gt;" in report
     assert "Review retained <genome>" not in report
     assert result["dating_status"] == "unsupported"
+
+
+@pytest.mark.parametrize("seed,keep_polytomies", [(None, False), (20261013, True)])
+def test_dated_tree_seed_and_polytomy_flags(tmp_path, monkeypatch, seed, keep_polytomies):
+    from chronoclade.lineage import LineageFiles, _run_dated_tree
+    commands = []
+    monkeypatch.setattr("chronoclade.lineage._run_command", lambda command, **kwargs: commands.append(command))
+    files = LineageFiles.in_directory(tmp_path)
+    _run_dated_tree(files, 2000, False, seed=seed, keep_polytomies=keep_polytomies)
+    command = commands[0]
+    assert ("--keep-polytomies" in command) is keep_polytomies
+    assert "--keep-root" in command
+    if seed is None:
+        assert "--rng-seed" not in command
+    else:
+        assert command[command.index("--rng-seed") + 1] == str(seed)
+
+
+@pytest.mark.parametrize("prior_policy", ["unseeded", "unchecked_topology"])
+def test_native_time_policy_invalidates_prior_unseeded_fingerprint(tmp_path, native_stubs, prior_policy):
+    from chronoclade.stage_artifacts import fingerprint, reference
+    selection, _ = selection_fixture(tmp_path, dates=("", "", ""))
+    source = tmp_path / "tree/tree.json"
+    run_tree(selection, output=source.parent, seed=20261013)
+    output = tmp_path / "time"
+    first = run_time(source, output=output)
+    assert first["parameters"] == {"allow_unsupported": False, "dating_seed": 20261013, "keep_polytomies": True, "dating_inference_policy": "seeded_saved_topology_keep_polytomies", "topology_validation_policy": "rooted_nontrivial_internal_leafsets_root_excluded"}
+    prior = {**first, "parameters": {"allow_unsupported": False}}
+    if prior_policy == "unseeded":
+        prior["fingerprint"] = fingerprint({"tree": reference(output, source)["sha256"], "tools": first["tools"], "allow_unsupported": False})
+    else:
+        prior["parameters"] = {key: value for key, value in first["parameters"].items() if key != "topology_validation_policy"}
+        prior["fingerprint"] = fingerprint({"tree": reference(output, source)["sha256"], "tools": first["tools"], "parameters": prior["parameters"]})
+    assert first["fingerprint"] != prior["fingerprint"]
+    (output / "time.json").write_text(json.dumps(prior))
+    second = run_time(source, output=output)
+    assert second["fingerprint"] == first["fingerprint"]
+    assert second["parameters"] == first["parameters"]
+    assert json.loads((output / "time.json").read_text())["parameters"] == first["parameters"]
+
+
+def test_topology_validation_ignores_node_labels_and_lengths():
+    from io import StringIO
+    from Bio import Phylo
+    from chronoclade.time_stage.workflow import validate_rooted_topology
+    source = Phylo.read(StringIO("((a:1,b:2)original:3,c:4)root;"), "newick")
+    dated = Phylo.read(StringIO("(c:8,(b:7,a:6)renamed:5)dated;"), "newick")
+    result = validate_rooted_topology(source, dated)
+    assert result["source_clade_count"] == result["dated_clade_count"] == 1
+    assert result["preserved"]
+
+
+def test_same_tips_changed_rooted_topology_fails_before_publish(tmp_path, native_stubs, monkeypatch):
+    from io import StringIO
+    from Bio import Phylo
+    selection, _ = selection_fixture(tmp_path)
+    run_tree(selection, output=tmp_path / "tree", assess_temporal=False)
+    monkeypatch.setattr("chronoclade.time_stage.workflow.require_tools", lambda names: None)
+    def altered_dating(files, *args, **kwargs):
+        # Source is a trifurcation; retaining exact tips while adding a clade is forbidden.
+        files.time_tree.parent.mkdir(parents=True, exist_ok=True)
+        Phylo.write(Phylo.read(StringIO("((q:1,c:1):1,d:2);"), "newick"), files.time_tree, "nexus")
+    monkeypatch.setattr("chronoclade.lineage._run_dated_tree", altered_dating)
+    with pytest.raises(WorkflowError, match="changed the saved rooted topology"):
+        run_time(tmp_path / "tree/tree.json", output=tmp_path / "time", allow_unsupported=True)
+    assert not (tmp_path / "time/time.json").exists()
+    failed = next((tmp_path / "time/jobs").glob("*/job.json"))
+    assert json.loads(failed.read_text())["status"] == "failed"
+
+
+def test_topology_validation_rejects_equal_counts_with_different_clades():
+    from io import StringIO
+    from Bio import Phylo
+    from chronoclade.time_stage.workflow import validate_rooted_topology
+    source = Phylo.read(StringIO("((a,b),c);"), "newick")
+    altered = Phylo.read(StringIO("((a,c),b);"), "newick")
+    with pytest.raises(WorkflowError, match="1 saved internal clade.*1 new internal clade"):
+        validate_rooted_topology(source, altered)

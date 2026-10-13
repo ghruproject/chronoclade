@@ -117,3 +117,24 @@ def test_checked_time_reuse_avoids_execution_and_validates_gate(tmp_path, native
     with pytest.raises(WorkflowError, match="uniquely"):
         run_time_ensemble(tmp_path / "trees/tree_ensemble.json", output=tmp_path / "duplicate",
                            reuse_results=paths + paths[:1])
+
+
+@pytest.mark.parametrize("change", ["legacy", "different_seed", "resolve_polytomies"])
+def test_time_reuse_rejects_different_inference_policy(tmp_path, native_stubs, change):
+    from chronoclade.time_stage.workflow import run_time
+    selection, ensemble = selection_fixture(tmp_path, dates=("", "", ""))
+    run_tree(selection, output=tmp_path / "tree")
+    register_tree_ensemble(ensemble, [tmp_path / "tree/tree.json"], output=tmp_path / "trees")
+    run_time(tmp_path / "tree/tree.json", output=tmp_path / "time")
+    path = tmp_path / "time/time.json"
+    altered = json.loads(path.read_text())
+    if change == "legacy":
+        altered["parameters"] = {"allow_unsupported": False}
+    elif change == "different_seed":
+        altered["parameters"]["dating_seed"] += 1
+    else:
+        altered["parameters"]["keep_polytomies"] = False
+    path.write_text(json.dumps(altered))
+    with pytest.raises(WorkflowError, match="native dating inference policy or seed"):
+        run_time_ensemble(tmp_path / "trees/tree_ensemble.json", output=tmp_path / "reused", reuse_results=[path])
+    assert not (tmp_path / "reused/time_ensemble.json").exists()
