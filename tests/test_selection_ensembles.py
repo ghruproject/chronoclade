@@ -15,6 +15,8 @@ from chronoclade.selection_manifest import (
 )
 from chronoclade.selections import (
     DistanceEvidence,
+    read_distance_evidence,
+    representative_coverage,
     select_assembly_context,
     select_context_ensemble,
     selected_context_records,
@@ -59,7 +61,8 @@ def pair(a, b, raw, normalized):
     }
 
 
-def test_raw_allele_boundary_ties_union_with_pins_overrun(tmp_path):
+@pytest.mark.parametrize("distance_method", ["cgmlst", "alleles"])
+def test_raw_allele_boundary_ties_union_with_pins_overrun(tmp_path, distance_method):
     queries = [row("q1"), row("q2")]
     context = [row(i) for i in ("a", "b", "c", "d", "pin", "far")]
     distances = analysis(
@@ -72,6 +75,7 @@ def test_raw_allele_boundary_ties_union_with_pins_overrun(tmp_path):
             pair("q2", "d", 1, 0.01),
         ],
     )
+    distances["distance_method"] = distance_method
     selections, ensemble = select_context_ensemble(
         queries,
         context,
@@ -151,16 +155,61 @@ def test_missing_dates_are_retained_and_reported():
     assert selections[0]["strata_coverage"][0]["stratum"][1] == "Unknown"
 
 
-def test_distance_adapter_labels_esm2_without_cgmlst_policy():
+def test_distance_adapter_labels_snp_without_cgmlst_policy():
     evidence = DistanceEvidence(
         ({"sample_id_1": "q", "sample_id_2": "x", "distance": 0.5},),
-        method="esm2",
-        distance_definition="cosine distance",
+        method="snp",
+        distance_definition="SNP differences",
     )
     selections, _ = select_context_ensemble([row("q")], [row("x")], {"distance_evidence": evidence})
-    assert selections[0]["source_method"] == "esm2"
+    assert selections[0]["source_method"] == "snp"
     assert selections[0]["nearest_ranking"] == "supplied_distance"
-    assert selections[0]["decisions"][0]["reason"] == "esm2_neighbour:q:rank=1"
+    assert selections[0]["decisions"][0]["reason"] == "snp_neighbour:q:rank=1"
+
+
+def test_direct_dna_selection_preserves_raw_snp_ties_and_callable_sites(tmp_path):
+    records = [
+        dict(pair("q", "a", 1, 0.0001), snp_differences=8, shared_called_sites=80000),
+        dict(pair("q", "b", 3, 0.005), snp_differences=5, shared_called_sites=1000),
+        dict(pair("q", "c", 2, 0.0005), snp_differences=5, shared_called_sites=10000),
+        dict(pair("q", "unavailable", 0, 0.00001), snp_differences=None,
+             shared_called_sites=0),
+    ]
+    distance_path = tmp_path / "direct.csv"
+    with distance_path.open("w", newline="") as stream:
+        writer = csv.DictWriter(stream, fieldnames=list(records[0]))
+        writer.writeheader()
+        writer.writerows(records)
+    analysis_data = {
+        "distance_method": "direct-dna",
+        "distance_definition": "SNP differences / jointly called nucleotide sites",
+        "paths": {"pairwise_distances": str(distance_path)},
+    }
+    queries, context = [row("q", role="input")], [row(i) for i in ("a", "b", "c", "unavailable")]
+    prepared = write_dataset(
+        PreparedDataset(samples=samples_from_records(queries + context)), tmp_path / "prepared"
+    )
+    ensemble_path = write_selection_ensemble(
+        queries, context, analysis_data, dataset_manifest=prepared,
+        output=tmp_path / "selections", size=0, nearest_per_query=1,
+    )
+    ensemble = load_selection_ensemble(ensemble_path)
+    selection_path = ensemble_path.parent / ensemble["selections"][0]["path"]
+    selection = load_selection_manifest(selection_path)
+    assert selection["source_method"] == "direct-dna"
+    assert selection["source"]["method"] == "direct-dna"
+    assert selection["nearest_ranking"] == "raw_snp_differences_when_available"
+    assert selection["required_nearest_context_ids"] == ["b", "c"]
+    assert selection["nearest_neighbours"][0]["boundary_distance"] == 5
+    assert selection["nearest_neighbours"][0]["tie_expanded"]
+    evidence = read_distance_evidence(analysis_data)
+    _, coverage = representative_coverage(queries, context, ["b", "c"], evidence)
+    observed = next(item for item in coverage if item["sample_id"] == "q")
+    assert observed["ranking_metric"] == "snp_differences"
+    assert observed["nearest_value"] == 5
+    assert observed["nearest_selected_ids"] == ["b", "c"]
+    assert [item["shared_called_sites"] for item in observed["nearest_tie_evidence"]] == [1000, 10000]
+    assert [item["allele_differences"] for item in observed["nearest_tie_evidence"]] == [3, 2]
 
 
 def test_incomplete_raw_evidence_never_mixes_raw_and_normalized_ranks(tmp_path):
@@ -341,3 +390,228 @@ def test_selection_date_strata_use_validated_intervals_not_raw_prefixes():
     assert {tuple(row['stratum']) for row in audit['strata_coverage']} == {
         ('unassigned','2018..2020','UK','Unknown'), ('unassigned','Unknown','UK','Unknown')}
     assert audit['missing_metadata']['collection_date'] == ['future','invalid']
+
+
+def test_full_pool_coverage_records_raw_distance_ties_and_noncomparable_samples(tmp_path):
+    queries = [row("q", role="input")]
+    context = [row(ident) for ident in ("x", "y", "z", "orphan")]
+    records = (
+        pair("q", "x", 1, 0.1) | {"shared_called_loci": 10, "scheme_loci": 100},
+        pair("q", "y", 1, 0.01) | {"shared_called_loci": 100, "scheme_loci": 100},
+        pair("q", "z", 3, 0.03) | {"shared_called_loci": 100, "scheme_loci": 100},
+        pair("x", "z", 2, 0.02) | {"shared_called_loci": 100, "scheme_loci": 100},
+        pair("y", "z", 2, 0.2) | {"shared_called_loci": 10, "scheme_loci": 100},
+    )
+    dataset = write_dataset(
+        PreparedDataset(samples=samples_from_records(queries + context)), tmp_path / "prepared"
+    )
+    ensemble_path = write_selection_ensemble(
+        queries,
+        context,
+        {"distance_evidence": DistanceEvidence(records)},
+        dataset_manifest=dataset,
+        output=tmp_path / "selection_bundle",
+        size=0,
+        nearest_per_query=1,
+    )
+    ensemble = load_selection_ensemble(ensemble_path)
+    selection_path = ensemble_path.parent / ensemble["selections"][0]["path"]
+    selection = load_selection_manifest(selection_path)
+    coverage = selection["representative_coverage"]
+    assert coverage["scope"] == "full_available_selection_pool"
+    assert coverage["sample_count"] == 5
+    assert coverage["artifact"]["sha256"]
+
+    with (selection_path.parent / coverage["artifact"]["path"]).open(newline="") as stream:
+        coverage_rows = {item["sample_id"]: item for item in csv.DictReader(stream)}
+    assert set(coverage_rows) == {"q", "x", "y", "z", "orphan"}
+    z = coverage_rows["z"]
+    assert z["selected"] == "False"
+    assert z["ranking_metric"] == "allele_differences"
+    assert z["nearest_value"] == "2"
+    assert json.loads(z["nearest_selected_ids"]) == ["x", "y"]
+    ties = json.loads(z["nearest_tie_evidence"])
+    assert [(item["sample_id"], item["allele_differences"], item["shared_called_loci"])
+            for item in ties] == [("x", 2, 100), ("y", 2, 10)]
+    assert coverage_rows["orphan"]["coverage_status"] == "no_comparable_selected_representative"
+
+    coverage_path = selection_path.parent / coverage["artifact"]["path"]
+    coverage_path.write_text(coverage_path.read_text() + "tampered\n")
+    with pytest.raises(WorkflowError, match="representative_coverage.artifact.sha256"):
+        load_selection_manifest(selection_path)
+
+
+def test_full_pool_coverage_normalizes_csv_distance_fields(tmp_path):
+    path = tmp_path / "string_distances.csv"
+    with path.open("w", newline="") as stream:
+        writer = csv.DictWriter(
+            stream,
+            fieldnames=[
+                "sample_id_1", "sample_id_2", "distance", "allele_differences",
+                "shared_called_loci", "call_overlap",
+            ],
+        )
+        writer.writeheader()
+        writer.writerows([
+            {"sample_id_1": "q", "sample_id_2": "r1", "distance": "0.1",
+             "allele_differences": "2", "shared_called_loci": "20", "call_overlap": "0.2"},
+            {"sample_id_1": "q", "sample_id_2": "r2", "distance": "0.05",
+             "allele_differences": "2", "shared_called_loci": "10", "call_overlap": "0.1"},
+        ])
+    evidence = read_distance_evidence({"paths": {"pairwise_distances": path}})
+    summary, rows = representative_coverage(
+        [row("q")], [row("r1"), row("r2")], ["r1", "r2"], evidence,
+        ranking_metric="raw_allele_differences_when_available",
+    )
+    q = next(item for item in rows if item["sample_id"] == "q")
+    assert q["nearest_value"] == 2
+    assert [item["shared_called_loci"] for item in q["nearest_tie_evidence"]] == [20, 10]
+    assert [item["scheme_loci"] for item in q["nearest_tie_evidence"]] == [100, 100]
+    assert [item["distance"] for item in q["nearest_tie_evidence"]] == [0.1, 0.05]
+    assert summary["nearest_value_quantiles"]["median"] == 0
+
+
+def test_binary_coverage_uses_raw_ties_and_keeps_unavailable_rows(tmp_path):
+    from chronoclade.cgmlst.scale_distance import write_distances
+
+    loci = ["a", "b", "c", "d"]
+    definitions = [
+        ("q", "input", [1, 1, 1, 1], "db-a"),
+        ("x", "context", [2, 1, 1, 1], "db-a"),
+        ("y", "context", [1, 2, 1, 1], "db-a"),
+        ("unavailable", "context", [1, 1, 1, 2], "db-b"),
+    ]
+    records = [
+        {
+            "sample_id": ident,
+            "role": role,
+            "origin": "local" if role == "input" else "context",
+            "country": "UK",
+            "species": "Klebsiella pneumoniae",
+            "cgmlst_scheme": "test",
+            "cgmlst_scheme_version": "1",
+            "cgmlst_database_sha256": database,
+            "cgmlst_loci": loci,
+            "cgmlst_profile": dict(zip(loci, calls)),
+        }
+        for ident, role, calls, database in definitions
+    ]
+    evidence, _, _ = write_distances(records, tmp_path / "binary", min_overlap=0.9)
+    queries, context = records[:1], records[1:]
+    summary, rows = representative_coverage(queries, context, ["x", "y"], evidence)
+    by_id = {record["sample_id"]: record for record in rows}
+    assert summary["ranking_metric"] == "allele_differences"
+    assert by_id["q"]["nearest_value"] == 1
+    assert by_id["q"]["nearest_selected_ids"] == ["x", "y"]
+    assert [row["shared_called_loci"] for row in by_id["q"]["nearest_tie_evidence"]] == [4, 4]
+    assert by_id["unavailable"]["coverage_status"] == "no_comparable_selected_representative"
+
+    dataset = write_dataset(PreparedDataset(samples=samples_from_records(records)), tmp_path / "prepared")
+    ensemble = write_selection_ensemble(
+        queries,
+        context,
+        {"distance_evidence": evidence},
+        dataset_manifest=dataset,
+        output=tmp_path / "binary_selection",
+        size=0,
+        nearest_per_query=1,
+    )
+    selection_path = ensemble.parent / load_selection_ensemble(ensemble)["selections"][0]["path"]
+    selection = load_selection_manifest(selection_path)
+    assert selection["representative_coverage"]["sample_count"] == 4
+    coverage_path = selection_path.parent / selection["representative_coverage"]["artifact"]["path"]
+    with coverage_path.open(newline="") as stream:
+        coverage_rows = {row["sample_id"]: row for row in csv.DictReader(stream)}
+    assert {ident for ident, row in coverage_rows.items() if row["selected"] == "True"} == {"q", "x", "y"}
+    assert coverage_rows["unavailable"]["coverage_status"] == "no_comparable_selected_representative"
+    with selection_path.open() as stream:
+        persisted = json.load(stream)
+    assert persisted["representative_coverage"]["artifact"]["sha256"]
+
+
+def test_binary_full_pool_coverage_keeps_only_linear_output_memory():
+    from chronoclade.matrix_distances import BinaryDistanceEvidence
+
+    count = 15_000
+    ids = [f"s{index:05d}" for index in range(count)]
+    evidence = object.__new__(BinaryDistanceEvidence)
+    evidence.method = "cgmlst"
+    evidence.distance_definition = "fraction of mismatching jointly called cgMLST loci"
+    evidence.sample_ids = tuple(ids)
+    lookups = []
+
+    def get(left, right):
+        lookups.append((left, right))
+        return {
+            "distance": 0.1,
+            "allele_differences": 1,
+            "shared_called_loci": 10,
+            "scheme_loci": 10,
+            "call_overlap": 1.0,
+        }
+
+    evidence.get = get
+    rows = [dict(sample_id=ident) for ident in ids]
+    summary, coverage = representative_coverage(rows[:1], rows[1:], [ids[0]], evidence)
+    assert len(coverage) == count
+    assert len(lookups) == count - 1
+    assert summary["sample_count"] == count
+    assert coverage[0]["coverage_status"] == "selected_identity_only"
+
+
+def test_explicit_reserve_keeps_all_nearest_ties_and_optional_variation(tmp_path):
+    queries = [row("q", role="input")]
+    context = [row(i) for i in ("a", "b", "c", "far1", "far2", "far3")]
+    evidence = {"distance_evidence": DistanceEvidence(tuple(pair("q", i, 1, 0.01) for i in "abc"))}
+    selections, ensemble = select_context_ensemble(
+        queries, context, evidence, size=1, nearest_per_query=1,
+        representative_reserve=1, replicates=3,
+    )
+    assert ensemble["distinct_selections"] == 3
+    for selection in selections:
+        assert selection["required_nearest_context_ids"] == ["a", "b", "c"]
+        assert selection["context_budget"] == 1
+        assert selection["budget_overrun"] == 2
+        assert selection["effective_context_budget"] == 4
+        assert len(selection["selected_context_ids"]) == 4
+    dataset = write_dataset(PreparedDataset(samples=samples_from_records(queries + context)), tmp_path / "prepared")
+    path = write_selection_ensemble(queries, context, evidence, dataset_manifest=dataset,
+                                   output=tmp_path / "reserved", size=1, nearest_per_query=1,
+                                   representative_reserve=1)
+    ensemble = load_selection_ensemble(path)
+    selection_path = path.parent / ensemble["selections"][0]["path"]
+    saved = load_selection_manifest(selection_path)
+    saved["representative_reserve"] = 0
+    selection_path.write_text(json.dumps(saved))
+    with pytest.raises(WorkflowError, match="effective_context_budget"):
+        load_selection_manifest(selection_path)
+
+
+@pytest.mark.parametrize("reserve", [-1, True, 1.5])
+def test_invalid_representative_reserve_rejected(reserve):
+    with pytest.raises(WorkflowError, match="Representative reserve"):
+        select_context_ensemble([], [], {}, representative_reserve=reserve)
+
+
+def test_evidence_snapshot_is_independent_and_fallback_cleans_partial_file(tmp_path, monkeypatch):
+    import chronoclade.selection_manifest as manifests
+
+    source = tmp_path / "source.npy"
+    source.write_bytes(b"original matrix data")
+    destination = tmp_path / "snapshot.npy"
+    method = manifests.copy_evidence_snapshot(source, destination)
+    assert method in {"copy_on_write", "copy"}
+    assert source.stat().st_ino != destination.stat().st_ino
+    source.write_bytes(b"changed")
+    assert destination.read_bytes() == b"original matrix data"
+
+    def failed_clone(original, cloned):
+        cloned.write_bytes(b"partial")
+        return False
+
+    monkeypatch.setattr(manifests, "_clone_file", failed_clone)
+    fallback = tmp_path / "fallback.npy"
+    assert manifests.copy_evidence_snapshot(source, fallback) == "copy"
+    assert fallback.read_bytes() == b"changed"
+    with pytest.raises(WorkflowError, match="already exists"):
+        manifests.copy_evidence_snapshot(source, fallback)

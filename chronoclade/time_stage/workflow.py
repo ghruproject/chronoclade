@@ -152,6 +152,7 @@ def run_time(tree_manifest, *, output, force=False, allow_unsupported=False):
             write_report(
                 job / "report.html",
                 title="Time-scaled phylogeny" if result["dated_tree"] else "Dating assessment",
+                report_label="TIME TREE ANALYSIS REPORT",
                 result=result,
                 rows=rows,
                 network=network,

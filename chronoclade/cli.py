@@ -11,7 +11,6 @@ from rich.console import Console
 from rich.table import Table
 
 from chronoclade import __version__
-from chronoclade.esm2_cli import esm2_command
 from chronoclade.prepare_cli import prepare_command
 from chronoclade.cgmlst.cli import cgmlst_command
 from chronoclade.execution.cli import job_command
@@ -26,8 +25,6 @@ app = typer.Typer(
 )
 console = Console()
 
-# Optional inference dependencies are imported only when this command runs.
-app.command("esm2")(esm2_command)
 app.command("prepare")(prepare_command)
 app.command("cgmlst")(cgmlst_command)
 app.command("job")(job_command)

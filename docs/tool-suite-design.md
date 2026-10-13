@@ -7,34 +7,46 @@ Design specification and implementation status, 10 October 2026.
 | Component | Implemented | Validation or remaining boundary |
 | --- | --- | --- |
 | `prepare` | Saved bundles, assemblies, accessions and Pathogenwatch collection IDs/URLs; exact metadata enrichment; configured typing and reference readiness | A live 23-genome collection was retrieved. Pasteur/HierCC reference access remains external. |
-| `cgmlst` | Complete matching profile context, explicit LIN5/6/7 or HierCC partitions, full NJ/ordination, neighbours and group sensitivity | Synthetic 10,000 × 629 full-profile analysis was exercised; large blocks use compiled distances and RapidNJ. |
-| `esm2` | Genome-level matched-locus distances, ordination, neighbours, grouping, descriptive date diagnostics and shared selections | Real 8M/35M inference exercised on CPU/MPS with controlled sequence fixtures; natural within-lineage biological adequacy remains unvalidated. Allele catalogue acquisition requires supplied reference data. |
-| Selections | Mandatory inputs/pins/raw-distance nearest ties, portable checked binary or tabular evidence, reproducible alternatives, coverage/overlap | Alternative selections describe sensitivity, not population confidence intervals. |
+| `cgmlst` | Allele profiles by default; optional direct DNA distances over the same called cgMLST genes; complete matching profile context, explicit LIN5/6/7 or HierCC partitions, full NJ/ordination, neighbours and group sensitivity | Synthetic 10,000 × 629 allele-profile analysis was exercised; large blocks use compiled distances and RapidNJ. Direct DNA mode requires its own report and denominator validation. |
+| Selections | Mandatory inputs/pins/raw-distance nearest ties, portable checked binary or tabular evidence, reproducible alternatives, coverage/overlap | Each alternative records full-pool nearest-representative coverage. Alternative selections describe sensitivity, not population confidence intervals. |
 | `tree` | Exact selected-assembly acquisition, SNP and recombination-corrected trees, independent reports and clustered date assessment | Genuine native runs use SKA, IQ-TREE and ClonalFrameML. |
-| `time` | Independent saved-tree dating, evidence gates, own report and shared-anchor ensemble comparison | Missing/unsupported temporal evidence produces an explicit unsupported report. |
-| Shared reports | Approved report style and location network, metadata ordination controls, stage results and downloads | Embedding distances never become ancestral-state or mutation-rate evidence. |
+| `time` | Independent saved-tree dating, evidence gates, own report and shared-anchor ensemble comparison | Automatic ensemble execution/reuse and shared-anchor interval forests retain missing/unsupported runs explicitly. |
+| Shared reports | Approved report style and location network, metadata ordination controls, stage results and downloads | Each report labels its input method and distance units. |
 | Execution | Isolated command environments, checked local jobs and generated SLURM scripts; tree/time resume and invalidation | No live SLURM cluster was available to test submission. cgMLST owns a fresh output directory per revised run. |
 
 See the [independent suite](independent-suite.md), [large-block backend](cgmlst-scale.md),
-[tree stage](tree-stage.md), [time stage](time-stage.md) and
-[genome ESM2 analysis](esm2-genomes.md) for executable contracts and validation details.
+[tree stage](tree-stage.md), [time stage](time-stage.md), and the
+[parked sequence-embedding research notes](research/parked-sequence-embeddings.md)
+for executable contracts and the archived research record.
 
 ## Public interface
 
-Five analysis commands, each independently executable and each owning its output.
-cgmlst and esm2 are alternative exploration/selection routes after prepare:
+Four analysis commands, each independently executable and each owning its output.
+cgmlst accepts categorical allele profiles by default, with direct DNA comparison
+as an explicit alternative within the same called cgMLST genes:
 
 ```text
 chronoclade prepare <input> --species <species> --out prepared/
 chronoclade cgmlst prepared/dataset.json --out cgmlst/
-chronoclade esm2 prepared/dataset.json --out esm2/
-chronoclade tree cgmlst/<block>/selections/selection-001.json --out tree/
+chronoclade tree cgmlst/<block>/selection_bundle/selections/selection-001.json --out tree/
 chronoclade time tree/tree.json --out time/
 ```
 
-Tree accepts the same selection contract from either cgmlst or esm2. Running both
-exploration routes on a frozen dataset permits a direct comparison of their
-selected representatives and downstream SNP/dating results.
+For the direct DNA mode, cgMLST genes must have an explicit allele catalogue:
+
+```text
+chronoclade cgmlst prepared/dataset.json --distance-method direct-dna \
+  --allele-catalogue catalogue/catalogue.json --distance-threshold 0.00001 \
+  --out cgmlst-dna/
+```
+
+The direct DNA mode compares equal-length homologous alleles per cgMLST gene, counts
+sitewise A/C/G/T differences, and divides by jointly compared nucleotide sites.
+Missing and unequal-length loci are excluded per pair, subject to a minimum
+overlap, and the report audits that coverage. It is a comparison over the
+cgMLST genes; it is not a genome-wide or recombination-corrected SNP analysis.
+Tree accepts the same selection contract from either distance method. The saved
+selection evidence records which method and units produced it.
 
 Assemblies, accession lists with metadata, and Pathogenwatch collection IDs or
 URLs are prepare inputs. Explicit input options will disambiguate these forms.
@@ -49,26 +61,25 @@ not submit those scripts, and execution on a real SLURM cluster remains untested
 
 ### Package and dependency boundaries
 
-Keep one repository, version and `chronoclade` CLI, with separate stage packages
-for prepare, cgmlst, esm2, tree and time. Shared code is limited to dataset and
+Keep one repository, version and `chronoclade` CLI, with four stage packages
+for prepare, cgmlst, tree and time. Shared code is limited to dataset and
 manifest contracts, identity/metadata handling, context retrieval and partition
 policy, selection manifests, execution/caching and report components. Numerical
 and scientific implementations belong to their owning stage. Shared services
-must not import stage implementations or optional model libraries.
+must not import stage implementations.
 
 Use stage-specific installation environments/features and lazy imports. The CLI
-and cgmlst must work without PyTorch, model weights or SNP/dating executables.
+and cgmlst must work without tree or dating executables.
 Prepare needs typing tools only when it actually calls profiles/assignments;
 importing existing typing does not require them. Tree needs its alignment,
 IQ-TREE, ClonalFrameML and PHIPack tools, plus temporal-testing dependencies when
-that assessment is requested. Time needs its dating backend. esm2 alone requires
-the validated ESM2 inference backend, PyTorch and explicitly acquired weights.
+that assessment is requested. Time needs its dating backend.
 
 Python optional extras do not install arbitrary native executables; distinguish
-them from Pixi/managed tool environments. The Pixi prepare, cgmlst, tree and time environments isolate the command dependencies; the default remains a development environment. Model/GPU dependency
-conflicts can be isolated in an esm2 worker environment using the same saved
-contracts. Pin model weights, extraction settings and runtime versions. No model
-download occurs during installation of the base package or CLI startup.
+them from Pixi/managed tool environments. The Pixi prepare, cgmlst, tree and time
+environments isolate the command dependencies; the default remains a development
+environment. The base package does not download stage-specific databases or
+native executables during installation or CLI startup.
 
 ## Shared dataset contract
 
@@ -100,7 +111,7 @@ Credentials are referenced by configuration, never copied into bundles.
 ## Concrete ownership and reuse
 
 The following is the target dependency graph, not a description of completed
-migration. Arrows mean an allowed Python dependency. The five stage runners
+migration. Arrows mean an allowed Python dependency. The four stage runners
 exchange saved manifests; they do not call each other's runners.
 
 ```mermaid
@@ -108,7 +119,6 @@ flowchart TD
     CLI[CLI: argument validation and lazy stage dispatch]
     PREP[prepare: input resolution and typing readiness]
     CG[cgmlst: categorical distances, NJ, groups and allele diagnostics]
-    ESM[esm2: sequences, model inference and embedding analysis]
     TREE[tree: reference, alignment, recombination and temporal assessment]
     TIME[time: dating and ensemble comparison]
     DATA[datasets: schemas, identity, metadata and bundle I/O]
@@ -118,10 +128,9 @@ flowchart TD
     LOC[location: biological-tree reconstruction, metrics and renderers]
     REP[reports: theme, components, assets and downloads]
     PROVIDER[providers: Pathogenwatch, ENA and assembly retrieval]
-    CLI --> PREP & CG & ESM & TREE & TIME
+    CLI --> PREP & CG & TREE & TIME
     PREP --> DATA & EXEC & PROVIDER & REP
     CG --> DATA & CTX & SEL & EXEC & LOC & REP
-    ESM --> DATA & CTX & SEL & EXEC & LOC & REP
     TREE --> DATA & EXEC & PROVIDER & LOC & REP
     TIME --> DATA & EXEC & LOC & REP
     CTX --> DATA & PROVIDER
@@ -137,11 +146,11 @@ Each box has an owner and a narrow responsibility:
 | Owner | Canonical responsibilities | Must stay elsewhere |
 | --- | --- | --- |
 | `datasets/` | Manifest validation, typed table access, immutable sample IDs, crosswalk resolution, date intervals, metadata precedence and artifact references | Provider requests, distances, plotting and native commands |
-| `providers/` | Source-specific parsing, pagination, raw snapshots, exact metadata links and validated assembly acquisition | Partition choice, sample selection, model inference and reports |
+| `providers/` | Source-specific parsing, pagination, raw snapshots, exact metadata links and validated assembly acquisition | Partition choice, sample selection, distance analysis and reports |
 | `context/` | Same-ST discovery, scheme/version compatibility, explicit cgLIN/HierCC partition policy and retrieval coverage | Automatic deepest-prefix narrowing and representative selection |
-| `selection/` | Mandatory IDs, pins, distance-aware representatives, quotas, reproducible alternatives and coverage evidence | cgMLST/ESM2 distance calculation, tree building and clock-fit optimisation |
+| `selection/` | Mandatory IDs, pins, distance-aware representatives, quotas, reproducible alternatives and coverage evidence | cgMLST distance calculation, tree building and clock-fit optimisation |
 | `execution/` | Input/tool fingerprints, stage jobs, bounded resources, local/SLURM execution and atomic manifest publication | Scientific gates, provider identities and HTML copying |
-| `location/` | Frozen-tree state-change reconstruction, uncertainty, centralities, metadata composition, palette and static/interactive views | cgLIN partition discovery, embedding inference and stage orchestration |
+| `location/` | Frozen-tree state-change reconstruction, uncertainty, centralities, metadata composition, palette and static/interactive views | cgLIN partition discovery and stage orchestration |
 | `reports/` | Existing theme, labelled figure/table/download components, report pages and indexes | Computation, metadata inference and provider access |
 | Stage package | Its scientific engine, settings, result schema adapter and runner | Another stage's engine or report-private helpers |
 
@@ -159,8 +168,8 @@ namespace identity and compatibility. The diagram's location, selection and repo
 owners map to those modules. `profile_network.py` remains the cgLIN-specific view
 adapter while common reconstruction/rendering moves beneath `location_network/`.
 This is a concrete first boundary, not a completed stage-package migration.
-Provider/context separation, independent tree/time runners and the complete
-genome-level esm2 route remain subsequent work.
+Provider/context separation and independent tree/time runners remain subsequent
+work.
 
 The former provider-owned date decoder is now in `metadata_dates.py`, imported
 by both provider normalization and prepared-data adaptation. Scheme/version/
@@ -184,10 +193,10 @@ in every downstream renderer.
 | Identity resolution | One internal ID maps to typed provider/accession aliases and a resolution status. Ambiguous aliases are retained as ambiguous, never resolved by nearest profile, filename similarity or first match. Identical profiles do not imply identical specimens. |
 | Metadata value | Value, raw source value, provider/source ID, precedence, conflict evidence and availability status. Dates use start/end/precision plus eligibility reasons. Unknown location/host remains a visible missing category. |
 | Partition manifest | Source dataset hash, scheme/version/database scope, chosen policy/depth, disjoint exact IDs, unresolved inputs, requested/retrieved/usable counts and completeness status. A nested prefix is a child, not an overlapping peer block. |
-| Distance evidence | Ordered IDs, metric identifier and units, compatible scheme/model provenance, callable or missing-data evidence and artifact hash. Allele distances retain raw differences and jointly called denominators; embedding distances have their own units. |
+| Distance evidence | Ordered IDs, metric identifier and units, compatible scheme/database provenance, callable or missing-data evidence and artifact hash. Allele distances retain raw differences and jointly called denominators; direct DNA distances retain sitewise SNP counts and jointly compared nucleotide denominators. |
 | Selection manifest | Source dataset/partition hashes, source method and distance evidence hash, all mandatory input/pin/nearest IDs, ordered selected IDs, per-ID reasons, seeds, quotas and budget overruns. Tree consumes these exact IDs without replacement or rerouting. |
 | Stage job/result | Input manifest hashes, stage/parameter/tool versions, execution resources, artifact paths/hashes and explicit pending/running/complete/failed status. Unsupported scientific evidence is a completed assessment with a reason, not an invented output. |
-| Biological tree evidence | Tree path/hash, exact tips, input dataset/selection hash, source method and branch units, rooting policy/provenance and exclusions. Its kind is conventional allele NJ, assembly SNP/corrected phylogeny or dated biological tree; embedding coordinates are not a biological tree. |
+| Biological tree evidence | Tree path/hash, exact tips, input dataset/selection hash, source method and branch units, rooting policy/provenance and exclusions. Its kind is conventional cgMLST NJ, assembly SNP/corrected phylogeny or dated biological tree. |
 | Location result | Biological-tree source evidence, exact analysed IDs, metadata field/known/unknown counts, root and reconstruction method, coherent displayed history, directed counts, exact pair ranges, centrality definition and root-sensitivity audit. Nearest-observation edges are separately typed and labelled. |
 | Ensemble manifest | Independent selection/run manifest references and declared common anchor/target IDs. Include failed/unsupported runs and assessable denominators; never compare mutable run-local cluster numbers as shared identities. |
 
@@ -198,7 +207,7 @@ leave the previous complete bundle readable. A report receives validated stage
 results and artifact references, rather than discovering science from whatever
 files happen to exist in a directory.
 
-### One location component for cgmlst, esm2 and tree
+### One location component for cgmlst and tree
 
 Reuse the approved interaction, country colours, graph metrics, optimal-history
 count ranges and established report style. Extraction changes ownership, not the
@@ -208,15 +217,14 @@ and a recombination-adjusted SNP tree correctly.
 
 Use two explicit inputs to location rendering:
 
-1. A metadata composition table or ordination with linked IDs. Every stage,
-   including esm2, can show country/region/host distributions and metadata-coloured
+1. A metadata composition table or ordination with linked IDs. The cgmlst and
+   tree reports can show country/region/host distributions and metadata-coloured
    points without reconstructing ancestral states.
 2. A `BiologicalTreeEvidence` and its matched metadata, used by a separately called
    reconstruction engine. cgmlst supplies its full comparable conventional NJ;
-   tree supplies its selected-sample corrected SNP tree. esm2 can supply a frozen
-   conventional cgMLST baseline and label that source, or omit the reconstructed
-   network. ESM2 vectors, embedding-space coordinates and an embedding NJ do not
-   satisfy this input contract.
+   tree supplies its selected-sample corrected SNP tree. Direct DNA distances
+   within cgMLST genes do not supply ancestral-state evidence; the location
+   reconstruction uses the declared biological tree source and labels it.
 
 The shared reconstruction engine does not infer sample groups. Stage/context
 owners supply the intended whole-block IDs and optional declared views. Report
@@ -230,7 +238,7 @@ Share labels, palettes and rendering contracts where valid; keep distinct
 method-specific adapters and uncertainty fields. Do not rename marginal support
 as an exact range or force two products into a generic ambiguous `confidence`
 field. Nearest-country connections remain observations with their own metric;
-SNP/embedding connections never inherit an allele-difference label.
+SNP connections never inherit an allele-difference label.
 
 ## prepare
 
@@ -293,17 +301,21 @@ remain visible in the index and preparation audit.
   multiplicities and metadata; the complete Newick remains downloadable.
 - The existing approved location state-change network, including its interaction,
   centrality metrics and uncertainty. It uses the full comparable block.
-- PCoA of categorical allele distances, retaining all samples. Point shape or
+- NJ-tree distance MDS by default, with direct profile-distance PCoA available
+  for comparison, retaining all samples. Negative NJ branches are zeroed only
+  for the ordination calculation and audited; the saved tree stays unchanged.
+  Hover labels identify accessions and overlapping samples. Point shape or
   outline distinguishes input/context; colour toggles between country/region,
   collection date, host and genetic cluster. Unknown values remain visible.
 - Root-to-tip date regression with the fitted line, root method, dated count,
   date bounds, slope, fit and uncertainty diagnostics.
 - Genetic groups, their country/host/year breakdowns and separation evidence.
-- Nearest public relatives per input, with raw allele differences, jointly called
-  loci, normalized distance, ties, date, location, host and lineage membership.
+- Nearest public relatives per input, with the selected method's raw allele
+  mismatches or DNA SNP count, its jointly called locus/site denominator,
+  normalized distance, ties, date, location, host and lineage membership.
 - One or more representative selections for subsequent tree analyses.
 
-PCoA is the correct name for the existing distance-based ordination. Numeric
+PCoA is classical MDS, the method used for both distance-based projections. Numeric
 allele identifiers are categorical labels and are not fed to ordinary numeric PCA.
 
 ### Root-to-tip units and interpretation
@@ -416,103 +428,34 @@ tolerance and coverage, rather than selecting the runs with the best clock fit.
 The default 50-context budget is a starting resource setting, not a guarantee
 of adequate representation for a block of 10,000 genomes.
 
-## esm2: optional sequence-embedding exploration
+## cgmlst distance methods
 
-esm2 consumes the same prepared dataset and shared public-context/partition
-policy as cgmlst. It resolves actual allele DNA sequences from compatible
-catalogues or retained caller outputs, translates valid coding sequences and
-embeds unique proteins once. Sequence availability and translation failures are
-audited; allele IDs/hashes alone cannot reconstruct a sequence. Catalogue
-enrichment can be requested during preparation and cached for subsequent runs.
+Allele profiles are the default because they are the module's core input and
+retain the established categorical comparison. Users may select direct DNA
+comparison when the sequence for each called cgMLST allele is available in a
+compatible allele catalogue. This mode compares only those cgMLST genes.
 
-Preserve locus identity when building genome representations, explicit
-missing-locus masks and model provenance. Do not silently average away the small
-number of variable loci or treat missing embeddings as ordinary zero vectors.
-Save vectors, embedding distances, exploratory groups, nearest neighbours and
-metadata-linked visualisations in an independent report using the existing
-style. Export the same selection and ensemble schemas as cgmlst, with the source
-method, distance definition and selection evidence recorded.
+For each gene and sample pair, compare the two equal-length homologous allele sequences,
+count sitewise differences at A/C/G/T positions, and divide by jointly compared
+nucleotide sites. Exclude missing calls, missing sequences and unequal-length
+loci for that gene pair; reject catalogue sequences containing non-ACGT bases.
+Require an explicit nucleotide-fraction cutoff, configured minimum overlap and save
+per-pair callable-site coverage and exclusions. Summarize raw SNP counts and
+callable denominators alongside normalized distances. Neighbour ranking uses
+raw SNP counts, retaining ties.
 
-Compatible outputs mean a common dataset/selection interface and report
-structure, not interchangeable scientific units. Embedding distances are not
-allele differences, SNP substitutions or changes/year. Until validated, an
-embedding NJ/tree, clock slope or ancestral-state network is not substituted for
-the approved allele-based network. If that network is included in an esm2 report,
-calculate it from the conventional cgMLST NJ baseline and label its source.
+The report accepts either distance evidence and labels the method, units,
+sequence catalogue provenance, and denominator. Allele reports show allele
+mismatches, shared called loci and mismatch fractions. Direct DNA reports show
+sitewise SNP counts, jointly compared nucleotide sites and normalized DNA
+distances. Plot, tree, grouping, selection and downloadable evidence must all
+use the declared input distance consistently. Do not describe these counts as
+genome-wide SNP distances or recombination-corrected phylogeny; those analyses
+belong to the assembly-based tree stage.
 
-Benchmark allele distances, DNA-sequence distances and ESM2 representations on
-the same frozen samples. Assess corrected SNP neighbour/cluster agreement,
-missing-locus robustness, synonymous-variation loss and selection coverage.
-Use separate downstream tree/time outputs to compare selection strategies.
-Keep the module experimental until the relevant within-lineage performance is
-demonstrated. Model inference and structure prediction are distinct; this
-module needs embeddings, not ESMFold structure prediction.
-
-### Descriptive collection-date comparison
-
-The implemented optional report accepts a prepared dataset, validated saved
-protein embeddings and explicit sample–locus–record mappings. It preserves the
-established full-report stylesheet. Automatic allele acquisition/translation,
-genome clustering and selection remain outside this implementation.
-
-Keep two named panels and their scientific units distinct. The conventional
-cgMLST panel shows rooted NJ root-to-tip distance in mismatch fractions on a
-fixed common callable-locus denominator; its descriptive slope is mismatch
-fraction/year. The protein panel shows mean per-locus cosine distance to a fixed
-real reference sample on a frozen callable protein panel; its slope is mean
-locus cosine distance/year. Use the same real reference as the cgMLST tip root
-where that reference belongs to the cohort. Reference and locus-panel selection
-are independent of dates. Compatible cgMLST cohorts are plotted separately and
-unavailable cohorts retain their status rather than borrowing another tree.
-
-Share location colours and distinguish input/context samples by marker shape and
-outline. Show collection-date interval bars, midpoint fitted lines and residuals.
-Retain undated finite distances separately and export every sample row, missing
-locus and date exclusion. Require three distinct date midpoints for a fit;
-constant distances retain slope zero and explicitly undefined correlation/R².
-Record prepared/mapped/eligible/dated counts, root/reference selection, callable
-loci, model/checkpoint/runtime provenance, and scheme/database versions. Provide
-CSV/JSON evidence and SVG/PNG figures beside the offline HTML report.
-
-The comparison is exploratory and has no formal temporal-signal gate,
-confidence intervals, p-values or embedding-based ancestry/TMRCA. Date bars
-describe collection precision. Synonymous DNA changes producing identical
-proteins are invisible to embeddings; a protein distance/date slope is not a
-substitution rate. Formal temporal testing and dating remain the conventional
-assembly-based tree/time route.
-
-### Laptop benchmark and SLURM execution
-
-Implement the optional embedding engine separately from its performance study.
-Compare ESM2 8M and 35M on the same representative protein allele sequences,
-using CPU and Apple MPS where available. Record hardware, runtime versions,
-model/checkpoint hashes, sequence-length distribution, token budget, batching,
-precision, cold model-loading time, warm inference throughput, process memory
-and accelerator memory where measurable. Synchronize accelerator operations
-before timing. Benchmark fresh embeddings separately from cached reuse; never
-present cache speed as model inference speed.
-
-Embed unique protein sequences once and preserve their sample/locus mapping.
-Include closely related variants and identical proteins from synonymous DNA
-alleles. Runtime alone cannot establish biological adequacy; benchmark neighbour
-and cluster preservation separately before assigning a scientific default.
-Use the laptop runtime/memory measurements to recommend an easy 8M or 35M
-starting setting, and retain explicit model selection. Current local hardware
-is an Apple M1 Pro with 32 GiB unified memory. MPS compatibility must be
-exercised, not inferred from PyTorch's general Apple support.
-
-The same engine supports explicit CPU, MPS and CUDA devices with an audited
-automatic choice. Explicitly requested unavailable devices fail clearly;
-automatic fallback records the actual device. SLURM runs the ordinary command
-in a batch job, with user/site configuration for partition, account, GPU request,
-CPU threads, memory and wall time. CPU execution does not require a GPU node.
-Prepare checkpoint weights and the runtime on a login/staging node; compute-node
-inference can run offline using those local checkpoints and input files.
-For GPU work, allocate one GPU per inference worker and shard unique-sequence
-batches through explicit manifests when using arrays. Give workers separate
-output/cache namespaces and assemble validated shards afterwards. Keep model
-loading/cache costs and missing/failed shards visible. A documented SLURM script
-is not a claim that a real cluster run has been tested.
+The prior sequence-embedding experiments are recorded in the
+[parked research notes](research/parked-sequence-embeddings.md). They are not an
+active stage, command, report mode or dependency.
 
 ## tree: assembly-based, recombination-adjusted analysis
 
@@ -550,6 +493,12 @@ and recorded. A failed dating run does not remove valid tree or cgMLST products.
 
 ## Report presentation
 
+For cgLIN organisms, primary report groups and representative-selection strata
+use reported same-scheme cgLIN level-7 prefixes within the context block. The
+prefixes are displayed explicitly and unassigned codes remain unassigned.
+Additional complete-linkage distance-cutoff clusters are supplementary diagnostics;
+the exploratory 2% default must not define the main displayed groups.
+
 Retain the established full-report visual style and the approved interactive
 network. Reports are result sections with named plots/tables, dataset counts,
 units, legends and downloads. Remove the question-and-answer narrative and do
@@ -558,6 +507,25 @@ not reintroduce REP labels. Scientific interpretation can be developed later.
 Prepare has a concise input/readiness audit; cgmlst, tree and time each have their
 own analysis report. The partition index links the per-block reports and their
 available selections. Alternative tree/time analyses have separate directories.
+
+The cgMLST group report follows a compact result flow:
+
+1. Combined input/context dataset: country totals, optional region/NUTS2,
+   collection-year and host breakdowns, and metadata coverage.
+2. Full usable-profile NJ tree and distance PCoA, retaining dataset markers and
+   location/host/date colour choices. Nearest relatives and the exploratory
+   date regression expand beneath these figures.
+3. One interactive state network, selectable by location or host. Missing host
+   metadata and insufficient state diversity remain explicit. PNG exports use
+   the current display; interactive HTML exports retain layout and view options.
+4. Saved representative selections for the tree stage: exact input/context
+   counts, retained nearest neighbours, selection method, metadata comparison
+   against the full pool, and manifest downloads. Multiple alternatives show
+   their distinctness, overlap and cumulative coverage.
+
+Exploratory distance-cutoff groups, comparability cohorts, sensitivity tests
+and coverage diagnostics remain expandable methods/evidence. They do not form
+extra primary result sections or duplicate network figures.
 
 ## Scale and implementation order
 
@@ -575,7 +543,7 @@ subsampling is used to claim complete analysis.
 
 Implementation sequence:
 
-1. Dataset/manifest contracts, five command entry points and independent caches.
+1. Dataset/manifest contracts, four command entry points and independent caches.
 2. Prepare separation, typing-completion fixes, identity/metadata enrichment and
    explicit database readiness.
 3. cgmlst partitioning/full context retrieval and full-tree display, preserving
@@ -585,8 +553,6 @@ Implementation sequence:
 6. Independent tree with temporal testing, followed by independent time and
    their multi-selection comparison report.
 7. Compiled scale backend and benchmark-driven resource settings.
-8. Optional esm2 package/environment and benchmarked alternative selection route,
-   reusing the established contracts rather than changing cgmlst semantics.
 
 Acceptance uses the ten Greek inputs, exact partition/count audits, unchanged
 network calculations on fixed inputs, missing-profile/lineage/date fixtures,
@@ -605,28 +571,25 @@ only after their input/output boundary is fixed.
 
 | Package | Owns | Depends on | Reviewable completion gate |
 | --- | --- | --- | --- |
-| A: dataset foundations | `datasets/`, schema fixtures and contract tests | Agreed manifest schemas | Portable bundle round-trip, checksum/path validation, stable IDs, missing calls/date precision/conflicts retained; no provider/stage/model imports. |
+| A: dataset foundations | `datasets/`, schema fixtures and contract tests | Agreed manifest schemas | Portable bundle round-trip, checksum/path validation, stable IDs, missing calls/date precision/conflicts retained; no provider/stage imports. |
 | B: location extraction | `location_network/`, migrated network/widget/tree-renderer call sites and parity fixtures | Tree/result contract from A | Existing fixed-tree directed counts, ranges, centralities and palette unchanged; renderer labels source/units; no private stage imports. |
 | C: report shell | `reports/` theme/components/assets; migrated report helper call sites | Artifact/location contracts from A/B | Approved full-report style and network controls retained, mobile/desktop render checked, no report-private cross-imports or science computed in HTML. |
 | D: prepare/context | Provider adapters, prepare runner and context/partition services | A | Existing profile with missing assignment handled explicitly; no context assembly acquisition in prepare; exact identity and partition/coverage counts on Greek inputs. |
 | E: cgmlst/selection | Categorical engines, whole-block reports and selection/ensemble writers | A/B/C plus D partitions | Full comparable NJ/PCoA kept; ties and mandatory budget overruns retained; source IDs/hashes stable and selections reproducible. |
 | F: tree/time separation | Independent tree and time runners, corrected-tree/assessment/dating contracts | A/B/C and selection from E | Tree uses exactly selected IDs; time reads saved corrected tree and gate; independent invalidation, unsupported-date result and failures preserved. |
-| G: optional esm2 | Existing inference foundation plus catalogue mapping, genome distance/selection adapter and benchmark | A/C, D partition, E selection contract | Lazy dependency boundary; real sequence mapping and missing masks; benchmark/biological comparison; conventional tree required for any state-change network. |
-| H: scale backend | Distance/tree/ordination implementations behind cgmlst interfaces | E correctness baselines | Same small-input numerical evidence, complete IDs at benchmark sizes, bounded memory/runtime evidence; no silent subsetting. |
+| G: scale backend | Distance/tree/ordination implementations behind cgmlst interfaces | E correctness baselines | Same small-input numerical evidence, complete IDs at benchmark sizes, bounded memory/runtime evidence; no silent subsetting. |
 
-The initial change establishes A and B plus shared selection/date/style ownership
-and this reviewed design. It does not complete the full selection policy in E,
-the report decomposition in C or D–H. C can follow alongside D; E follows validated context partitions.
-F can start from a frozen example selection while E develops, but cannot claim
-suite integration until E's emitted manifest is exercised. G can benchmark its
-existing protein engine in parallel; its genome-selection and location integration
-wait for validated A/D/E contracts. H starts from the fixed small-data baseline,
-not by relaxing the current guard before replacement backends exist.
+These lanes describe the original implementation order. The current completion
+and validation evidence is recorded in the status table above. Subsequent work
+has exercised the emitted selections through genuine tree/time runs and
+validated the compiled large-block backend. External assignment-database access
+and live SLURM execution remain explicit boundaries. Package names in this design are ownership targets; the executable
+contracts are documented in the independent-suite pages.
 
 Integration is accepted in this order:
 
 1. **Boundary gate:** schemas, ownership and import direction validated; shared
-   packages import no stage engines; CLI help works without model/native tooling.
+   packages import no stage engines; CLI help works without optional native tools.
 2. **Behaviour gate:** fixed inputs preserve approved network results/style and
    metadata/identity semantics. Extracting modules is reviewed separately from
    changing science; intentional scientific changes need their own fixtures.
@@ -638,9 +601,8 @@ Integration is accepted in this order:
 5. **Worked-example gate:** actual prepare → cgmlst → tree → time from ten Greek
    inputs, then an alternative selection and independent resume/invalidation.
    Record unavailable data/tools and blocked commands explicitly.
-6. **Scale/experimental gate:** separately exercised large-data and ESM2 results
-   with resource/biological evidence. A small Greek run is not proof of scale or
-   embedding adequacy.
+6. **Scale gate:** separately exercise large-data results with resource evidence.
+   A small Greek run is not proof of scale.
 
 ## Research informing the design
 

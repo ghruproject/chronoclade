@@ -34,7 +34,7 @@ _CGMLST_COUNTRY_TREE = dict(
 )
 
 
-def draw_profile_tree(tree, records, labels, path, nearest_ids=()):
+def draw_profile_tree(tree, records, labels, path, nearest_ids=(), *, distance_units=None):
     """Draw neutral branches with dataset-coloured tips and supplied metadata."""
     import matplotlib.pyplot as plt
     from matplotlib.lines import Line2D
@@ -79,7 +79,7 @@ def draw_profile_tree(tree, records, labels, path, nearest_ids=()):
                               linestyle="None", label="Nearest public relatives"))
     ax.legend(handles=handles, loc="lower left", bbox_to_anchor=(0, 1.01),
               frameon=False, ncol=len(handles))
-    ax.set_xlabel("Fraction of mismatching callable cgMLST loci")
+    ax.set_xlabel(distance_units or "Fraction of mismatching callable cgMLST loci")
     ax.set_ylabel("")
     ax.set_yticks([])
     left, right = ax.get_xlim()
@@ -139,7 +139,7 @@ def _location_network(tree, rows, nearest_neighbours=None):
     return build_profile_network(tree, rows, nearest_neighbours)
 
 
-def write_profile_network_figures(output, cohort_id, network, records=(), display_ids=None):
+def write_profile_network_figures(output, cohort_id, network, records=(), display_ids=None, *, distance_units=None):
     """Export alternate views for one report viewer, with a complete audit."""
     from chronoclade.location_network.static import draw_location_network
     from chronoclade.location_network.tree import draw_country_tree
@@ -168,7 +168,8 @@ def write_profile_network_figures(output, cohort_id, network, records=(), displa
         if records:
             model["country_tree_figure"] = draw_country_tree(
                 model, records, output / f"{stem}_country_tree.svg",
-                display_ids=display_ids, nearest_ids=nearest_ids, **_CGMLST_COUNTRY_TREE,
+                display_ids=display_ids, nearest_ids=nearest_ids,
+                **dict(_CGMLST_COUNTRY_TREE, **({"distance_label": distance_units} if distance_units else {})),
             )
         model["transition_counts_path"] = _csv(
             output / f"{stem}_country_transition_counts.csv",
@@ -184,7 +185,8 @@ def write_profile_network_figures(output, cohort_id, network, records=(), displa
             output / f"{stem}_nearest_country_connections.csv", model["nearest_edges"],
             ["source", "target", "query_count", "context_count", "comparison_count",
              "query_ids", "context_ids", "allele_mismatches_min", "allele_mismatches_max",
-             "shared_loci_min", "shared_loci_max"],
+             "shared_loci_min", "shared_loci_max",
+             "snp_differences_min", "snp_differences_max", "shared_sites_min", "shared_sites_max"],
         )
     audit = output / f"{cohort_id}_location_network.json"
     audit.write_text(json.dumps(network, indent=2) + "\n")
@@ -192,15 +194,18 @@ def write_profile_network_figures(output, cohort_id, network, records=(), displa
     return network["network_figure"]
 
 
-def _plots(output, cohort_id, coords, rows, network, display_ids=None):
+def _plots(output, cohort_id, coords, rows, network, display_ids=None, *, distance_units=None,
+           groups=None, coordinate_views=None):
     from chronoclade.report_components.ordination import write_ordination_views
     paths = write_ordination_views(output, cohort_id, coords, rows,
-                                   title="cgMLST distance ordination",
-                                   axis_labels=("PCoA axis 1", "PCoA axis 2"))
+                                   title="NJ-tree distance ordination" if coordinate_views else "cgMLST distance ordination",
+                                   axis_labels=("MDS axis 1", "MDS axis 2"), groups=groups,
+                                   coordinate_views=coordinate_views,
+                                   default_basis="nj_tree" if coordinate_views else None)
     from chronoclade.report_components.geography import write_country_figure
     paths["country_figure"] = write_country_figure(output, cohort_id, rows)
     paths["network_figure"] = write_profile_network_figures(
-        output, cohort_id, network, rows, display_ids
+        output, cohort_id, network, rows, display_ids, distance_units=distance_units
     )
     return paths
 
@@ -282,6 +287,7 @@ def analyse_profiles(
     bootstrap_replicates: int = 30,
     distance_threshold: float = 0.02,
     tree_limit: int = 100,
+    distance_model=None,
 ) -> dict:
     """Write a reproducible, descriptive report using available compatible profiles.
 
@@ -324,18 +330,23 @@ def analyse_profiles(
                 row.get("cgmlst_database_sha256", ""),
             )
             row["cgmlst_loci"] = sorted(observed_universes[scope])
+    compare_pair = distance_model.pair if distance_model else _pair
+    difference_field = distance_model.metadata["raw_difference_field"] if distance_model else "allele_differences"
+    distance_units = distance_model.metadata["distance_units"] if distance_model else "cgMLST mismatch fraction"
+    sequence_fields = ["snp_differences", "shared_called_sites", "missing_call_loci",
+                       "missing_sequence_loci", "unequal_length_loci"] if distance_model else []
     pairs, incompatible, exclusions = [], Counter(), []
     distances = np.full((len(records), len(records)), np.nan)
     np.fill_diagonal(distances, 0)
     eligible = []
     for i, row in enumerate(records):
-        evidence, reason = _pair(row, row, min_overlap)
+        evidence, reason = compare_pair(row, row, min_overlap)
         if evidence is None:
             exclusions.append({"sample_id": row["sample_id"], "reason": reason})
         else:
             eligible.append(i)
         for j in range(i):
-            evidence, reason = _pair(records[j], row, min_overlap)
+            evidence, reason = compare_pair(records[j], row, min_overlap)
             if evidence is None:
                 incompatible[reason] += 1
             else:
@@ -373,7 +384,7 @@ def analyse_profiles(
         if row.get("origin") not in {"local", "query", "focal"}:
             continue
         choices = [
-            (_pair(row, other, min_overlap)[0]["allele_differences"], j)
+            (compare_pair(row, other, min_overlap)[0][difference_field], j)
             for j, other in enumerate(records)
             if other.get("origin") == "context" and np.isfinite(distances[i, j])
         ]
@@ -383,7 +394,7 @@ def analyse_profiles(
         minimum = min(value for value, _ in choices)
         for value, j in choices:
             if value == minimum:
-                evidence, _ = _pair(row, records[j], min_overlap)
+                evidence, _ = compare_pair(row, records[j], min_overlap)
                 nearest.append(
                     {
                         "query_id": row["sample_id"],
@@ -438,6 +449,15 @@ def analyse_profiles(
             "NJ date diagnostics do not assess the final recombination-corrected tree.",
         ],
     }
+    summary.update(distance_model.metadata if distance_model else {
+        "distance_method": "alleles",
+        "distance_definition": "fraction of mismatching jointly called cgMLST loci",
+        "distance_units": "cgMLST mismatch fraction",
+        "raw_difference_field": "allele_differences",
+    })
+    if distance_model:
+        summary["limitations"].extend(distance_model.limitations)
+        summary["sequence_provenance"] = distance_model.provenance
     rng = np.random.default_rng(seed)
     for number, indexes in enumerate(cohorts, 1):
         cohort_id = f"cohort_{number}"
@@ -446,7 +466,7 @@ def analyse_profiles(
         cohort = {
             "cohort_id": cohort_id,
             "sample_ids": [r["sample_id"] for r in rows],
-            "tree_units": "fraction of mismatching jointly called cgMLST loci",
+            "tree_units": summary["distance_definition"],
             "warnings": [],
         }
         if any(row["sample_id"] in future_ids for row in rows):
@@ -466,7 +486,7 @@ def analyse_profiles(
         cohort["pcoa_positive_axis_fraction"] = (
             (positive[:2] / positive.sum()).tolist() if positive.sum() else [0, 0]
         )
-        if np.any(eigenvalues < -1e-10):
+        if np.any(eigenvalues < -1e-10 * np.max(np.abs(eigenvalues), initial=0)):
             cohort["warnings"].append(
                 "Non-Euclidean distances: negative PCoA eigenvalues; scatterplot is an approximation."
             )
@@ -488,19 +508,24 @@ def analyse_profiles(
         valid_replicates = 0
         for _ in range(bootstrap_replicates):
             selected = rng.integers(0, len(loci), len(loci))
-            resampled = np.zeros_like(matrix)
-            shared_counts = np.zeros_like(matrix)
-            differences = np.zeros_like(matrix)
-            for locus in selected:
-                values = np.array([profile[locus] or "" for profile in calls])
-                present = values != ""
-                shared = present[:, None] & present[None, :]
-                shared_counts += shared
-                differences += shared & (values[:, None] != values[None, :])
-            valid = bool(np.all(shared_counts / len(loci) >= min_overlap))
-            np.divide(differences, shared_counts, out=resampled, where=shared_counts > 0)
-            if not valid:
-                continue
+            if distance_model:
+                resampled = distance_model.resample(rows, loci, selected, min_overlap)
+                if resampled is None:
+                    continue
+            else:
+                resampled = np.zeros_like(matrix)
+                shared_counts = np.zeros_like(matrix)
+                differences = np.zeros_like(matrix)
+                for locus in selected:
+                    values = np.array([profile[locus] or "" for profile in calls])
+                    present = values != ""
+                    shared = present[:, None] & present[None, :]
+                    shared_counts += shared
+                    differences += shared & (values[:, None] != values[None, :])
+                valid = bool(np.all(shared_counts / len(loci) >= min_overlap))
+                np.divide(differences, shared_counts, out=resampled, where=shared_counts > 0)
+                if not valid:
+                    continue
             valid_replicates += 1
             for group in _clusters(resampled, distance_threshold):
                 for i in group:
@@ -574,7 +599,7 @@ def analyse_profiles(
             tree = DistanceTreeConstructor().nj(dm)
             tree.root_with_outgroup(names[0])
             path = output / f"{cohort_id}_nj.nwk"
-            Phylo.write(tree, str(path), "newick")
+            Phylo.write(tree, str(path), "newick", format_branch_length="%.12g")
             cohort["tree_path"] = str(path)
             import matplotlib.pyplot as plt
 
@@ -608,7 +633,7 @@ def analyse_profiles(
                     if tip.name not in display_ids:
                         display_tree.prune(tip)
                 draw_profile_tree(display_tree, display_rows, summary["sample_labels"],
-                                  tree_figure, nearest_ids)
+                                  tree_figure, nearest_ids, distance_units=distance_units if distance_model else None)
                 cohort["tree_figure"] = str(tree_figure)
                 cohort["tree_display_sample_ids"] = [r["sample_id"] for r in display_rows]
                 cohort["tree_display_limit"] = tree_limit
@@ -638,12 +663,13 @@ def analyse_profiles(
                   "role": "input" if row.get("origin") in {"local", "query", "focal", "input"}
                   else "context", "root_to_tip": float(tree.distance(diagnostic_tips[row["sample_id"]]))}
                  for row in rows],
-                distance_field="root_to_tip", distance_units="cgMLST mismatch fraction",
+                distance_field="root_to_tip", distance_units=distance_units,
                 label="Existing profile NJ root-to-tip",
             )
-            diagnostic = allele_unit_diagnostic(
-                diagnostic, len(loci), catalogue_complete=not any(
-                    row.get("cgmlst_locus_universe_complete") is False for row in rows))
+            if not distance_model:
+                diagnostic = allele_unit_diagnostic(
+                    diagnostic, len(loci), catalogue_complete=not any(
+                        row.get("cgmlst_locus_universe_complete") is False for row in rows))
             points = diagnostic["points"]
             summary["root_to_tip"].append(
                 {
@@ -695,9 +721,36 @@ def analyse_profiles(
             network = _location_network(singleton_tree, rows, nearest)
             cohort["warnings"].append("Single comparable profile: no NJ tree or date diagnostic.")
         network["cohort_id"] = cohort_id
+        for model in [network, *network.get("views", [])]:
+            model["distance_method"] = summary["distance_method"]
+            model["distance_units"] = distance_units
         summary["location_network"].append(network)
+        coordinate_views = None
+        groups_by_id = {ident: group['group_id'] for group in summary['genetic_groups']
+                        if group['group_id'].startswith(cohort_id + '_group_')
+                        for ident in group['sample_ids']}
+        if len(rows) >= 2:
+            from chronoclade.report_components.tree_ordination import ordination_bases
+            from chronoclade.report_components.group_tree import write_group_tree
+            cohort['tree_groups_html'] = write_group_tree(
+                tree, rows, summary['sample_labels'], groups_by_id,
+                output / f'{cohort_id}_tree_groups.html',
+                distance_units=distance_units if distance_model else None)
+            direct_coords = coords.copy()
+            cohort['direct_pcoa_eigenvalues'] = cohort['pcoa_eigenvalues']
+            cohort['direct_pcoa_positive_axis_fraction'] = cohort['pcoa_positive_axis_fraction']
+            coords, audit, coordinate_views = ordination_bases(tree, rows, direct_coords, seed=seed)
+            cohort.update(audit)
+            cohort['ordination_default_basis'] = 'nj_tree'
+            cohort['direct_pcoa_csv'] = _csv(
+                output / f'{cohort_id}_direct_pcoa.csv',
+                [{'sample_id': row['sample_id'], 'axis_1': float(direct_coords[i, 0]),
+                  'axis_2': float(direct_coords[i, 1])} for i, row in enumerate(rows)],
+                ['sample_id', 'axis_1', 'axis_2'])
         cohort.update(_plots(output, cohort_id, coords, rows, network,
-                             cohort.get("tree_display_sample_ids")))
+                             cohort.get("tree_display_sample_ids"),
+                             distance_units=distance_units if distance_model else None,
+                             groups=groups_by_id, coordinate_views=coordinate_views))
         summary["paths"][f"{cohort_id}_network_audit"] = network["audit_path"]
         summary["paths"][f"{cohort_id}_nearest_country_connections"] = network["nearest_country_connections_path"]
         summary["paths"][f"{cohort_id}_country_transitions"] = network["transition_counts_path"]
@@ -724,6 +777,7 @@ def analyse_profiles(
                 "sample_a",
                 "sample_b",
                 "allele_differences",
+                *sequence_fields,
                 "shared_called_loci",
                 "scheme_loci",
                 "call_overlap",
@@ -746,6 +800,7 @@ def analyse_profiles(
                 "cohort_id",
                 "query_cohort_id",
                 "allele_differences",
+                *sequence_fields,
                 "shared_called_loci",
                 "call_overlap",
                 "distance",
@@ -799,6 +854,7 @@ def analyse_profiles(
                     for key in (
                         "distance",
                         "allele_differences",
+                *sequence_fields,
                         "shared_called_loci",
                         "call_overlap",
                     )
@@ -811,6 +867,7 @@ def analyse_profiles(
             "sample_id_2",
             "distance",
             "allele_differences",
+                *sequence_fields,
             "shared_called_loci",
             "call_overlap",
         ],

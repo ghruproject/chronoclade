@@ -89,6 +89,10 @@ def test_real_stage_has_full_tree_and_validated_selections_without_assembly_retr
         assert "q" in selection["selected_sample_ids"]
     analysis = json.loads((directory / block["block_id"] / "profile_analysis.json").read_text())
     assert analysis["records_count"] == 3
+    comparison = analysis["root_comparisons"][0]
+    assert comparison["audit"]["status"] == "skipped"
+    assert "date" in comparison["audit"]["reason"]
+    assert (directory / block["block_id"] / comparison["audit_path"]).is_file()
     assert ensemble
     newick_files = list((directory / block["block_id"]).glob("*.nwk"))
     if not newick_files:
@@ -188,3 +192,138 @@ def test_missing_mlst_metadata_can_compare_with_one_explicit_namespace(tmp_path)
     assert {r["sample_id"] for r in blocks[0]["records"]} == {"q", "c1", "c2"}
     assert next(r for r in blocks[0]["records"] if r["sample_id"] == "q")["mlst_scheme"] is None
     assert audit["ambiguous_mlst_namespace_ids"] == []
+
+
+@pytest.mark.parametrize("packager", ["write_selection_ensemble", "write_profile_report"])
+@pytest.mark.parametrize("backend", ["dense", "scale"])
+def test_native_resume_reuses_completed_numerical_analysis(tmp_path, monkeypatch, packager, backend):
+    import chronoclade.cgmlst.workflow as workflow
+
+    if backend == "scale":
+        monkeypatch.setattr("chronoclade.profile_analysis.MAX_RECORDS", 2)
+    _, source = fixture_dataset(tmp_path)
+    output = tmp_path / "interrupted"
+    arguments = dict(bootstrap_replicates=0, context_size=1, nearest_per_query=1)
+    original = getattr(workflow, packager)
+
+    def interrupted(*args, **kwargs):
+        raise OSError("fixture packaging interruption")
+
+    monkeypatch.setattr(workflow, packager, interrupted)
+    with pytest.raises(OSError, match="packaging interruption"):
+        workflow.run_cgmlst(source, output, **arguments)
+    assert list(output.glob("*/numerical_analysis.json"))
+    assert not (output / "cgmlst.json").exists()
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Resume must not recalculate numerical analysis")
+
+    monkeypatch.setattr(workflow, "analyse_profiles", forbidden)
+    monkeypatch.setattr("chronoclade.cgmlst.scale.analyse_profiles_scale", forbidden)
+    monkeypatch.setattr(workflow, packager, original)
+    if packager == "write_profile_report":
+        monkeypatch.setattr(workflow, "write_selection_ensemble", forbidden)
+    with pytest.raises(ValueError, match="source or parameters differ"):
+        workflow.run_cgmlst(source, output, resume=True, **{**arguments, "seed": 99})
+    original_source = source.read_text()
+    source.write_text(original_source + "\n")
+    with pytest.raises(ValueError, match="source or parameters differ"):
+        workflow.run_cgmlst(source, output, resume=True, **arguments)
+    source.write_text(original_source)
+    result = workflow.run_cgmlst(source, output, resume=True, **arguments)
+    manifest = json.loads(result.manifest_path.read_text())
+    assert result.report_path.is_file()
+    assert manifest["status"] == "partial"
+    block = manifest["blocks"][0]
+    assert (output / block["ensemble"]).is_file()
+    for path in (output / block["ensemble"]).parent.glob("selections/selection-*.json"):
+        assert "q" in load_selection_manifest(path)["selected_sample_ids"]
+
+
+def test_resume_rejects_changed_numerical_evidence(tmp_path, monkeypatch):
+    import chronoclade.cgmlst.workflow as workflow
+
+    _, source = fixture_dataset(tmp_path)
+    output = tmp_path / "interrupted"
+    arguments = dict(bootstrap_replicates=0)
+
+    def interrupted(*args, **kwargs):
+        raise OSError("fixture packaging interruption")
+
+    monkeypatch.setattr(workflow, "write_selection_ensemble", interrupted)
+    with pytest.raises(OSError):
+        workflow.run_cgmlst(source, output, **arguments)
+    checkpoint = next(output.glob("*/numerical_analysis.json"))
+    saved = json.loads(checkpoint.read_text())
+    evidence = checkpoint.parent / next(iter(saved["artifacts"]))
+    evidence.write_text("changed")
+    with pytest.raises(ValueError, match="numerical artifact changed"):
+        workflow.run_cgmlst(source, output, resume=True, **arguments)
+    assert not (output / "cgmlst.json").exists()
+
+
+def test_cli_resume_repackages_saved_analysis(tmp_path, monkeypatch):
+    import chronoclade.cgmlst.workflow as workflow
+
+    _, source = fixture_dataset(tmp_path)
+    output = tmp_path / "interrupted"
+    original = workflow.write_profile_report
+
+    def interrupted(*args, **kwargs):
+        raise OSError("fixture packaging interruption")
+
+    monkeypatch.setattr(workflow, "write_profile_report", interrupted)
+    with pytest.raises(OSError):
+        workflow.run_cgmlst(source, output, bootstrap_replicates=0, representative_reserve=1)
+    monkeypatch.setattr(workflow, "write_profile_report", original)
+    result = CliRunner().invoke(app, [
+        "cgmlst", str(source), "--out", str(output), "--bootstrap-replicates", "0",
+        "--representative-reserve", "1", "--resume",
+    ])
+    assert result.exit_code == 0, result.output
+    assert json.loads((output / "cgmlst.json").read_text())["parameters"]["representative_reserve"] == 1
+
+
+def test_resume_can_start_analysis_after_retrieval_interruption(tmp_path):
+    _, source = fixture_dataset(tmp_path)
+    result = run_cgmlst(source, tmp_path / "not_started", resume=True, bootstrap_replicates=0)
+    assert result.manifest_path.is_file()
+    unrecognised = tmp_path / "unrecognised"
+    unrecognised.mkdir()
+    (unrecognised / "foreign.txt").write_text("unrecognised output")
+    with pytest.raises(ValueError, match="No native cgmlst resume checkpoint"):
+        run_cgmlst(source, unrecognised, resume=True, bootstrap_replicates=0)
+
+
+def test_resume_rejects_injected_valid_selection_bundle_from_other_parameters(tmp_path, monkeypatch):
+    import shutil
+    import chronoclade.cgmlst.workflow as workflow
+    from chronoclade.selection_manifest import load_selection_ensemble, write_selection_ensemble
+
+    dataset, source = fixture_dataset(tmp_path)
+    output = tmp_path / "interrupted"
+
+    def interrupted(*args, **kwargs):
+        raise OSError("fixture packaging interruption")
+
+    monkeypatch.setattr(workflow, "write_profile_report", interrupted)
+    with pytest.raises(OSError):
+        workflow.run_cgmlst(source, output, bootstrap_replicates=0, context_size=1)
+    checkpoint = next(output.glob("*/numerical_analysis.json"))
+    directory = checkpoint.parent
+    analysis = workflow._restore_artifact_paths(json.loads(checkpoint.read_text())["analysis"], directory)
+    block = partition_records(profile_records(dataset))[0][0]
+    analysis["partition"] = {key: value for key, value in block.items() if key != "records"}
+    replacement = write_selection_ensemble(
+        [row for row in block["records"] if row["role"] == "input"],
+        [row for row in block["records"] if row["role"] == "context"],
+        analysis, dataset_manifest=source, output=directory / "replacement_bundle",
+        size=1, seed=99, partition_manifest=output / "partitions.json",
+    )
+    shutil.rmtree(directory / "selection_bundle")
+    replacement.parent.rename(directory / "selection_bundle")
+    ensemble = directory / "selection_bundle" / "ensemble.json"
+    assert load_selection_ensemble(ensemble)["parameters"]["seed"] == 99
+    with pytest.raises(ValueError, match="selection bundle differs"):
+        workflow.run_cgmlst(source, output, bootstrap_replicates=0, context_size=1, resume=True)
+    assert not (output / "cgmlst.json").exists()

@@ -47,10 +47,7 @@ nav:
       - Large cgMLST blocks: cgmlst-scale.md
       - Independent tree stage: tree-stage.md
       - Independent time stage: time-stage.md
-      - Genome ESM2 analysis: esm2-genomes.md
       - Profile-first stages: staged-workflow.md
-      - Optional ESM2 embeddings: esm2.md
-      - ESM2 DNA catalogue inputs: esm2-sequence-input.md
   - Worked example: worked-example.md
   - Pathogenwatch context:
       - Frozen metadata: pathogenwatch.md
@@ -68,6 +65,7 @@ nav:
       - Design notes: DESIGN.md
       - Tool suite redesign: tool-suite-design.md
       - Suite architecture review: architecture-review.md
+      - Parked embedding research: research/parked-sequence-embeddings.md
       - Public-health questions: PUBLIC_HEALTH_QUESTIONS.md
       - Roadmap: ROADMAP.md
       - Code review: CODE_REVIEW.md

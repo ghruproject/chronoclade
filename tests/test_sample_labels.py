@@ -15,10 +15,17 @@ def test_repeated_accessions_do_not_merge_genomes():
         {"sample_id": "PW_a", "run_accessions": ["SRR123"]},
         {"sample_id": "PW_b", "run_accessions": ["SRR123"]},
     ])
-    assert labels == {"PW_a": "SRR123 (PW_a)", "PW_b": "SRR123 (PW_b)"}
+    assert labels == {"PW_a": "SRR123", "PW_b": "SRR123"}
     analysis = {"nearest_neighbours": [{"query_id": "PW_a", "context_id": "PW_b"}],
                 "paths": {"summary": "PW_a"}}
     rendered = label_analysis(analysis, labels)
-    assert rendered["nearest_neighbours"][0]["context_id"] == "SRR123 (PW_b)"
+    assert rendered["nearest_neighbours"][0]["context_id"] == "SRR123"
     assert rendered["paths"] == analysis["paths"]
     assert analysis["nearest_neighbours"][0]["context_id"] == "PW_b"
+
+
+def test_legacy_label_suffix_is_hidden_without_changing_identity():
+    source = {"nearest_neighbours": [{"context_id": "PW_old"}]}
+    rendered = label_analysis(source, {"PW_old": "ERR11592219 (PW_old)"})
+    assert rendered["nearest_neighbours"][0]["context_id"] == "ERR11592219"
+    assert source["nearest_neighbours"][0]["context_id"] == "PW_old"

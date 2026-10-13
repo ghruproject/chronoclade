@@ -473,15 +473,32 @@ def analyse_profiles_scale(
             ("network_metrics", "network_metrics_path"),
         ):
             summary["paths"][f"{cohort_id}_{label}"] = network[key]
+        from chronoclade.report_components.tree_ordination import ordination_bases
+        from chronoclade.report_components.group_tree import write_group_tree
+        cohort['tree_groups_html'] = write_group_tree(
+            tree, rows, labels, groups_by_id, output / f'{cohort_id}_tree_groups.html')
+        direct_coords = coords.copy()
+        coords, audit, coordinate_views = ordination_bases(
+            tree, rows, direct_coords, output=output / f'{cohort_id}_nj_distances.npy', seed=seed)
+        cohort['direct_ordination'] = ordination
+        cohort.update(audit)
+        cohort['ordination_default_basis'] = 'nj_tree'
+        cohort['direct_pcoa_csv'] = _csv(
+            output / f'{cohort_id}_direct_pcoa.csv',
+            [{'sample_id': row['sample_id'], 'axis_1': float(direct_coords[i, 0]),
+              'axis_2': float(direct_coords[i, 1])} for i, row in enumerate(rows)],
+            ['sample_id', 'axis_1', 'axis_2'])
         cohort.update(
             write_ordination_views(
                 output,
                 cohort_id,
                 coords,
                 rows,
-                title="Full cgMLST distance ordination",
-                axis_labels=("PCoA axis 1", "PCoA axis 2"),
+                title="NJ-tree distance ordination",
+                axis_labels=("MDS axis 1", "MDS axis 2"),
                 groups=groups_by_id,
+                coordinate_views=coordinate_views,
+                default_basis='nj_tree',
             )
         )
         cohort["pcoa_csv"] = _csv(

@@ -1,9 +1,8 @@
 """Accession labels for presentation, separate from analytical sample identity."""
 
-from collections import Counter
-from collections.abc import Iterable, Mapping
-import re
 import json
+import re
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 
@@ -27,10 +26,12 @@ def sample_label(row: Mapping) -> str:
 
 
 def sample_labels(records: Iterable[Mapping]) -> dict[str, str]:
-    labels = {str(row["sample_id"]): sample_label(row) for row in records if row.get("sample_id")}
-    counts = Counter(labels.values())
-    return {ident: f"{label} ({ident})" if counts[label] > 1 else label
-            for ident, label in labels.items()}
+    return {str(row["sample_id"]): sample_label(row) for row in records if row.get("sample_id")}
+
+
+def display_label(label: str) -> str:
+    """Hide legacy internal-key suffixes when a public accession is available."""
+    return re.sub(r"^((?:[SED]RR\d+|SAM[NED][A-Z]?\d+|GC[AF]_\d+(?:\.\d+)?)) \(PW_[^)]+\)$", r"\1", str(label))
 
 
 def label_analysis(value, labels: Mapping[str, str], field: str = ""):
@@ -42,7 +43,7 @@ def label_analysis(value, labels: Mapping[str, str], field: str = ""):
     if isinstance(value, list):
         return [label_analysis(item, labels, field) for item in value]
     if isinstance(value, str) and field in fields:
-        return labels.get(value, value)
+        return display_label(labels.get(value, value))
     return value
 
 
@@ -51,4 +52,4 @@ def read_sample_labels(directory: Path) -> dict[str, str]:
         value = json.loads((directory / "sample_labels.json").read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {}
-    return {str(key): str(label) for key, label in value.items()} if isinstance(value, dict) else {}
+    return {str(key): display_label(label) for key, label in value.items()} if isinstance(value, dict) else {}

@@ -20,7 +20,7 @@ def test_report_uses_accession_without_changing_analysis_or_style(tmp_path):
     assert "Archivo" in html
 
 
-def test_report_orders_summary_figures_and_groups_before_neighbours(tmp_path: Path) -> None:
+def test_report_orders_dataset_relationships_network_subsamples_and_evidence(tmp_path: Path) -> None:
     (tmp_path / "figures").mkdir()
     (tmp_path / "figures" / "pcoa.svg").write_text(
         '<svg xmlns="http://www.w3.org/2000/svg"></svg>', encoding="utf-8"
@@ -67,12 +67,12 @@ def test_report_orders_summary_figures_and_groups_before_neighbours(tmp_path: Pa
     assert output.name == "profile_report.html"
     assert html.index("id=\"summary\"") < html.index("id=\"geography\"")
     assert html.index("id=\"geography\"") < html.index("id=\"nearest\"")
-    assert html.index("id=\"nearest\"") < html.index("id=\"figures\"")
+    assert html.index("id=\"figures\"") < html.index("id=\"nearest\"")
     assert html.index("id=\"nearest\"") < html.index("id=\"groups\"")
     assert 'id="persistence"' not in html
-    assert "concentration in time and place" in html
-    assert 'src="figures/pcoa.svg"' in html
-    assert 'src="figures/cohort_nj.svg"' in html
+    assert "Concentration in time and place" in html
+    assert 'data-source-asset="figures/pcoa.svg"' in html
+    assert 'data-source-asset="figures/cohort_nj.svg"' in html
     assert 'href="figures/cohort.nwk"' in html
     assert "alternate roots" in html
     assert "8 profiles available / 8 records" in html
@@ -183,7 +183,7 @@ def test_report_separates_query_context_coverage_and_explains_unknown_support(tm
     assert "Query dataset" in html and "Public context" in html
     assert "no API credentials were configured" in html
     assert "Records without profiles" in html
-    assert "combine query and public context records" in html
+    assert "input and public comparison genomes together" in html
     assert "observed export locus union; canonical completeness unknown" in html
     assert "support is unknown because no valid replicates were available" in html
     assert "not evidence of instability" in html
@@ -244,7 +244,9 @@ def test_geography_distinguishes_input_origin_and_full_catalogue(tmp_path: Path)
     assert "Your input genomes" in html and "Public comparison genomes" in html
     assert "2 input genomes · 1 public comparisons" in html
     assert "your 2 input genomes and compares them with 1 additional public genomes" in html
-    assert html.index("<h3>Your input genomes") < html.index("<h3>Public comparison genomes")
+    assert "<h3>Country totals</h3>" in html
+    assert '<th scope="col">Inputs</th>' in html
+    assert '<th scope="col">Context</th>' in html
     assert "Frozen public catalogue" in html
     assert "Public catalogue records before deduplication" in html
     assert "Public context records in profile analysis" in html
@@ -358,13 +360,13 @@ def test_large_geography_and_network_tables_are_collapsed_and_network_figure_is_
         directory=tmp_path,
     )
     html = output.read_text(encoding="utf-8")
-    catalogue = html.split('id="geography"', 1)[1].split('id="nearest"', 1)[0]
+    catalogue = html.split('id="coverage"', 1)[1].split('id="cohorts"', 1)[0]
     network = html.split('id="network"', 1)[1].split('id="cohorts"', 1)[0]
 
     assert "Frozen public catalogue: 87 records" in catalogue
     assert 'class="coverage-details"><summary>Frozen public catalogue' in catalogue
     assert "Inferred country connections (72 pairs)" in network
-    assert network.index('src="network.svg"') < network.index("Inferred country connections")
+    assert network.index('data-cc-network') < network.index("Inferred country connections")
     assert "Minimum changes" in network
     assert "exact conditional counts" in network
 
@@ -425,7 +427,7 @@ def test_adaptive_context_report_separates_dataset_pool_from_tree_and_keeps_one_
         },
     }
     html = write_profile_report({"records_count": 261}, directory=tmp_path, provenance=provenance).read_text()
-    assert html.index("Input datasets and their public context") < html.index('id="geography"')
+    assert html.index('id="subsamples"') < html.index("Input datasets and their public context")
     assert "CG39" in html and "787" in html and "252" in html
     assert "Level 5 context" in html and "Level 7 context" in html
     assert "Limited context" in html and "Minimum met" in html
@@ -503,8 +505,10 @@ def test_network_viewer_switches_weighted_reconstructions_and_retains_nearest_ti
     assert "</script>" not in payload
     assert views[1]["label"] == '</script><img src=x onerror=alert(1)>'
     assert '<img src=x onerror=' not in html
-    assert 'src="focus.svg"' in views[0]["input"]
-    assert 'src="all.svg"' in views[0]["all"]
+    assert 'Static network figure' not in html
+    assert 'Save PNG' in views[0]["input"]
+    assert 'Save interactive HTML' in views[0]["input"]
+    assert "<img" not in views[0]["all"]
     assert "India" not in views[0]["input"]
     assert "India" in views[0]["all"]
     assert "<td>1</td><td>3</td>" in views[0]["input"]
@@ -561,3 +565,42 @@ def test_network_viewer_excludes_foreign_missing_and_non_image_paths(tmp_path: P
         assert "No closest-relative country connections" in views[1]["input"]
     finally:
         foreign.unlink()
+
+
+def test_report_labels_direct_dna_counts_and_retains_existing_style(tmp_path):
+    analysis = {
+        "distance_method": "direct-dna",
+        "nearest_neighbours": [{
+            "query_id": "q", "context_id": "c", "status": "matched",
+            "distance": 0.0002, "snp_differences": 2,
+            "shared_called_sites": 10000, "shared_called_loci": 20,
+            "allele_differences": 1,
+        }],
+    }
+    document = write_profile_report(analysis, directory=tmp_path).read_text()
+    assert "Direct SNP differences within cgMLST genes" in document
+    assert "SNP differences / compared sites" in document
+    assert "2 / 10,000" in document
+    assert "Allele differences / shared loci" not in document
+    assert "Gene-panel SNP-distance root-to-tip" in document
+    assert "Archivo" in document
+    assert "not a recombination-adjusted whole-genome SNP tree" in document
+
+
+def test_report_defaults_to_categorical_allele_comparison(tmp_path):
+    analysis = {"nearest_neighbours": [{
+        "query_id": "q", "context_id": "c", "status": "matched",
+        "distance": 0.1, "allele_differences": 2, "shared_called_loci": 20,
+    }]}
+    document = write_profile_report(analysis, directory=tmp_path).read_text()
+    assert "cgMLST allele-profile differences" in document
+    assert "Allele differences / shared loci" in document
+    assert "2 / 20" in document
+    assert "SNP differences / compared sites" not in document
+
+
+def test_cgmlst_report_names_stage_and_links_to_group_index(tmp_path):
+    document = write_profile_report({}, directory=tmp_path, group_index_href="../index.html").read_text()
+    assert "ChronoClade · cgMLST ANALYSIS REPORT" in document
+    assert '<a href="../index.html">← All groups</a>' in document
+    assert document.index('href="../index.html"') < document.index('href="#summary"')

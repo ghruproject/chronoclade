@@ -39,7 +39,8 @@ def _number(value, default=0):
 
 
 def _payload(row, *, focus_inputs=False, include_possible=False):
-    metrics = {str(item["country"]): item for item in row.get("network_metrics", [])}
+    state_key = "state" if row.get("state_field") == "host" else "country"
+    metrics = {str(item[state_key]): item for item in row.get("network_metrics", [])}
     directed = row.get("directed_edges", row.get("edges", []))
     originals = row.get("nodes", [])
     if not originals:
@@ -47,21 +48,21 @@ def _payload(row, *, focus_inputs=False, include_possible=False):
         countries = sorted({str(edge[key]) for edge in directed for key in ("source", "target")})
         originals = [
             dict(
-                country=country, count=0, is_input_country=country in row.get("input_countries", [])
+                **{state_key: country}, count=0, is_input_state=country in row.get("input_states", row.get("input_countries", []))
             )
             for country in countries
         ]
-    palette = country_palette(str(node["country"]) for node in originals)
+    palette = country_palette(str(node[state_key]) for node in originals)
     palette.update(
         {
             str(key): value
-            for key, value in row.get("country_colors", {}).items()
+            for key, value in row.get("state_colors", row.get("country_colors", {})).items()
             if isinstance(value, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", value)
         }
     )
     nodes = []
     for node in originals:
-        country = str(node["country"])
+        country = str(node[state_key])
         values = metrics.get(country, {})
         measures = {key: _number(values.get(key)) for key, _ in _METRICS}
         if measures["degree"] is None:
@@ -69,9 +70,10 @@ def _payload(row, *, focus_inputs=False, include_possible=False):
         nodes.append(
             dict(
                 id=country,
-                country=country,
+                **({"country": country} if state_key == "country" else {}),
+                state=country,
                 color=palette[country],
-                input=bool(node.get("is_input_country")),
+                input=bool(node.get("is_input_state", node.get("is_input_country"))),
                 count=_number(node.get("count", 0)),
                 metrics=measures,
             )
@@ -104,7 +106,9 @@ def _payload(row, *, focus_inputs=False, include_possible=False):
     if focus_inputs:
         retained = inputs | {edge[key] for edge in edges for key in ("source", "target")}
         nodes = [node for node in nodes if node["id"] in retained]
-    return dict(nodes=nodes, edges=edges, includePossible=bool(include_possible))
+    return dict(nodes=nodes, edges=edges, includePossible=bool(include_possible),
+                stateLabel=row.get("state_label", "country"),
+                statePlural=row.get("state_plural", "countries"))
 
 
 def interactive_network_html(row, identifier, *, focus_inputs=False, include_possible=False):
@@ -118,27 +122,32 @@ def interactive_network_html(row, identifier, *, focus_inputs=False, include_pos
         separators=(",", ":"),
     )
     payload = payload.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+    state_label = html.escape(row.get("state_label", "country"))
+    state_plural = html.escape(row.get("state_plural", "countries"))
+    widget_kind = "host-network" if row.get("state_field") == "host" else "country-network"
     options = "".join(
         f'<option value="{key}">{html.escape(label)}</option>' for key, label in _METRICS
     )
-    return f"""<section class="cc-network-widget" data-cc-network data-widget="country-network">
+    return f"""<section class="cc-network-widget" data-cc-network data-widget="{widget_kind}">
   <div class="cc-network-controls">
     <label for="cc-metric-{token}">Node size <select id="cc-metric-{token}" data-network-metric>{options}</select></label>
-    <label for="cc-country-{token}">Highlight country <select id="cc-country-{token}" data-network-country><option value="">All countries</option></select></label>
+    <label for="cc-country-{token}">Highlight {state_label} <select id="cc-country-{token}" data-network-country><option value="">All {state_plural}</option></select></label>
     <label><input type="checkbox" data-network-possible{" checked" if include_possible else ""}> Include alternative possible links</label>
     <div class="cc-network-buttons" aria-label="Network navigation">
       <button type="button" data-network-action="zoom-in" aria-label="Zoom in">+</button>
       <button type="button" data-network-action="zoom-out" aria-label="Zoom out">−</button>
       <button type="button" data-network-action="fit">Fit network</button>
       <button type="button" data-network-action="clear">Clear selection</button>
+      <button type="button" data-network-action="export-png">Save PNG</button>
+      <button type="button" data-network-action="export-html">Save interactive HTML</button>
     </div>
   </div>
   <p class="cc-network-metric-note" data-network-metric-note>Node size: indegree centrality.</p>
-  <div class="cc-network-canvas" data-network-canvas role="img" aria-label="Interactive directed country network. Use the country selector and navigation buttons to explore connections."></div>
+  <div class="cc-network-canvas" data-network-canvas role="img" aria-label="Interactive directed {state_label} network. Use the {state_label} selector and navigation buttons to explore connections."></div>
   <p class="cc-network-status" data-network-status role="status" aria-live="polite"></p>
-  <div class="cc-network-legend"><span>Arrow width: representative change count</span><span>Dashed: count varies across optimal histories</span><span>Dark outline: input country</span></div>
-  <details class="cc-network-country-key"><summary>Country colour key</summary><div class="cc-network-countries" data-network-legend aria-label="Country colours"></div></details>
-  <p class="cc-network-caveat">Arrows show country-state changes in one optimal history, not demonstrated transmission. Alternative links need not occur together. Metrics remain those of the representative history.</p>
+  <div class="cc-network-legend"><span>Arrow width: representative change count</span><span>Dashed: count varies across optimal histories</span><span>Dark outline: input {state_label}</span></div>
+  <details class="cc-network-country-key"><summary>{state_label.capitalize()} colour key</summary><div class="cc-network-countries" data-network-legend aria-label="{state_label.capitalize()} colours"></div></details>
+  <p class="cc-network-caveat">Arrows show {state_label}-state changes in one optimal history, not demonstrated transmission. Alternative links need not occur together. Metrics remain those of the representative history.</p>
   <script type="application/json" data-network-data>{payload}</script>
 </section>"""
 
@@ -186,17 +195,17 @@ _INITIALIZER = r"""
       const metric=host.querySelector('[data-network-metric]'),country=host.querySelector('[data-network-country]');
       const possible=host.querySelector('[data-network-possible]'),note=host.querySelector('[data-network-metric-note]');
       const canvas=host.querySelector('[data-network-canvas]'),legend=host.querySelector('[data-network-legend]');
-      country.replaceChildren(new Option('All countries',''));legend.replaceChildren();
+      country.replaceChildren(new Option('All '+(data.statePlural || 'countries'),''));legend.replaceChildren();
       for(const node of data.nodes){
-        country.add(new Option(node.country,node.id));
+        country.add(new Option(node.state || node.country,node.id));
         const entry=document.createElement('span'),swatch=document.createElement('i');
         swatch.className='cc-network-swatch';swatch.style.backgroundColor=node.color;
-        entry.append(swatch,document.createTextNode(node.country));legend.append(entry);
+        entry.append(swatch,document.createTextNode(node.state || node.country));legend.append(entry);
       }
       const nodes=new vis.DataSet(),edges=new vis.DataSet();
       const network=new vis.Network(canvas,{nodes,edges},{
         layout:{randomSeed:1729,improvedLayout:true},
-        physics:{solver:'repulsion',repulsion:{nodeDistance:180,centralGravity:0.12,springLength:180,springConstant:0.03,damping:0.12},stabilization:{iterations:250,fit:true}},
+        physics:{enabled:!data.view,solver:'repulsion',repulsion:{nodeDistance:180,centralGravity:0.12,springLength:180,springConstant:0.03,damping:0.12},stabilization:{iterations:250,fit:true}},
         interaction:{dragNodes:true,dragView:true,zoomView:true,hover:true,keyboard:{enabled:false},navigationButtons:false},
         nodes:{shape:'dot',font:{size:20,color:'#263142',face:'Arial'},scaling:{min:12,max:38,label:{drawThreshold:0}},borderWidth:1},
         edges:{arrows:{to:{enabled:true,scaleFactor:0.75}},smooth:{enabled:true,type:'dynamic'},color:{color:'#78869a',highlight:'#35445d',opacity:0.7},scaling:{min:1,max:8}}
@@ -217,9 +226,9 @@ _INITIALIZER = r"""
         nodes.update(data.nodes.map(node=>{
           const value=node.metrics[key],dim=selected && !neighbours.has(node.id);
           const background=dim?'#e2e6ed':node.color,border=node.input?'#222222':'#ffffff';
-          return {id:node.id,label:node.country,size:12+(maximum>0 && value!==null?26*Math.sqrt(Math.max(0,value)/maximum):0),
+          return {id:node.id,label:node.state || node.country,size:12+(maximum>0 && value!==null?26*Math.sqrt(Math.max(0,value)/maximum):0),
             color:{background,border,highlight:{background,border},hover:{background,border}},borderWidth:node.input?3:1,
-            font:{color:dim?'#a4acb9':'#263142'},title:tooltip(node.country+'\n'+names[key]+': '+format(value)+'\nSamples: '+node.count)};
+            font:{color:dim?'#a4acb9':'#263142'},title:tooltip((node.state || node.country)+'\n'+names[key]+': '+format(value)+'\nSamples: '+node.count)};
         }));
         edges.clear();edges.add(activeEdges.map(edge=>({
           id:edge.id,from:edge.source,to:edge.target,value:Math.max(1,edge.count),dashes:edge.ambiguous || edge.count===0,
@@ -232,20 +241,51 @@ _INITIALIZER = r"""
           const connections=activeEdges.filter(edge=>edge.source===selected || edge.target===selected).length;
           const value=data.nodes.find(node=>node.id===selected).metrics[key];
           status.textContent=selected+': '+connections+' directed connection'+(connections===1?'':'s')+'; '+names[key].toLowerCase()+' '+format(value)+'. Direct neighbours are highlighted.';
-        }else status.textContent=data.nodes.length+' countries · '+activeEdges.length+' directed links. Drag nodes, pan the background, or zoom to explore.';
-        if(!data.nodes.length) status.textContent='No known countries are available in this view.';
+        }else status.textContent=data.nodes.length+' '+(data.statePlural || 'countries')+' · '+activeEdges.length+' directed links. Drag nodes, pan the background, or zoom to explore.';
+        if(!data.nodes.length) status.textContent='No known '+(data.statePlural || 'countries')+' are available in this view.';
       }
       listen(metric,'change',update);listen(country,'change',update);
       listen(possible,'change',()=>{update();network.stabilize(100);});
+      function save(blob,name){
+        const url=URL.createObjectURL(blob),link=document.createElement('a');
+        link.href=url;link.download=name;document.body.append(link);link.click();link.remove();
+        setTimeout(()=>URL.revokeObjectURL(url),1000);
+      }
+      function exportView(action){
+        network.stopSimulation();network.redraw();
+        if(action==='export-png'){
+          const source=canvas.querySelector('canvas'),image=document.createElement('canvas');
+          image.width=source.width;image.height=source.height;
+          const context=image.getContext('2d');context.fillStyle='#ffffff';
+          context.fillRect(0,0,image.width,image.height);context.drawImage(source,0,0);
+          image.toBlob(blob=>{if(blob)save(blob,'chronoclade-network.png');else status.textContent='Image export failed.';},'image/png');
+        }else{
+          const copy=host.cloneNode(true),saved=JSON.parse(JSON.stringify(data));
+          saved.includePossible=possible.checked;
+          saved.view={positions:network.getPositions(),position:network.getViewPosition(),scale:network.getScale(),metric:metric.value,country:country.value};
+          copy.querySelector('[data-network-data]').textContent=JSON.stringify(saved).replace(/</g,'\\u003c');
+          copy.querySelector('[data-network-canvas]').replaceChildren();
+          const style=document.querySelector('[data-cc-network-style]').outerHTML;
+          const library=document.querySelector('[data-cc-network-library]').outerHTML;
+          const initializer=document.querySelector('[data-cc-network-initializer]').outerHTML;
+          save(new Blob(['<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ChronoClade network</title>',style,'</head><body>',copy.outerHTML,library,initializer,'</body></html>'],{type:'text/html'}),'chronoclade-network.html');
+        }
+      }
       for(const button of host.querySelectorAll('[data-network-action]')) listen(button,'click',()=>{
         const action=button.dataset.networkAction;
-        if(action==='fit') fitNetwork();
+        if(action.startsWith('export-')){try{exportView(action);}catch(error){status.textContent='Network export failed: '+error.message;}}
+        else if(action==='fit') fitNetwork();
         else if(action==='clear'){country.value='';update();}
         else network.moveTo({scale:Math.max(0.05,Math.min(8,network.getScale()*(action==='zoom-in'?1.25:0.8))),animation:false});
       });
       network.on('click',event=>{country.value=event.nodes.length?event.nodes[0]:'';update();});
       network.once('stabilized',()=>{network.stopSimulation();fitNetwork();});
+      if(data.view){metric.value=data.view.metric;country.value=data.view.country;}
       update();
+      if(data.view){
+        for(const [id,position] of Object.entries(data.view.positions))network.moveNode(id,position.x,position.y);
+        network.moveTo({position:data.view.position,scale:data.view.scale,animation:false});
+      }
     }
   }
   window.ChronoCladeNetworks={mount,destroy};
@@ -261,11 +301,11 @@ def widget_assets():
     # Protect HTML script boundaries even if a future upstream bundle contains one.
     library = re.sub(r"</script", r"<\\/script", library, flags=re.IGNORECASE)
     return (
-        "<style>"
+        '<style data-cc-network-style>'
         + _CSS
         + "</style>\n<script data-cc-network-library>"
         + library
-        + "</script>\n<script>"
+        + '</script>\n<script data-cc-network-initializer>'
         + _INITIALIZER
         + "</script>"
     )

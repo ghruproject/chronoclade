@@ -1,9 +1,15 @@
 """Arguments for the independent categorical-profile stage."""
 
+from enum import Enum
 from pathlib import Path
 from typing import Annotated
 import typer
 from rich.console import Console
+
+
+class DistanceMethod(str, Enum):
+    alleles = "alleles"
+    direct_dna = "direct-dna"
 
 
 def cgmlst_command(
@@ -13,10 +19,12 @@ def cgmlst_command(
     hiercc_level: Annotated[str | None, typer.Option(help="Explicit E. coli HC level")] = None,
     subsamples: Annotated[int, typer.Option(min=1)] = 1,
     context_size: Annotated[int, typer.Option(min=0)] = 50,
+    representative_reserve: Annotated[int, typer.Option(min=0, help="Minimum optional representative room beyond mandatory neighbours")] = 0,
     nearest_per_query: Annotated[int, typer.Option(min=1)] = 3,
     include: Annotated[
         list[str] | None, typer.Option(help="Pin a context ID; repeat for several")
     ] = None,
+    resume: Annotated[bool, typer.Option(help="Reuse saved numerical analysis after packaging failure with identical source and parameters")] = False,
     fetch_context: Annotated[bool, typer.Option(help="Retrieve matching public profiles before analysis")] = False,
     public_typing: Annotated[Path | None, typer.Option(help="Public profile export")] = None,
     cglin_export: Annotated[Path | None, typer.Option(help="Compatible lineage export")] = None,
@@ -24,7 +32,9 @@ def cgmlst_command(
     seed: int = 42,
     bootstrap_replicates: Annotated[int | None, typer.Option(min=0, max=200, help="Default: 30 for dense blocks, 0 for large blocks; recorded per block")] = None,
     min_overlap: Annotated[float, typer.Option(min=0, max=1)] = 0.9,
-    distance_threshold: Annotated[float, typer.Option(min=0, max=1)] = 0.02,
+    distance_threshold: Annotated[float | None, typer.Option(min=0, max=1, help="Cutoff in the selected mismatch fraction; default .02 for alleles, required for direct-dna")] = None,
+    distance_method: Annotated[DistanceMethod, typer.Option(help="Allele profiles (default) or direct nucleotide comparisons within cgMLST genes")] = DistanceMethod.alleles,
+    allele_catalogue: Annotated[Path | None, typer.Option(help="Scope-checked frozen allele DNA catalogue required for direct-dna")] = None,
 ):
     """Analyse every matching profile in explicit frozen lineage blocks."""
     from chronoclade.cgmlst.workflow import run_cgmlst
@@ -39,6 +49,7 @@ def cgmlst_command(
                 source, output.expanduser().parent / (output.name + "_context"),
                 lin_level=lin_level, hiercc_level=hiercc_level,
                 public_typing=public_typing, cglin_export=cglin_export, catalogues=catalogues,
+                resume=resume,
             )
             source = prepared.dataset_manifest
         result = run_cgmlst(
@@ -46,6 +57,8 @@ def cgmlst_command(
             output.expanduser(),
             lin_level=lin_level,
             hiercc_level=hiercc_level,
+            resume=resume,
+            representative_reserve=representative_reserve,
             replicates=subsamples,
             context_size=context_size,
             nearest_per_query=nearest_per_query,
@@ -54,6 +67,8 @@ def cgmlst_command(
             bootstrap_replicates=bootstrap_replicates,
             min_overlap=min_overlap,
             distance_threshold=distance_threshold,
+            distance_method=distance_method.value,
+            allele_catalogue=allele_catalogue.expanduser() if allele_catalogue else None,
         )
     except (ValueError, OSError, WorkflowError) as error:
         console.print(f"Error: {error}", style="bold red", markup=False)

@@ -156,6 +156,9 @@ def test_context_retrieves_all_matching_profiles_without_assemblies(tmp_path, mo
             cgmlst_profile={},
         )
         public.append(row)
+    # Two separately retrieved genomes belong to the same BioSample unit.
+    public[0]["biosample_accessions"] = ["SAMEA123"]
+    public[1]["biosample"] = "SAMEA123"
     unrelated = record("other")
     unrelated.update(source_genome_id="other", cglin_raw="0,0,1,2,9,4,5,6,7,8", cgmlst_profile={})
     public.append(unrelated)
@@ -187,13 +190,187 @@ def test_context_retrieves_all_matching_profiles_without_assemblies(tmp_path, mo
         prepared.dataset_manifest, tmp_path / "context", client=Client(), lin_level=5
     )
     ds = load_dataset(result.dataset_manifest)
-    assert len(ds.samples) == 121 and len(requested) == 120
+    assert len(ds.samples) == 120 and len(requested) == 120
     assert ds.samples[0] == load_dataset(prepared.dataset_manifest).samples[0]
     audit = json.loads(result.audit_path.read_text())["provider_context"]
-    assert audit["usable"] == 120 and audit["pools"][0]["requested"] == 120
+    assert audit["usable"] == 119 and audit["context_candidates"] == 120
+    assert audit["context_deduplication"]["raw_records"] == 120
+    assert audit["context_deduplication"]["sample_units"] == 119
+    duplicate = next(
+        d for d in audit["context_deduplication"]["decisions"]
+        if d["sample_unit_id"] == "SAMEA123"
+    )
+    assert duplicate["source_genome_ids"] == ["source0", "source1"]
+    assert audit["pools"][0]["requested"] == 120
     assert audit["pools"][0]["level_counts"] == {"5": 120, "6": 120, "7": 120}
     assert audit["context_assemblies"] == "not_requested"
     assert all(not r.get("assembly_reference") for r in ds.samples[1:])
+
+
+def test_context_resume_reuses_completed_scope_and_frozen_catalogues(tmp_path, monkeypatch):
+    import chronoclade.profile_context_provider as provider
+
+    q1 = record("q1")
+    q2 = record("q2")
+    q2["mlst_st"] = "40"
+    source = tmp_path / "profiles.json"
+    source.write_text(json.dumps([q1, q2]))
+    cats = tmp_path / "catalogues.json"
+    cats.write_text(json.dumps([asdict(LocusCatalogue("test", "v1", ("a",), "fixture"))]))
+    prepared = run_prepare(source, tmp_path / "prepared", catalogues=cats)
+
+    class Client:
+        api_key = "fake"
+        base_url = "https://example.test"
+
+        def __init__(self):
+            self.freezes = []
+
+        def supported_organisms(self):
+            return [{"fullName": SPECIES, "organismId": "573"}]
+
+        def freeze_catalogue(self, path, *, organism_id, st):
+            self.freezes.append(st)
+            row = record("PW_source" + st)
+            row.update(source_genome_id="source" + st, origin="context", aliases=["source" + st])
+            envelope = {
+                "rows": [row],
+                "provenance": {
+                    "complete": True,
+                    "expected_count": 1,
+                    "query": {"organismId": organism_id, "mlst": [st]},
+                    "organism_capabilities": {"fullName": SPECIES, "organismId": organism_id},
+                    "base_url": self.base_url,
+                },
+            }
+            path.write_text(json.dumps(envelope))
+            return envelope
+
+    client = Client()
+    actual_loader = provider.load_catalogue
+    monkeypatch.setattr(
+        provider,
+        "load_catalogue",
+        lambda path: json.loads(path.read_text()),
+    )
+    export_calls = []
+    fail_once = {"value": True}
+
+    def exports(rows, _client, _output, _provenance, download_names=None):
+        ids = [r["source_genome_id"] for r in rows]
+        export_calls.extend(ids)
+        if download_names is None and "source40" in ids and fail_once["value"]:
+            fail_once["value"] = False
+            raise RuntimeError("simulated interrupted profile export")
+        if download_names is None:
+            return [dict(r, cgmlst_profile={"a": "1"}) for r in rows]
+        return rows
+
+    monkeypatch.setattr(provider, "_grouped_analysis_exports", exports)
+    output = tmp_path / "resumed"
+    with pytest.raises(RuntimeError, match="interrupted"):
+        discover_profile_context(prepared.dataset_manifest, output, client=client)
+
+    retrieval = tmp_path / "resumed_retrieval"
+    assert sorted(client.freezes) == ["39", "40"]
+    assert (retrieval / "public_0.json").is_file()
+    assert (retrieval / "public_1.json").is_file()
+    assert (retrieval / "matched_0.json").is_file()
+    first_scope_calls = export_calls.count("source39")
+
+    with pytest.raises(DatasetError, match="inputs changed"):
+        discover_profile_context(
+            prepared.dataset_manifest, output, client=client, resume=True, lin_level=6
+        )
+    assert len(client.freezes) == 2
+
+    # This mocked loader stands in for load_catalogue's full snapshot validation.
+    monkeypatch.setattr(provider, "load_catalogue", lambda path: json.loads(path.read_text()))
+    result = discover_profile_context(prepared.dataset_manifest, output, client=client, resume=True)
+    assert len(client.freezes) == 2
+    assert export_calls.count("source39") == first_scope_calls == 2
+    assert len(export_calls) == 6
+    assert result.dataset_manifest.is_file()
+    call_count = len(export_calls)
+    reused = discover_profile_context(
+        prepared.dataset_manifest, output, client=client, resume=True
+    )
+    assert reused == result
+    assert len(export_calls) == call_count and len(client.freezes) == 2
+    with pytest.raises(DatasetError, match="already exists"):
+        discover_profile_context(prepared.dataset_manifest, output, client=client)
+    monkeypatch.setattr(provider, "load_catalogue", actual_loader)
+
+
+def test_context_resume_reuses_source_copy_after_packaging_failure(tmp_path, monkeypatch):
+    import chronoclade.profile_context_provider as provider
+    import chronoclade.prepare_stage as prepare_stage
+
+    source = tmp_path / "profiles.json"
+    source.write_text(json.dumps([record()]))
+    cats = tmp_path / "catalogues.json"
+    cats.write_text(json.dumps([asdict(LocusCatalogue("test", "v1", ("a",), "fixture"))]))
+    prepared = run_prepare(source, tmp_path / "prepared", catalogues=cats)
+
+    class Client:
+        api_key = "fake"
+        base_url = "https://example.test"
+
+        def __init__(self):
+            self.freezes = 0
+
+        def supported_organisms(self):
+            return [{"fullName": SPECIES, "organismId": "573"}]
+
+        def freeze_catalogue(self, path, *, organism_id, st):
+            self.freezes += 1
+            row = record("PW_source")
+            row.update(source_genome_id="source", origin="context", aliases=["source"])
+            envelope = {
+                "rows": [row],
+                "provenance": {
+                    "complete": True,
+                    "expected_count": 1,
+                    "query": {"organismId": organism_id, "mlst": [st]},
+                    "organism_capabilities": {"fullName": SPECIES, "organismId": organism_id},
+                    "base_url": self.base_url,
+                },
+            }
+            path.write_text(json.dumps(envelope))
+            return envelope
+
+    client = Client()
+    export_calls = []
+
+    def exports(rows, _client, _output, _provenance, download_names=None):
+        export_calls.extend(r["source_genome_id"] for r in rows)
+        if download_names is None:
+            return [dict(row, cgmlst_profile={"a": "1"}) for row in rows]
+        return rows
+
+    monkeypatch.setattr(provider, "_grouped_analysis_exports", exports)
+    original_report = prepare_stage._report
+    fail_once = {"value": True}
+
+    def report_with_interruption(audit):
+        if fail_once["value"]:
+            fail_once["value"] = False
+            raise RuntimeError("simulated packaging failure")
+        return original_report(audit)
+
+    monkeypatch.setattr(prepare_stage, "_report", report_with_interruption)
+    output = tmp_path / "packaging"
+    with pytest.raises(RuntimeError, match="packaging failure"):
+        discover_profile_context(prepared.dataset_manifest, output, client=client)
+    source_copy = tmp_path / "packaging_retrieval" / "source_dataset"
+    assert (source_copy / "dataset.json").is_file()
+
+    result = discover_profile_context(
+        prepared.dataset_manifest, output, client=client, resume=True
+    )
+    assert result.dataset_manifest.is_file()
+    assert client.freezes == 1
+    assert export_calls == ["source", "source"]
 
 
 def test_context_ecoli_requires_explicit_hiercc_level(tmp_path):

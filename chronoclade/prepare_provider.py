@@ -512,7 +512,11 @@ def resolve_queries(
             "selected": True,
         }
         for r in rows
-        for key in ("country", "region", "nuts2", "host", "isolation_source", "collection_date")
+        for key in (
+            "country", "region", "nuts2", "host", "isolation_source", "collection_date",
+            "hospital", "hospital_code", "publication_isolate_id", "specimen_type",
+            "clinical_specimen", "study_accession",
+        )
         if r.get(key)
     ]
     conflicts = [

@@ -265,6 +265,8 @@ def nearest_country_connections(rows, comparisons):
         for field, alias in (
             ("allele_differences", "allele_mismatches"),
             ("shared_called_loci", "shared_loci"),
+            ("snp_differences", "snp_differences"),
+            ("shared_called_sites", "shared_sites"),
         ):
             values = [i[field] for i in items if i.get(field) is not None]
             row[alias + "_min"] = min(values) if values else None
@@ -359,15 +361,14 @@ def build_location_network(
 ):
     """Reconstruct locations on an explicitly supplied biological tree.
 
-    A protein embedding or an embedding-distance NJ diagram is not a biological
-    phylogeny. ESM2 workflows can use this component only with an independently
-    supplied biological tree, declared as ``provided_phylogeny`` or ``sequence``.
+    Tree sources are categorical cgMLST, nucleotide sequence or an independently
+    supplied biological phylogeny.
     Tree provenance is the caller's responsibility; it cannot be inferred from
     a Newick topology alone. No tree is constructed by this component.
     """
     if tree_basis not in {"cgmlst", "sequence", "provided_phylogeny"}:
         raise ValueError(
-            "Location reconstruction requires a biological tree, not embedding distances"
+            "Location reconstruction requires a declared biological tree basis"
         )
     if not isinstance(tree, Tree):
         raise TypeError("Location reconstruction requires a Bio.Phylo biological tree")
@@ -462,3 +463,56 @@ def build_location_network(
         ],
         nearest_edges=nearest_country_connections(rows, nearest_neighbours),
     )
+
+
+def observed_host(value):
+    """Normalize trivial host case variants without inferring taxonomic aliases."""
+    value = " ".join(str(value or "").split())
+    if value.casefold() in {"", "unknown", "none", "na", "n/a", "not provided", "not available"}:
+        return None
+    return value.casefold().capitalize()
+
+
+def build_state_network(tree, rows, nearest_neighbours=None, *, state_field="country", tree_basis):
+    """Run the same categorical reconstruction using the requested observed metadata.
+
+    Missing states remain unconstrained tips and are never promoted to observed
+    hosts. The country implementation is the shared Sankoff engine; adapting its
+    input here changes observations before reconstruction, rather than relabelling
+    a location network after it has been inferred.
+    """
+    if state_field not in {"country", "host"}:
+        raise ValueError("state_field must be country or host")
+    rows = list(rows)
+    observed = [dict(row, country=observed_host(row.get("host")) if state_field == "host"
+                     else row.get("country")) for row in rows]
+    comparisons = nearest_neighbours
+    if state_field == "host":
+        by_id = {row["sample_id"]: row for row in rows}
+        comparisons = [dict(item, country=observed_host(
+            by_id.get(item.get("context_id"), item).get("host")))
+            for item in nearest_neighbours or []]
+    result = build_location_network(tree, observed, comparisons, tree_basis=tree_basis)
+    if state_field == "host":
+        def generic(value):
+            if isinstance(value, dict):
+                return {key.replace("country", "state").replace("countries", "states"): generic(item)
+                        for key, item in value.items()}
+            if isinstance(value, list):
+                return [generic(item) for item in value]
+            return value
+        result = generic(result)
+        result["method"] = result["method"].replace("country-state", "host-state")
+        result["interpretation"] = result["interpretation"].replace("country-state", "host-state").replace("Location changes", "Host changes")
+        result["root_selection"] = result["root_selection"].replace("country diversity", "host diversity")
+    result["state_field"] = state_field
+    result["state_label"] = state_field
+    result["state_plural"] = "countries" if state_field == "country" else "hosts"
+    result["unknown_state_count"] = result.get("unknown_state_count", result.get("unknown_country_count", 0))
+    result["known_state_count"] = len(result["nodes"])
+    result["status"] = "available" if len(result["nodes"]) >= 2 else "insufficient_metadata"
+    result["status_reason"] = (
+        "At least two distinct known states are required to compare state changes."
+        if result["status"] == "insufficient_metadata" else None
+    )
+    return result

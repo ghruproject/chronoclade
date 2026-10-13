@@ -1,6 +1,7 @@
 """The existing report shell presents saved profile partitions and selections."""
 
 import html
+from chronoclade.report_components.tables import write_report_html
 from chronoclade.report_components.styles import report_styles
 
 
@@ -34,11 +35,11 @@ def write_partition_index(
         else ""
     )
     report_path = output / "index.html"
-    report_path.write_text(
+    write_report_html(report_path,
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
         f"<title>ChronoClade · cgMLST</title><style>{report_styles()}</style></head>"
-        '<body><main class="shell"><header class="identity"><div class="identity-mark">CHRONOCLADE · cgMLST</div><div class="identity-copy">'
+        '<body><main class="shell"><header class="identity"><div class="identity-mark">ChronoClade · cgMLST ANALYSIS REPORT</div><div class="identity-copy">'
         '<h1>Profile analysis blocks</h1></div></header><section class="stage"><div class="stage-body"><h2>Prepared dataset</h2>'
         f"<p>{records_count} samples; {len(products)} disjoint blocks. Status: {status}.</p>"
         "<p>Context counts describe compatible profiles in the prepared dataset, before assembly subsampling. "

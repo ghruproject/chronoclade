@@ -1,22 +1,22 @@
 # ChronoClade suite architecture review
 
 Reviewed 10 October 2026 in the `codex/shared-suite-foundations` checkout.
+Updated 11 October 2026 to reflect the parked embedding work and four active stages.
 This is a strict source-level architecture audit and implementation guide. The
-five-stage design is in [tool-suite-design.md](tool-suite-design.md); this review
+four-stage design is in [tool-suite-design.md](tool-suite-design.md); this review
 does not certify that those commands or their scientific workflows are complete.
 
 ## Verdict and scope
 
 The reusable foundation is worth extracting now. The existing cumulative
 fast/full/finish workflow is unsuitable as the permanent implementation of
-prepare/cgmlst/esm2/tree/time. Adding command wrappers or more mode checks would
+prepare/cgmlst/tree/time. Adding command wrappers or more mode checks would
 retain the central coupling, file-discovery semantics and shared invalidation
 logic. Move ownership first, then give each stage its own validated inputs and
 output namespace.
 
 The review inspected the CLI, input/provider resolution, adaptive/refined context,
-profile analysis/network/reporting, assembly/temporal orchestration and the ESM2
-inference foundation. It also inspected current tests for selection, stage
+profile analysis/network/reporting and assembly/temporal orchestration. It also inspected current tests for selection, stage
 snapshots, location reconstruction, country-tree display and widget interaction.
 Line counts below are the baseline observed before concurrent foundation edits;
 they are evidence of responsibility concentration, not a claim that this branch
@@ -75,7 +75,7 @@ Sankoff reconstruction/exact pair extrema, graph metrics and layout, and
 private `_compatible`/`_lineage` policy helpers from `context_refinement.py`.
 `profile_country_tree.py` imported `_date_interval` from `profile_analysis.py` and
 hard-coded NJ/cgMLST titles and branch units. Reusing those files directly in
-tree/esm2 would import another stage's policy and mislabel scientific evidence.
+the tree stage would import another stage's policy and mislabel scientific evidence.
 
 Move fixed-tree reconstruction, centralities, colours, static network, interactive
 widget and country-tree rendering into `location_network/`. Keep declared group
@@ -89,22 +89,20 @@ silently replace the scientific method during extraction. The older
 semantics; its source parsing stays in a separate marginal adapter. Shared
 presentation does not make marginal support and exact parsimony ranges equivalent.
 
-ESM2 metadata composition and metadata-coloured embedding points can reuse these
-visual components. Embedding coordinates or embedding NJ cannot be supplied as a
-biological tree for ancestral location changes. An esm2 network needs an explicit
-conventional cgMLST/SNP baseline, labelled with its source, or is unavailable.
+Location reconstruction requires an explicitly declared biological tree and
+method-specific branch units. Metadata-only views retain their separate scope.
 
 **Acceptance:** unchanged fixed-tree edges/ranges/metrics/palette; no shared
 location module imports profile_analysis/context-refinement stage policy;
-corrected-SNP trees have SNP labels; embedding-space input is rejected at the
-future typed biological-tree boundary. Filtering a saved graph cannot claim a
+corrected-SNP trees have SNP labels; unsupported tree bases are rejected at the
+biological-tree boundary. Filtering a saved graph cannot claim a
 new reconstruction.
 
 The current import graph meets the extraction boundary: common functions live
 under `location_network/`; `profile_network.py` retains only the cgLIN view
 adapter; shared country-tree rendering imports `metadata_dates.date_interval`
-and receives scale/title/dating labels. `tree_basis` rejects named embedding
-inputs and requires a Bio.Phylo tree, saving the declared basis in its result.
+and receives scale/title/dating labels. `tree_basis` requires a supported basis
+and a Bio.Phylo tree, saving the declared basis in its result.
 It is a caller declaration, not validation
 of a frozen tree manifest or saved root/checksum provenance; those remain part
 of the independent-stage contract.
@@ -178,7 +176,7 @@ Do not turn selection into a shared distance engine.
 
 **Acceptance:** same existing selections after extraction; separate new fixtures
 for exact ties, overrun, missing dates, reproducible alternatives and sources from
-cgmlst/esm2. Every selection has source IDs/hashes and per-ID reasons. Tree checks
+cgmlst. Every selection has source IDs/hashes and per-ID reasons. Tree checks
 that emitted manifest and uses exactly its IDs.
 
 ### 5. Reporting crosses private boundaries and owns some scientific assessment
@@ -207,9 +205,8 @@ report rebuild works from saved evidence without rerunning analysis.
 **Priority: P2 before independent resume is claimed.** `_run_command` and direct
 file fingerprinting live in `lineage.py`; temporal workers execute commands
 separately; stable object hashing is imported from the Pathogenwatch provider;
-file SHA256 exists independently in temporal, ESM2 proteins and neighbourhood.
-JSON publication is atomic in some ESM2 paths while legacy stage/report manifests
-are written directly. The cumulative fingerprint mixes profile and temporal
+file SHA256 exists independently in temporal and neighbourhood code.
+Legacy stage/report manifests are written directly. The cumulative fingerprint mixes profile and temporal
 settings, so changing dating options can invalidate reader-facing tree products.
 
 Create one execution/artifact layer when migrating independent stages. It owns
@@ -218,10 +215,8 @@ atomic publication and a resource plan. The provider client must not be the
 canonical hashing utility. Reuse one ordinary job description under local and
 SLURM executors; do not implement two scientific pipelines.
 
-Preserve the useful ESM2 atomic publication and provenance-specific vector-cache
-behaviour. Backend/device fallback must not mix caches. Do not force the model
-cache into the same key schema as a native alignment job simply because both
-contain hashes.
+Preserve atomic publication and provenance-specific cache behaviour. Backend
+fallback must not mix caches, and each job records the inputs it actually uses.
 
 **Acceptance:** changed direct input or tool identity invalidates its owner;
 unchanged upstream bundles remain valid; interrupted publication preserves the
@@ -237,23 +232,19 @@ greedy complete-comparability cohorts are reported limitations, not proof of
 biological partitioning. Removing the guard would expose resource failure without
 making the engine a tens-of-thousands implementation.
 
-The ESM2 foundation is well scoped: `esm2_cli.py` lazily imports protein inference,
-the engine retains sequence mapping/model/device/cache provenance, and describes
-itself as protein-level only. It is not the prepared-dataset genome embedding,
-selection or report route. Keep that distinction. `pixi.toml` still installs all
-native tools in its default environment; `cli.py` imports workflow/lineage/report
-eagerly. A base CLI that avoids PyTorch is useful but does not complete all stage
-environment boundaries.
+Separate stage environments must avoid loading unrelated scientific backends.
+The default development environment can include the complete native tool stack
+while prepare and cgmlst retain lighter environments and lazy imports.
 
 Replace dense distance/tree/ordination/storage backends behind validated small-
 input interfaces and benchmark complete outputs. Split tool environments and lazy
-stage imports independently. Optional model inference can progress without being
-used to imply biological validation or suite integration.
+stage imports independently. Exercise each declared scientific workflow on
+representative input before claiming completion.
 
 **Acceptance:** unchanged small-input distance evidence; full IDs retained at
 benchmark sizes; measured memory/runtime for network reconstruction too; CLI and
-cgmlst work without PyTorch/weights/tree/date executables; model inference and
-actual genome-level neighbour/selection performance are tested separately.
+cgmlst work without tree/date executables; actual genome-level
+neighbour/selection performance is tested separately.
 
 ## Foundation change and follow-through
 
@@ -283,13 +274,13 @@ the conflicting/unknown database-fingerprint regression fixtures and declared
 tree-basis persistence. No remaining blocker was found within this extraction
 and prepared-bundle scope. This approval does not cover independent prepare/
 cgmlst/tree/time commands, the revised mandatory-selection policy, scale
-backends or genome-level ESM2 analysis.
+backends.
 
 Remaining work should follow the parallel packages and integration gates in the
 design document. The first complete vertical path is prepared bundle → explicit
 cgmlst partition → selection manifest → independent corrected tree/assessment →
 independent dating result. Then exercise alternatives, resume/invalidation,
-large-block execution and the experimental ESM2 route separately.
+large-block execution separately.
 
 Do not combine a scientific algorithm change, a whole-report restyle and an
 ownership extraction in one unreviewable diff. Maintain fixed-tree numerical

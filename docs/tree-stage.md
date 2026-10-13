@@ -1,7 +1,7 @@
 # Independent assembly tree
 
 `chronoclade tree <selection.json> --out tree/ --threads 4` consumes a validated
-cgMLST or ESM2 selection. It checks every source checksum and builds precisely the
+cgMLST selection. It checks every source checksum and builds precisely the
 ordered selected IDs. It never retrieves other context or chooses replacements.
 Linked local assemblies are validated and copied. Missing assemblies are acquired
 by exact Pathogenwatch `source_genome_id` using the configured API key; credentials

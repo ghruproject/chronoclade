@@ -1,12 +1,14 @@
 """Mandatory context policy and reproducible alternatives over supplied distances.
 
-No distances or clock fits are computed here. Raw allele differences rank cgMLST
+No distances or clock fits are computed here. Raw allele or SNP differences rank
 neighbours; the supplied normalized distance is retained for diversity and audit.
 """
 
 from __future__ import annotations
 
 import csv
+import hashlib
+import json
 import math
 import random
 from collections import Counter, defaultdict
@@ -53,8 +55,20 @@ def read_distance_evidence(analysis: dict) -> DistanceEvidence:
         if not Path(path).is_file():
             raise WorkflowError(f"Distance evidence does not exist: {path}")
         with Path(path).open(newline="", encoding="utf-8") as handle:
-            return DistanceEvidence(tuple(dict(row) for row in csv.DictReader(handle)))
-    return DistanceEvidence(())
+            return DistanceEvidence(
+                tuple(dict(row) for row in csv.DictReader(handle)),
+                method=analysis.get("distance_method", "cgmlst"),
+                distance_definition=analysis.get(
+                    "distance_definition", "allele differences / shared called loci"
+                ),
+            )
+    return DistanceEvidence(
+        (),
+        method=analysis.get("distance_method", "cgmlst"),
+        distance_definition=analysis.get(
+            "distance_definition", "allele differences / shared called loci"
+        ),
+    )
 
 
 def _number(value):
@@ -65,20 +79,26 @@ def _number(value):
     return result if math.isfinite(result) and result >= 0 else None
 
 
+def _raw_difference_field(evidence):
+    return {"cgmlst": "allele_differences", "alleles": "allele_differences",
+            "direct-dna": "snp_differences"}.get(evidence.method)
+
+
 def _distance_maps(evidence):
     from chronoclade.matrix_distances import BinaryDistanceEvidence
     if isinstance(evidence, BinaryDistanceEvidence):
         return evidence.value_map(), evidence.value_map(raw=True)
     normalized, nearest = {}, {}
-    raw_available = evidence.method == "cgmlst" and any(
-        _number(row.get("allele_differences")) is not None for row in evidence.records
+    raw_field = _raw_difference_field(evidence)
+    raw_available = raw_field is not None and any(
+        _number(row.get(raw_field)) is not None for row in evidence.records
     )
     for row in evidence.records:
         a, b = row.get("sample_id_1"), row.get("sample_id_2")
         if not isinstance(a, str) or not a or not isinstance(b, str) or not b:
             raise WorkflowError("Distance evidence requires nonempty sample_id_1/sample_id_2")
         distance = _number(row.get("distance"))
-        raw = _number(row.get("allele_differences")) if evidence.method == "cgmlst" else None
+        raw = _number(row.get(raw_field)) if raw_field else None
         rank = raw if raw_available else distance
         for values, value in ((normalized, distance), (nearest, rank)):
             if value is None:
@@ -251,6 +271,170 @@ def _coverage(strata, selected):
     ]
 
 
+def representative_coverage(queries, context, selected_ids, evidence, *, ranking_metric=None):
+    """Measure every available pool member against its nearest selected genome.
+
+    Binary evidence is queried one scalar pair at a time, keeping temporary memory
+    proportional to the pool size rather than copying its square matrices. Dense
+    evidence is scanned once and only per-genome best rows and ties are retained.
+    cgMLST uses raw allele differences and direct DNA uses raw SNP differences
+    for ranking. Other methods use their saved distance. Selected samples have a
+    zero-distance identity entry in addition to
+    any comparable external representatives.
+    """
+    from chronoclade.matrix_distances import BinaryDistanceEvidence
+
+    pool = sorted([row["sample_id"] for row in queries + context])
+    pool_set = set(pool)
+    representatives = list(selected_ids)
+    representative_set = set(representatives)
+    if len(representative_set) != len(representatives) or not representative_set.issubset(pool_set):
+        raise WorkflowError("Coverage representatives must be unique members of the full pool")
+
+    raw_field = _raw_difference_field(evidence)
+    raw_ranking = raw_field is not None and (
+        isinstance(evidence, BinaryDistanceEvidence)
+        or ranking_metric == f"raw_{raw_field}_when_available"
+        or ranking_metric is None
+        and any(_number(row.get(raw_field)) is not None for row in evidence.records)
+    )
+    metric = raw_field if raw_ranking else "distance"
+    best = {ident: None for ident in pool}
+    comparable_counts = Counter()
+
+    def consider(sample_id, representative_id, record, *, identity=False):
+        def numeric(field, *, integer=False):
+            value = _number(record.get(field))
+            if value is not None and integer and float(value).is_integer():
+                return int(value)
+            return value
+
+        shared = numeric("shared_called_loci", integer=True)
+        call_overlap = numeric("call_overlap")
+        scheme = numeric("scheme_loci", integer=True)
+        if scheme is None and shared is not None and call_overlap:
+            scheme = round(shared / call_overlap)
+        if call_overlap is None and shared is not None and scheme:
+            call_overlap = shared / scheme
+        candidate = {
+            "sample_id": representative_id,
+            "comparison": "same_sample_identity" if identity else "pairwise_distance",
+            "distance": numeric("distance"),
+            "allele_differences": numeric("allele_differences", integer=True),
+            "shared_called_loci": shared,
+            "scheme_loci": scheme,
+            "call_overlap": call_overlap,
+            "panel_loci": numeric("panel_loci", integer=True),
+        }
+        if evidence.method == "direct-dna":
+            candidate["snp_differences"] = numeric("snp_differences", integer=True)
+            candidate["shared_called_sites"] = numeric("shared_called_sites", integer=True)
+        value = 0 if identity and raw_ranking else (0.0 if identity else _number(record.get(metric)))
+        if raw_ranking and value is not None and float(value).is_integer():
+            value = int(value)
+        if value is None:
+            return
+        comparable_counts[sample_id] += 0 if identity else 1
+        candidate["ranking_value"] = value
+        current = best[sample_id]
+        if current is None or value < current["value"] - (0 if raw_ranking else 1e-12):
+            best[sample_id] = {"value": value, "ties": [candidate]}
+        elif (
+            value == current["value"]
+            if raw_ranking
+            else math.isclose(value, current["value"], rel_tol=0, abs_tol=1e-12)
+        ):
+            current["ties"].append(candidate)
+
+    if isinstance(evidence, BinaryDistanceEvidence):
+        for sample_id in pool:
+            for representative_id in representatives:
+                if sample_id == representative_id:
+                    continue
+                record = evidence.get(sample_id, representative_id)
+                if record is not None:
+                    consider(sample_id, representative_id, record)
+    else:
+        # One pass over the existing pair rows avoids building another O(n²) map.
+        for row in evidence.records:
+            left, right = row.get("sample_id_1"), row.get("sample_id_2")
+            if left not in pool_set or right not in pool_set or left == right:
+                continue
+            if right in representative_set:
+                consider(left, right, row)
+            if left in representative_set:
+                consider(right, left, row)
+
+    # An included genome covers itself exactly, while the record keeps that
+    # identity separate from callable pair evidence and its denominator.
+    for ident in representatives:
+        consider(ident, ident, {"distance": 0.0, "allele_differences": 0, "snp_differences": 0}, identity=True)
+
+    rows = []
+    for ident in pool:
+        result = best[ident]
+        ties = sorted(result["ties"], key=lambda item: item["sample_id"]) if result else []
+        identity_only = bool(ties) and all(
+            tie["comparison"] == "same_sample_identity" for tie in ties
+        )
+        rows.append({
+            "sample_id": ident,
+            "selected": ident in representative_set,
+            "candidate_representatives": max(0, len(representatives) - int(ident in representative_set)),
+            "comparable_representatives": comparable_counts[ident],
+            "coverage_status": (
+                "selected_identity_only" if identity_only else
+                "covered" if ties else "no_comparable_selected_representative"
+            ),
+            "ranking_metric": metric,
+            "nearest_value": result["value"] if result else None,
+            "nearest_tie_count": len(ties),
+            "nearest_tie_evidence": ties,
+            "nearest_selected_ids": [tie["sample_id"] for tie in ties],
+            "nearest_distance": min(
+                (value for tie in ties if (value := _number(tie["distance"])) is not None),
+                default=None,
+            ),
+        })
+
+    values = sorted(row["nearest_value"] for row in rows if row["nearest_value"] is not None)
+
+    def quantile(fraction):
+        if not values:
+            return None
+        position = (len(values) - 1) * fraction
+        lower, upper = math.floor(position), math.ceil(position)
+        if lower == upper:
+            return values[lower]
+        return values[lower] + (values[upper] - values[lower]) * (position - lower)
+
+    summary = {
+        "schema": "chronoclade.selection-representative-coverage",
+        "schema_version": 1,
+        "status": "complete",
+        "scope": "full_available_selection_pool",
+        "sample_count": len(pool),
+        "scope_sample_ids_sha256": hashlib.sha256(
+            json.dumps(pool, separators=(",", ":")).encode()
+        ).hexdigest(),
+        "selected_sample_ids": representatives,
+        "selected_count": len(representatives),
+        "ranking_metric": metric,
+        "distance_definition": evidence.distance_definition,
+        "coverage_status_counts": dict(sorted(Counter(row["coverage_status"] for row in rows).items())),
+        "comparable_sample_count": len(values),
+        "noncomparable_sample_count": len(pool) - len(values),
+        "nearest_value_quantiles": {
+            "minimum": values[0] if values else None,
+            "q25": quantile(0.25),
+            "median": quantile(0.5),
+            "q75": quantile(0.75),
+            "maximum": values[-1] if values else None,
+        },
+    }
+    return summary, rows
+
+
 def select_context_ensemble(
     queries: list[dict],
     context: list[dict],
@@ -259,10 +443,17 @@ def select_context_ensemble(
     replicates: int = 1,
     size: int = 50,
     nearest_per_query: int = 3,
+    representative_reserve: int = 0,
     include: list[str] | None = None,
     seed: int = 42,
 ) -> tuple[list[dict], dict]:
-    """Keep mandatory IDs fixed, varying eligible representatives with recorded seeds."""
+    """Keep mandatory IDs fixed, varying eligible representatives with recorded seeds.
+
+    ``size`` remains the requested context budget. ``representative_reserve`` is
+    an explicit minimum number of optional slots above the mandatory union;
+    it can extend that budget, but never removes required neighbours or ties.
+    The available pool may contain fewer optional genomes than requested.
+    """
     if (
         type(size) is not int
         or size < 0
@@ -272,6 +463,8 @@ def select_context_ensemble(
         raise WorkflowError("Context size must be non-negative and nearest-per-query positive")
     if type(replicates) is not int or replicates < 1 or type(seed) is not int:
         raise WorkflowError("Replicates must be positive and seed must be an integer")
+    if type(representative_reserve) is not int or representative_reserve < 0:
+        raise WorkflowError("Representative reserve must be a non-negative integer")
     query_ids, by_id, pinned = _pool(queries, context, include)
     all_records = {row["sample_id"]: row for row in queries} | by_id
     supplied = read_distance_evidence(analysis)
@@ -284,10 +477,12 @@ def select_context_ensemble(
         nearest_per_query,
         supplied.method,
     )
+    # Explicit optional room preserves every required nearest boundary tie.
+    effective_size = max(size, len(mandatory) + representative_reserve)
     strata = _strata(by_id, analysis)
-    quotas = _quotas(strata, mandatory, size, seed)
+    quotas = _quotas(strata, mandatory, effective_size, seed)
     selections, seen = [], {}
-    no_choices = len(mandatory) >= size or len(by_id) <= size
+    no_choices = len(mandatory) >= effective_size or len(by_id) <= effective_size
     for index in range(replicates):
         attempted_seeds = []
         for attempt in range(1 if no_choices or index == 0 else 32):
@@ -300,7 +495,7 @@ def select_context_ensemble(
                 distances,
                 strata,
                 quotas,
-                size,
+                effective_size,
                 run_seed,
                 supplied.method,
             )
@@ -325,6 +520,8 @@ def select_context_ensemble(
                 if any(reason.startswith(f"{supplied.method}_neighbour:") for reason in reasons[i])
             ],
             "context_budget": size,
+            "representative_reserve": representative_reserve,
+            "effective_context_budget": effective_size,
             "available_contexts": len(by_id),
             "selected_contexts": len(selected),
             "budget_overrun": max(0, len(mandatory) - size),
@@ -333,8 +530,8 @@ def select_context_ensemble(
             "attempted_seeds": attempted_seeds,
             "source_method": supplied.method,
             "distance_definition": supplied.distance_definition,
-            "nearest_ranking": "raw_allele_differences_when_available"
-            if supplied.method == "cgmlst"
+            "nearest_ranking": f"raw_{_raw_difference_field(supplied)}_when_available"
+            if _raw_difference_field(supplied)
             else "supplied_distance",
             "nearest_neighbours": neighbour_evidence,
             "decisions": [
@@ -417,6 +614,7 @@ def select_assembly_context(
     *,
     size: int = 50,
     nearest_per_query: int = 3,
+    representative_reserve: int = 0,
     include: list[str] | None = None,
     seed: int = 42,
 ) -> tuple[list[dict], dict]:
@@ -427,6 +625,7 @@ def select_assembly_context(
         analysis,
         size=size,
         nearest_per_query=nearest_per_query,
+        representative_reserve=representative_reserve,
         include=include,
         seed=seed,
     )
