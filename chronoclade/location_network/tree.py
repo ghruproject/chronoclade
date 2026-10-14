@@ -21,7 +21,9 @@ def draw_country_tree(
     dating_note="This tree is not dated.",
 ):
     """Retain original ancestors when hiding tips; never reconstruct a display subset."""
-    import matplotlib.pyplot as plt
+    from chronoclade.plotting import headless_pyplot
+
+    plt = headless_pyplot()
     from matplotlib.lines import Line2D
 
     reconstruction = network.get("reconstruction", {})

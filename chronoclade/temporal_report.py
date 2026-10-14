@@ -114,15 +114,10 @@ def format_rate(value: float) -> str:
 
 
 def _pyplot():
-    """Load matplotlib with a non-interactive backend only when figures are written."""
+    """Load the shared headless plotting setup only when figures are written."""
+    from chronoclade.plotting import headless_pyplot
 
-    import matplotlib
-
-    matplotlib.use("Agg")
-    matplotlib.rcParams["svg.hashsalt"] = "chronoclade"
-    from matplotlib import pyplot
-
-    return pyplot
+    return headless_pyplot()
 
 
 def _plot_style(axis: object) -> None:

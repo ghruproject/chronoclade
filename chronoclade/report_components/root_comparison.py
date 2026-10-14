@@ -70,7 +70,9 @@ def add_root_comparisons(analysis, records, directory):
 
 
 def _figure(baseline, fitted, path):
-    import matplotlib.pyplot as plt
+    from chronoclade.plotting import headless_pyplot
+
+    plt = headless_pyplot()
     fig, axes = plt.subplots(1, 2, figsize=(11, 4.2), sharex=True, sharey=True)
     for ax, value, title in zip(axes, (baseline, fitted), ('Existing root', 'Clock-compatible root')):
         for p in value['points']:

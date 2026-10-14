@@ -101,3 +101,57 @@ def test_shared_tree_renderer_accepts_method_specific_scale_and_dating_text(tmp_
     assert "profiles" not in svg
     assert "NJ tree" not in svg
     assert "This tree is not dated" not in svg
+
+
+@pytest.mark.parametrize("plot_kind", ["country", "root_comparison"])
+def test_worker_plots_override_gui_backend_in_fresh_process(tmp_path, plot_kind):
+    """Fresh workers must not inherit a GUI backend from macOS/user configuration."""
+    import os
+    from pathlib import Path
+    import subprocess
+    import sys
+    import textwrap
+
+    program = textwrap.dedent('''
+        from concurrent.futures import ThreadPoolExecutor
+        from io import StringIO
+        from pathlib import Path
+        import sys
+        from threading import Barrier
+        from Bio import Phylo
+        from chronoclade.location_network.reconstruction import build_location_network
+        from chronoclade.location_network.tree import draw_country_tree
+        from chronoclade.report_components.root_comparison import _figure
+        assert 'matplotlib.pyplot' not in sys.modules
+        output = Path(sys.argv[1])
+        plot_kind = sys.argv[2]
+        gate = Barrier(2)
+        def plot(index):
+            rows = [dict(sample_id='q', country='UK', role='input'),
+                    dict(sample_id='c', country='Italy', role='context'),
+                    dict(sample_id='u', country='Greece', role='context')]
+            tree = Phylo.read(StringIO('((q:0.1,c:0.1):0.2,u:0.3);'), 'newick')
+            network = build_location_network(tree, rows, tree_basis='sequence')
+            gate.wait()
+            path = output / f'tree-{index}.svg'
+            if plot_kind == "country":
+                draw_country_tree(network, rows, path)
+            else:
+                diagnostic = dict(points=[dict(midpoint_year=2020, year_min=2019, year_max=2021, root_to_tip=0.1)], centered_intercept=0.1, slope=0.01, reference_year=2020, r_squared=0.5, distance_units="substitutions/site")
+                _figure(diagnostic, diagnostic, path)
+            assert '<svg' in path.read_text()
+            return path
+        with ThreadPoolExecutor(max_workers=2) as workers:
+            paths = list(workers.map(plot, range(2)))
+        import matplotlib
+        assert matplotlib.get_backend().lower() == 'agg'
+        assert len(paths) == 2
+    ''')
+    environment = {**os.environ, "MPLBACKEND": "MacOSX", "MPLCONFIGDIR": str(tmp_path / "mpl")}
+    completed = subprocess.run(
+        [sys.executable, "-c", program, str(tmp_path), plot_kind],
+        cwd=Path(__file__).resolve().parents[1], env=environment,
+        capture_output=True, text=True, timeout=60,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert all((tmp_path / f"tree-{index}.svg").stat().st_size > 1000 for index in range(2))
