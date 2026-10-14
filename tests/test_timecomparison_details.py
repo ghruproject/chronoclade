@@ -181,6 +181,27 @@ def test_comparison_keeps_failures_coverage_and_saved_tree_audit(tmp_path, nativ
     assert "Shared genomes" in html and "Unavailable" in html
     assert "Statistical branch support is unavailable" in html
     assert result["shared_anchor_date_forest"] is None
+    assert result["sample_labels"] == {"q": "q", "c": "c", "d": "d"}
+
+
+def test_comparison_renders_accessions_without_changing_pair_identity(tmp_path, native_stubs):
+    from chronoclade.time_stage.comparison_report import write_comparison_report
+
+    selection, ensemble = selection_fixture(tmp_path, dates=("", "", ""))
+    run_tree(selection, output=tmp_path / "tree")
+    run_time(tmp_path / "tree/tree.json", output=tmp_path / "time")
+    output = tmp_path / "comparison"
+    result = compare_time_runs(ensemble, [tmp_path / "time/time.json"], output=output)
+    pair = {"target_pair": "PW_one|PW_two", "assessable_runs": 5, "co_clustered_runs": 5}
+    result["target_pair_agreement"] = [pair]
+    result["sample_labels"] = {
+        "PW_one": "ERR8772835 (PW_one)", "PW_two": "ERR8772768"
+    }
+    write_comparison_report(output, result)
+    html = (output / "report.html").read_text()
+    assert "ERR8772835 · ERR8772768" in html
+    assert "PW_one" not in html and "PW_two" not in html
+    assert pair["target_pair"] == "PW_one|PW_two"
 
 
 def test_corrupt_saved_coverage_csv_is_rejected_before_report(tmp_path):
