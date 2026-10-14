@@ -1,0 +1,50 @@
+"""Clock report refresh must preserve its frozen tree and selection evidence."""
+
+import json
+from pathlib import Path
+
+import pytest
+
+from chronoclade.cgmlst.refresh import refresh_clock_reports
+from chronoclade.errors import WorkflowError
+from chronoclade.datasets import LocusCatalogue, from_profile_records, write_dataset
+from chronoclade.cgmlst.workflow import run_cgmlst
+
+
+def completed_run(tmp_path):
+    rows = [dict(sample_id=name, origin='local' if i==0 else 'context',
+        species='Klebsiella pneumoniae', mlst_st='39', collection_date=str(2010+i),
+        country='Greece', cgmlst_scheme='test', cgmlst_scheme_version='1',
+        cgmlst_profile={'a':str(i+1),'b':'1','c':str(1+i//2)}, cgmlst_status='resolved',
+        cglin_scheme='scgMLST629_S', cglin_scheme_version='1',
+        cglin_raw='0,0,1,0,1,0,0', cglin_status='complete')
+        for i,name in enumerate(('q','c1','c2','c3'))]
+    dataset = write_dataset(from_profile_records(rows,[LocusCatalogue('test','1',('a','b','c'),'test')]),tmp_path/'prepared')
+    return run_cgmlst(dataset,tmp_path/'run',bootstrap_replicates=0,context_size=2).manifest_path
+
+
+def test_refresh_preserves_numeric_tree_and_selection(tmp_path):
+    path = completed_run(tmp_path)
+    manifest = json.loads(path.read_text())
+    directory = path.parent / manifest['blocks'][0]['block_id']
+    analysis = json.loads((directory/'profile_analysis.json').read_text())
+    tree = directory / analysis['cohorts'][0]['tree_path']
+    selection = directory/'selection_bundle/ensemble.json'
+    snapshots = [tree.read_bytes(), selection.read_bytes()]
+    result = refresh_clock_reports(path)
+    assert snapshots == [tree.read_bytes(),selection.read_bytes()]
+    assert result['clock_diagnostic_refresh']['blocks'][0]['sample_count']==4
+    report = Path(path.parent/result['blocks'][0]['report']).read_text()
+    assert 'Clock-compatible (date-optimised)' in report
+    assert 'Archivo' in report
+    assert '1 input genomes · 3 public comparisons' in report
+
+
+def test_refresh_rejects_changed_source_tree(tmp_path):
+    path = completed_run(tmp_path)
+    manifest=json.loads(path.read_text())
+    directory=path.parent/manifest['blocks'][0]['block_id']
+    analysis=json.loads((directory/'profile_analysis.json').read_text())
+    (directory/analysis['cohorts'][0]['tree_path']).write_text('(q:10,c1:10,c2:10,c3:10);')
+    with pytest.raises(WorkflowError,match='numerical checkpoint'):
+        refresh_clock_reports(path)

@@ -1084,7 +1084,7 @@ def write_profile_report(
     root_tip = data.get("root_to_tip")
     from chronoclade.report_components.root_comparison import root_comparison_html
     root_comparison = root_comparison_html(data.get('root_comparisons'), directory, _asset)
-    root_tip_text = ("Gene-panel SNP-distance" if direct_dna else "Allele-distance") + " root-to-tip is exploratory and does not pass the final clock gate."
+    root_tip_text = ("Gene-panel SNP-distance" if direct_dna else "Allele-distance") + " root-to-tip is exploratory. Temporal-signal testing is performed separately in the SNP-tree stage."
     if isinstance(root_tip, dict):
         root_tip_text += " " + _text(root_tip.get("interpretation", root_tip.get("summary", "")), "")
     from chronoclade.report_components.ordination import ordination_viewer

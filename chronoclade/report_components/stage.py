@@ -11,7 +11,8 @@ from chronoclade.location_network.widget import interactive_network_html, widget
 
 
 def write_report(
-    path, *, title, result, rows=(), network=None, figures=(), extra="", overview=None, report_label="TREE ANALYSIS REPORT"
+    path, *, title, result, rows=(), network=None, figures=(), extra="", overview=None, report_label="TREE ANALYSIS REPORT",
+    figure_heading="Biological tree and location history"
 ):
     path = Path(path)
     counts = "".join(
@@ -87,7 +88,7 @@ def write_report(
             ("Selected samples", counts + '<div class="table-scroll">' + table + "</div>")
         )
     if plots or network_html:
-        sections.append(("Biological tree and location history", plots + network_html))
+        sections.append((figure_heading, plots + network_html))
     sections.extend(
         [
             (

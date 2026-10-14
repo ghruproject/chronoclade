@@ -160,3 +160,36 @@ supported, with a regular-copy fallback. It never uses mutable hardlinks. Retain
 many completed runs still consumes space; copy-on-write reduces duplicate matrix
 storage within a run. Exact outgroup discovery is not automated by these commands;
 the declared root and the available clock-compatible comparison remain explicit.
+
+## Root-to-tip diagnostics
+
+The report compares the existing NJ root with a date-optimised root. The latter
+searches continuous positions along tree edges to minimise dated-tip regression
+residual mean squared error, using the same principle as Clockor2. This is an
+exploratory allele-divergence diagnostic, not a calibrated molecular clock.
+Collection-date interval midpoints are used; dates before 1900 are excluded from
+the regression and retained in the metadata and genetic analysis.
+
+Negative NJ branches are set to zero only in a separate diagnostic tree. Both
+root comparisons use that tree, with the number and magnitude of changed edges
+reported. A signed-original baseline is retained as a sensitivity check. The NJ
+tree displayed elsewhere and the location network keep their original branches
+and root. Normalised cgMLST distances are scaled by the recorded locus count;
+with variable missing-locus coverage these are allele-distance units rather than
+literal accumulated allele changes. A date-optimised fit alone does not establish
+temporal signal.
+
+Refresh a completed report from its checked saved NJ evidence, or compare the
+exact selections used by a native SNP-tree ensemble:
+
+```bash
+chronoclade refresh-cgmlst-report cgmlst/cgmlst.json
+chronoclade compare-clocks tree/tree_ensemble.json --out matched-clock-comparison
+```
+
+The matched comparison constructs a fresh NJ tree from each exact selected
+cgMLST distance submatrix. Both panels use the same date-eligible genomes and the
+same continuous-edge residual-MSE rooting criterion. The report separates
+allele-distance units/year from SNP-tree substitutions/site/year; their slopes
+are not directly interchangeable. It compares descriptive fits and does not
+perform another date-randomisation test or recalibrate the saved time trees.

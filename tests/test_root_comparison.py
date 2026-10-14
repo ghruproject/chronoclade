@@ -20,6 +20,8 @@ def test_clock_comparison_keeps_primary_tree_network_and_embeds_evidence(tmp_pat
     assert result['clock_compatible']['residual_mse']<=result['baseline']['residual_mse']+1e-10
     assert result['slope_change']==result['clock_compatible']['slope']-result['baseline']['slope']
     assert result['audit']['pairwise_distances_preserved']
+    assert result['signed_original_baseline'] is None
+    assert result['audit']['pairwise_distances_preserved_within_diagnostic_branch_policy'] is True
     assert json.loads((tmp_path/'one_root_comparison.json').read_text())['audit']['status']=='rooted'
     html=write_profile_report(analysis,directory=tmp_path).read_text()
     assert 'Clock-compatible (date-optimised)' in html
@@ -34,6 +36,44 @@ def test_comparison_reports_insufficient_dates(tmp_path):
     assert analysis['root_comparisons'][0]['audit']['status']=='skipped'
     html=write_profile_report(analysis,directory=tmp_path).read_text()
     assert 'Comparison unavailable' in html
+
+
+def test_negative_edges_are_clamped_only_in_rooting_diagnostic_and_dates_match(tmp_path):
+    path=tmp_path/'tree.nwk'
+    path.write_text('((a:1,b:1):-0.5,(c:3,d:4):1);')
+    original=path.read_bytes()
+    rows=[{'sample_id':s,'collection_date':str(1899+i) if s=='a' else str(2010+i)}
+          for i,s in enumerate('abcd')]
+    analysis={'distance_units':'cgMLST mismatch fraction','cohorts':[{'cohort_id':'neg',
+      'sample_ids':list('abcd'),'tree_path':'tree.nwk'}]}
+    add_root_comparisons(analysis,rows,tmp_path)
+    comparison=analysis['root_comparisons'][0]
+    assert path.read_bytes()==original
+    assert comparison['branch_length_policy']['negative_edge_count']==1
+    assert comparison['branch_length_policy']['negative_edge_total_magnitude']==0.5
+    assert comparison['branch_length_policy']['original_tree_modified'] is False
+    assert comparison['eligible_tip_count']==3
+    assert comparison['baseline']['n_points']==comparison['clock_compatible']['n_points']==3
+    assert comparison['signed_original_baseline']['n_points']==3
+    assert comparison['baseline']['points'][0]['root_to_tip'] != comparison['signed_original_baseline']['points'][0]['root_to_tip']
+    assert comparison['audit']['pairwise_distances_preserved_within_diagnostic_branch_policy'] is True
+    html=write_profile_report(analysis,directory=tmp_path).read_text()
+    assert 'negative edges, total magnitude 0.5' in html
+    assert 'Eligible dated tips: 3' in html
+    assert 'Signed original-branch sensitivity at existing root' in html
+
+
+def test_empty_eligible_dates_is_reported_without_plotting(tmp_path):
+    (tmp_path/'tree.nwk').write_text('(a:1,b:1,c:1);')
+    analysis={'cohorts':[{'cohort_id':'old','sample_ids':list('abc'),'tree_path':'tree.nwk'}]}
+    rows=[{'sample_id':s,'collection_date':'1890'} for s in 'abc']
+    add_root_comparisons(analysis,rows,tmp_path)
+    result=analysis['root_comparisons'][0]
+    assert result['eligible_tip_count']==0
+    assert result['audit']['status']=='skipped'
+    assert result['audit']['pairwise_distances_preserved_within_diagnostic_branch_policy'] is None
+    assert 'clock_compatible' not in result
+    assert not (tmp_path/'old_root_comparison.svg').exists()
 
 
 def test_clock_comparison_has_real_cgmlst_workflow_outputs(tmp_path):

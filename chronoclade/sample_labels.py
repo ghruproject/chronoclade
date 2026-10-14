@@ -36,7 +36,7 @@ def display_label(label: str) -> str:
 
 def label_analysis(value, labels: Mapping[str, str], field: str = ""):
     """Copy reader-facing fields without relabelling paths or scientific identifiers."""
-    fields = {"sample_id", "sample_ids", "query_id", "context_id", "root", "exploratory_root",
+    fields = {"sample_id", "sample_ids", "query_id", "context_id", "root", "baseline_root", "exploratory_root",
               "tested_roots", "sample_a", "sample_b", "focal_sample", "context_sample", "nearest_focal"}
     if isinstance(value, dict):
         return {key: label_analysis(item, labels, key) for key, item in value.items()}
