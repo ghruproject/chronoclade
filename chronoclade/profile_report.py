@@ -169,10 +169,22 @@ def _root_to_tip(value: object) -> str:
             f"<td>{escape(_number(row.get('midpoint_date_pearson_r')))}</td>"
             f"<td>{escape(_text(row.get('interpretation')))}</td></tr>"
         )
+    date_audit = []
+    for row in rows:
+        filtered = [point for point in row.get('exclusions', [])
+                    if point.get('reason') == 'before_minimum_collection_year']
+        if filtered:
+            minimum = row.get('date_filter', {}).get('minimum_collection_year', 1900)
+            date_audit.append(
+                f'<p>Collection dates before {minimum} are excluded from the regression. '
+                'These genomes remain in the NJ tree and other genetic analyses.</p><ul>'
+                + ''.join(f'<li>{escape(_text(point.get("label") or point.get("sample_id")))}: '
+                          f'{escape(_text(point.get("collection_date")))}</li>' for point in filtered)
+                + '</ul>')
     return (
         '<div class="table-wrap" tabindex="0" role="region" aria-label="Exploratory root-to-tip results">'
         '<table><thead><tr><th>Cohort</th><th>Root</th><th>Slope</th><th>Pearson r</th><th>Interpretation</th></tr></thead>'
-        f"<tbody>{''.join(content)}</tbody></table></div>"
+        f"<tbody>{''.join(content)}</tbody></table></div>" + ''.join(date_audit)
     )
 
 

@@ -27,11 +27,15 @@ def add_root_comparisons(analysis, records, directory):
         path = Path(cohort['tree_path'])
         tree = Phylo.read(path if path.is_absolute() else directory / path, 'newick')
         rows = [by_id[name] for name in cohort['sample_ids']]
+        eligible = date_regression(
+            [dict(row, root_to_tip=0) for row in rows],
+            distance_field='root_to_tip', distance_units='', label='Date eligibility')
+        dated_ids = {point['sample_id'] for point in eligible['points']}
         if len(rows) > 1500:
             optimised, audit = None, {'status': 'skipped',
                 'reason': 'Exact root search is limited to 1,500 genomes; use a representative tree.'}
         else:
-            optimised, audit = optimise_clock_root(tree, rows)
+            optimised, audit = optimise_clock_root(tree, [row for row in rows if row['sample_id'] in dated_ids])
         result = {'cohort_id': cohort['cohort_id'], 'audit': audit, 'note': NOTE,
                   'criterion_source': SOURCE, 'implementation': 'ChronoClade; not a TempEst run'}
         if optimised is not None:

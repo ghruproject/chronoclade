@@ -75,6 +75,21 @@ def test_negative_slope_is_retained_and_predictions_are_centred():
     json.dumps(result, allow_nan=False)
 
 
+def test_implausibly_old_dates_are_audited_and_can_be_explicitly_allowed():
+    records = points([1, 2, 3, 100], dates=('2000', '2001', '2002', '1800-01-01'))
+    records[-1]['label'] = 'ERR314421'
+    result = regress(records)
+    assert result['n_points'] == 3
+    assert result['slope'] == pytest.approx(1, abs=.002)
+    assert result['date_filter']['minimum_collection_year'] == 1900
+    assert result['exclusions'][0]['reason'] == 'before_minimum_collection_year'
+    assert result['exclusions'][0]['label'] == 'ERR314421'
+    assert records[-1]['collection_date'] == '1800-01-01'
+    unfiltered = date_regression(records, distance_field='distance',
+        distance_units='example units', label='Historical specimens', minimum_collection_year=None)
+    assert unfiltered['n_points'] == 4
+
+
 def test_constant_distances_have_zero_slope_and_null_undefined_statistics():
     result = regress(points([0.25, 0.25, 0.25]))
     assert result["status"] == "fitted"

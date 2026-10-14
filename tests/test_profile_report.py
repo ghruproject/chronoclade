@@ -20,6 +20,17 @@ def test_report_uses_accession_without_changing_analysis_or_style(tmp_path):
     assert "Archivo" in html
 
 
+def test_report_explains_excluded_old_dates_without_excluding_genomes(tmp_path):
+    analysis = {"root_to_tip": [{"cohort_id": "cohort_1",
+        "date_filter": {"minimum_collection_year": 1900},
+        "exclusions": [{"sample_id": "PW_old", "label": "ERR314421",
+            "collection_date": "1800-01-01", "reason": "before_minimum_collection_year"}]}]}
+    html = write_profile_report(analysis, directory=tmp_path).read_text()
+    assert "Collection dates before 1900 are excluded" in html
+    assert "These genomes remain in the NJ tree" in html
+    assert "ERR314421: 1800-01-01" in html
+
+
 def test_report_orders_dataset_relationships_network_subsamples_and_evidence(tmp_path: Path) -> None:
     (tmp_path / "figures").mkdir()
     (tmp_path / "figures" / "pcoa.svg").write_text(
