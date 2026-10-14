@@ -15,6 +15,7 @@ from chronoclade.prepare_cli import prepare_command
 from chronoclade.cgmlst.cli import cgmlst_command
 from chronoclade.cgmlst.refresh import refresh_command
 from chronoclade.cgmlst.clock_comparison import compare_clocks_command
+from chronoclade.cgmlst.calibration import calibrate_lin_command
 from chronoclade.execution.cli import job_command
 from chronoclade.tree_stage.cli import register as register_tree
 from chronoclade.time_stage.cli import register as register_time
@@ -35,6 +36,7 @@ register_tree(app)
 register_time(app)
 
 app.command("compare-clocks")(compare_clocks_command)
+app.command("calibrate-lin")(calibrate_lin_command)
 
 
 def _fail(error: Exception) -> None:

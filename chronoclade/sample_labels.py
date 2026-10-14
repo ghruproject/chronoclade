@@ -15,13 +15,17 @@ def sample_label(row: Mapping) -> str:
         raw = row.get(key) or []
         values.update([raw] if isinstance(raw, str) else raw)
     for key in ("run_accession", "runAccession", "biosample", "sample_accession",
-                "sampleAccession", "assembly_accession", "assemblyAccession", "accession"):
+                "sampleAccession", "assembly_accession", "assemblyAccession", "accession", "label"):
         if row.get(key):
             values.add(str(row[key]))
     for pattern in (r"[SED]RR\d+", r"SAM[NED][A-Z]?\d+", r"GC[AF]_\d+(?:\.\d+)?"):
         candidates = sorted(str(value) for value in values if re.fullmatch(pattern, str(value)))
         if candidates:
             return candidates[0]
+    for key in ("strain_name", "isolate_name", "label"):
+        label = str(row.get(key) or "").strip()
+        if label and not label.startswith("PW_") and label not in {ident, str(row.get("source_genome_id") or "")}:
+            return display_label(label)
     return ident
 
 

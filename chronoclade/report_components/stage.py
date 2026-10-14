@@ -12,7 +12,8 @@ from chronoclade.location_network.widget import interactive_network_html, widget
 
 def write_report(
     path, *, title, result, rows=(), network=None, figures=(), extra="", overview=None, report_label="TREE ANALYSIS REPORT",
-    figure_heading="Biological tree and location history"
+    figure_heading="Biological tree and location history", assessment_first=False,
+    assessment_title=None
 ):
     path = Path(path)
     counts = "".join(
@@ -92,15 +93,17 @@ def write_report(
     sections.extend(
         [
             (
-                "Ensemble assessment"
+                assessment_title or ("Ensemble assessment"
                 if assessment["code"] == "sensitivity"
-                else "Temporal assessment",
-                coherence_warning + f"<p><strong>{escape(assessment['code'])}</strong>: {escape(assessment['reason'])}</p><details><summary>Saved assessment</summary><pre>{escape(json.dumps(assessment, indent=2))}</pre></details>"
+                else "Temporal assessment"),
+                coherence_warning + ("" if assessment_title else f"<p><strong>{escape(assessment['code'])}</strong>: {escape(assessment['reason'])}</p>") + f"<details><summary>Saved assessment</summary><pre>{escape(json.dumps(assessment, indent=2))}</pre></details>"
                 + extra,
             ),
             ("Downloads", "<ul>" + downloads + "</ul>"),
         ]
     )
+    if assessment_first:
+        sections.insert(0, sections.pop(-2))
     if overview is None:
         overview = f"{len(result['selected_sample_ids'])} exact selected genomes"
         if result.get("branch_units"):
@@ -119,6 +122,8 @@ def write_report(
     if assessment["code"] == "sensitivity":
         verdict_title = "Selection sensitivity assessment"
         verdict_class = ""
+    if assessment_title is not None:
+        verdict_title = assessment_title
     verdict = (
         f'<div class="verdict {verdict_class}">'
         f"<strong>{escape(verdict_title)}</strong><p>{escape(assessment['reason'])}</p></div>"

@@ -193,3 +193,31 @@ same continuous-edge residual-MSE rooting criterion. The report separates
 allele-distance units/year from SNP-tree substitutions/site/year; their slopes
 are not directly interchangeable. It compares descriptive fits and does not
 perform another date-randomisation test or recalibrate the saved time trees.
+
+## Experimental finer-group calibration
+
+```bash
+chronoclade calibrate-lin cgmlst/<block>/selection_bundle/ensemble.json \
+  --folds 3 --output lin-calibration
+```
+
+This trial analyses the complete frozen profile pool, not the selected assembly
+subsample. It builds fresh NJ trees for input-containing LIN6 and LIN7 groups;
+singleton or insufficiently dated groups remain in the table without a fitted
+rate. These nested groups are not independent replications.
+
+For each of the latest calendar-year blocks, rooting and regression use only
+earlier eligible dates. The held-out dates then predict root-to-tip allele
+distance using that frozen root and fitted line. Mean absolute distance error is
+compared with two predictions at the same root: the training-set mean and the
+latest training-year mean. Held-out genomes still contribute genetic information
+to the NJ tree, so this is a transductive date check, not validation on unseen
+genomes. Fold counts and rate/root sensitivity are saved; tip independence and
+formal confidence intervals are not assumed.
+
+The trial does not publish biological cutoffs. `2*r*H` is saved only as a
+conditional expected pair-distance scenario when both descendants are H years
+from a shared ancestor under a constant rate. It does not follow from the
+difference between their sampling dates, and it is neither an empirical cutoff
+nor an uncertainty bound. Stronger predictive evidence and independently
+labelled epidemiological comparisons would be needed to justify a cutoff.
