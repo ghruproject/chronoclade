@@ -3,7 +3,7 @@ from chronoclade.report_components.root_comparison import add_root_comparisons
 from chronoclade.profile_report import write_profile_report
 
 
-def test_clock_comparison_keeps_primary_tree_network_and_embeds_evidence(tmp_path):
+def test_clock_comparison_keeps_primary_tree_network_and_saved_evidence(tmp_path):
     path=tmp_path/'tree.nwk'
     path.write_text('((a:1,b:2):1,(c:3,d:4):1);')
     before=path.read_bytes()
@@ -24,9 +24,8 @@ def test_clock_comparison_keeps_primary_tree_network_and_embeds_evidence(tmp_pat
     assert result['audit']['pairwise_distances_preserved_within_diagnostic_branch_policy'] is True
     assert json.loads((tmp_path/'one_root_comparison.json').read_text())['audit']['status']=='rooted'
     html=write_profile_report(analysis,directory=tmp_path).read_text()
-    assert 'Clock-compatible (date-optimised)' in html
-    assert 'does not establish temporal signal' in html
-    assert 'data:image/svg+xml' in html
+    assert 'Clock-compatible (date-optimised)' not in html
+    assert 'How much does the root affect the slope?' not in html
 
 
 def test_comparison_reports_insufficient_dates(tmp_path):
@@ -35,7 +34,7 @@ def test_comparison_reports_insufficient_dates(tmp_path):
     add_root_comparisons(analysis,[{'sample_id':s} for s in 'abc'],tmp_path)
     assert analysis['root_comparisons'][0]['audit']['status']=='skipped'
     html=write_profile_report(analysis,directory=tmp_path).read_text()
-    assert 'Comparison unavailable' in html
+    assert 'Comparison unavailable' not in html
 
 
 def test_negative_edges_are_clamped_only_in_rooting_diagnostic_and_dates_match(tmp_path):
@@ -58,9 +57,7 @@ def test_negative_edges_are_clamped_only_in_rooting_diagnostic_and_dates_match(t
     assert comparison['baseline']['points'][0]['root_to_tip'] != comparison['signed_original_baseline']['points'][0]['root_to_tip']
     assert comparison['audit']['pairwise_distances_preserved_within_diagnostic_branch_policy'] is True
     html=write_profile_report(analysis,directory=tmp_path).read_text()
-    assert 'negative edges, total magnitude 0.5' in html
-    assert 'Eligible dated tips: 3' in html
-    assert 'Signed original-branch sensitivity at existing root' in html
+    assert 'Signed original-branch sensitivity at existing root' not in html
 
 
 def test_empty_eligible_dates_is_reported_without_plotting(tmp_path):
@@ -96,5 +93,5 @@ def test_clock_comparison_has_real_cgmlst_workflow_outputs(tmp_path):
     assert comparison['audit']['status']=='rooted'
     assert (block/comparison['tree_path']).is_file()
     assert (block/comparison['audit_path']).is_file()
-    assert 'Clock-compatible (date-optimised)' in (block/'profile_report.html').read_text()
+    assert 'How much does the root affect the slope?' not in (block/'profile_report.html').read_text()
     assert comparison['baseline']['distance_units']==comparison['clock_compatible']['distance_units']

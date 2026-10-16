@@ -38,7 +38,8 @@ def test_refresh_preserves_numeric_tree_and_selection(tmp_path):
     assert snapshots == [file.read_bytes() for file in frozen]
     assert result['clock_diagnostic_refresh']['blocks'][0]['sample_count']==4
     report = Path(path.parent/result['blocks'][0]['report']).read_text()
-    assert 'Clock-compatible (date-optimised)' in report
+    assert 'How much does the root affect the slope?' not in report
+    assert 'Rooting method and sensitivity checks' not in report
     assert 'Archivo' in report
     assert '1 input genomes · 3 public comparisons' in report
     assert 'Browse output files by type' in report
