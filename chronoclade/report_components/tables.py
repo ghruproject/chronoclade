@@ -46,7 +46,7 @@ _TABLE_SCRIPT = r"""
     const labels = heads.map(h=>h.textContent.trim());
     const records = rows.map((row,index)=>{const values=[...row.cells].map(c=>c.textContent.trim());return {row,index,values,text:values.join(' ').toLocaleLowerCase()};});
     rows.forEach(r=>r.dataset.tableRow='');
-    let column = -1, direction = 1, page = 0, size = 25, query = '';
+    let column = -1, direction = 1, page = 0, size = 10, query = '';
     const large = rows.length > 10;
     let status, previous, next, sortMenu;
     const element = (tag,text) => {const e=document.createElement(tag);if(text)e.textContent=text;return e;};
@@ -92,7 +92,7 @@ _TABLE_SCRIPT = r"""
       searchLabel.append(search);tools.append(searchLabel);
       search.addEventListener('input',()=>{query=search.value.trim().toLocaleLowerCase();page=0;render();});
       const sizeLabel=element('label','Rows');const select=element('select');linkControl(select);
-      [10,25,50,100,'All'].forEach(v=>{const o=element('option',String(v));o.value=String(v);select.append(o);});select.value='25';
+      [10,25,50,100,'All'].forEach(v=>{const o=element('option',String(v));o.value=String(v);select.append(o);});select.value='10';
       sizeLabel.append(select);tools.append(sizeLabel);select.addEventListener('change',()=>{size=select.value==='All'?rows.length:Number(select.value);page=0;render();});
       const sortLabel=element('label','Sort by');sortLabel.className='table-mobile-sort';sortMenu=element('select');linkControl(sortMenu);
       const original=element('option','Original order');original.value='';sortMenu.append(original);

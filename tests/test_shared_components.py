@@ -6,6 +6,7 @@ import sys
 import pytest
 
 from chronoclade.errors import WorkflowError
+from chronoclade.report_components.tables import enhance_report_tables
 from chronoclade.selections import selected_context_records
 
 
@@ -43,3 +44,11 @@ def test_saved_selection_preserves_identity_and_does_not_mutate_pool():
     selection["decisions"][0].pop("reason")
     with pytest.raises(WorkflowError, match="decisions"):
         selected_context_records(selection, queries, context)
+
+
+def test_large_report_tables_default_to_ten_rows_and_keep_page_size_choices():
+    html = enhance_report_tables("<!doctype html><html><head></head><body></body></html>")
+
+    assert "page = 0, size = 10" in html
+    assert "[10,25,50,100,'All']" in html
+    assert "select.value='10'" in html

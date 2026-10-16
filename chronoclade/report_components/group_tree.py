@@ -2,24 +2,15 @@
 from __future__ import annotations
 
 import json
-import re
 from html import escape
 from pathlib import Path
 
+from chronoclade.report_components.group_controls import (
+    INPUT_ORIGINS, group_colors, group_label_map, group_name, group_selector_config,
+    group_selector_script, group_selector_styles,
+)
 from chronoclade.report_components.styles import report_styles
 from chronoclade.sample_labels import display_label
-
-_PALETTE = (
-    "#2166ac", "#b2182b", "#1b7837", "#762a83", "#e08214", "#008080",
-    "#c51b7d", "#4d4d4d", "#a6d854", "#3288bd", "#f46d43", "#66c2a5",
-)
-_INPUT_ORIGINS = {"input", "local", "query", "focal"}
-
-
-def _group_name(value):
-    value = str(value or "Ungrouped")
-    match = re.search(r"(?:^|_)group_(\d+)$", value, re.IGNORECASE)
-    return f"Group {match.group(1)}" if match else value
 
 
 def _safe_json(value):
@@ -29,14 +20,13 @@ def _safe_json(value):
 
 
 def write_group_tree(tree, records, labels, groups, output_path, *, distance_units=None) -> str:
-    """Write an offline interactive rectangular phylogram containing every input tip.
+    """Write every branch and tip with an independently navigable viewport.
 
-    Layout traverses the supplied Bio.Phylo tree without pruning or editing it. The
-    SVG retains each signed branch length; negative horizontal segments are dashed.
+    The supplied topology and signed branch lengths are never modified. Only the
+    viewport changes; labels and markers retain their screen size when zooming.
     """
     records = list(records)
-    labels = labels or {}
-    groups = groups or {}
+    labels, groups = labels or {}, groups or {}
     by_id = {str(row.get("sample_id")): row for row in records if row.get("sample_id") is not None}
     if len(by_id) != len(records):
         raise ValueError("Tree records require unique sample_id values")
@@ -46,156 +36,145 @@ def write_group_tree(tree, records, labels, groups, output_path, *, distance_uni
         raise ValueError("Group tree requires uniquely named tips")
     if set(tip_ids) != set(by_id):
         raise ValueError("Group tree records must match every tree tip")
-
-    group_names = sorted({_group_name(groups.get(name)) for name in tip_ids})
-    colors = {name: _PALETTE[index % len(_PALETTE)] for index, name in enumerate(group_names)}
-    # Explicit iterative traversal avoids recursion limits on large NJ trees.
     nodes, depths, parent = [], {}, {}
     stack = [(tree.root, 0.0, None)]
     while stack:
-        node, depth, parent_node = stack.pop()
+        node, depth, ancestor = stack.pop()
         nodes.append(node)
         depths[node] = depth
-        if parent_node is not None:
-            parent[node] = parent_node
+        if ancestor is not None:
+            parent[node] = ancestor
         for child in reversed(node.clades):
-            length = child.branch_length
-            if length is None:
-                length = 0.0
-            length = float(length)
+            length = float(child.branch_length or 0)
             if not (float("-inf") < length < float("inf")):
                 raise ValueError("Group tree requires finite branch lengths")
             stack.append((child, depth + length, node))
-
     tip_order = [node for node in nodes if not node.clades]
-    row_by_node = {node: index for index, node in enumerate(tip_order)}
-    # Internal y positions are the midpoint of their first and last descendant tips.
-    y_positions = {}
+    positions = {node: index for index, node in enumerate(tip_order)}
     for node in reversed(nodes):
-        if not node.clades:
-            y_positions[node] = row_by_node[node]
-        else:
-            child_y = [y_positions[child] for child in node.clades]
-            y_positions[node] = (min(child_y) + max(child_y)) / 2
+        if node.clades:
+            child_y = [positions[child] for child in node.clades]
+            positions[node] = (min(child_y) + max(child_y)) / 2
+    minimum, maximum = min(depths.values()), max(depths.values())
+    span = maximum - minimum
+    width, row_space, top = 1200, 20, 28
+    height = top * 2 + max(1, len(tip_order) - 1) * row_space
 
-    min_depth = min(depths.values(), default=0.0)
-    max_depth = max(depths.values(), default=0.0)
-    span = max_depth - min_depth
-    chart_left, chart_width = 48.0, 900.0
-    label_width = max(160, min(420, max((len(str(labels.get(name, name))) for name in tip_ids), default=10) * 7))
-    width = chart_left + chart_width + label_width + 20
-    unit = escape(str(distance_units), quote=True) if distance_units else ""
+    def x_for(node):
+        return 48 + ((depths[node] - minimum) / span * 900 if span else 45)
+
     metadata = []
-    for name in tip_ids:
-        row = by_id[name]
-        label = display_label(str(labels.get(name) or name))
-        # Public accession aliases supplied by the caller take precedence over internal IDs.
+    for node in tip_order:
+        name, row = node.name, by_id[node.name]
+        raw_group = str(groups.get(name) or "Ungrouped")
         metadata.append({
-            "id": name,
-            "label": label,
-            "group": _group_name(groups.get(name)),
+            "id": name, "label": display_label(str(labels.get(name) or name)),
+            "group": group_name(raw_group), "group_id": raw_group,
             "country": str(row.get("country") or "Unknown country"),
             "host": str(row.get("host") or "Unknown host"),
             "date": str(row.get("collection_date") or row.get("date") or row.get("collection_year") or "Unknown date"),
             "origin": str(row.get("origin") or row.get("role") or "context"),
+            "x": x_for(node), "y": top + positions[node] * row_space,
         })
-    data = {"tips": metadata, "groups": group_names, "colors": colors,
+    group_ids = sorted({item["group_id"] for item in metadata})
+    group_labels = group_label_map(group_ids)
+    for item in metadata:
+        item["group"] = group_labels[item["group_id"]]
+    colors = group_colors(group_ids, labels=group_labels)
+    config = group_selector_config(metadata, group_key="group_id", labels=group_labels)
+    config["labels"] = group_labels
+    data = {"tips": metadata, "groups": group_ids, "colors": colors,
+            "displayColors": {group_labels[key]: value for key, value in colors.items()},
+            "selector": config, "width": width, "height": height, "rowSpace": row_space,
             "units": str(distance_units or "")}
-    json_data = _safe_json(data)
-
-    def x_for(node):
-        if span == 0:
-            return chart_left + chart_width * .05
-        return chart_left + (depths[node] - min_depth) / span * chart_width
-
-    # A modest initial row spacing keeps even a few hundred tips tractable, while
-    # the canvas itself scrolls and offers a label-reading spacing mode.
-    row_space = 20
-    top = 28
-    height = top * 2 + max(1, len(tip_order) - 1) * row_space
-    index_for_node = {node: index for index, node in enumerate(tip_order)}
-    svg_parts = [f'<svg id="tree" role="img" aria-label="Complete NJ group tree" preserveAspectRatio="none" viewBox="0 0 {width:.1f} {height:.1f}" width="{width:.1f}" height="{height:.1f}"><g id="layout">']
-    # Branches are separate line elements to retain exact signed lengths and make
-    # negative edges visually explicit without changing topology or values.
+    svg = [f'<svg id="tree" role="img" aria-label="Complete NJ group tree" viewBox="0 0 {width} 400" width="{width}" height="400"><g id="branches">']
     for node in nodes:
         if node.clades:
-            low = top + min(y_positions[child] for child in node.clades) * row_space
-            high = top + max(y_positions[child] for child in node.clades) * row_space
-            svg_parts.append(f'<line class="branch" x1="{x_for(node):.2f}" y1="{low:.2f}" x2="{x_for(node):.2f}" y2="{high:.2f}"/>')
+            low = top + min(positions[child] for child in node.clades) * row_space
+            high = top + max(positions[child] for child in node.clades) * row_space
+            svg.append(f'<line class="branch" x1="{x_for(node):.6f}" y1="{low:.4f}" x2="{x_for(node):.6f}" y2="{high:.4f}"/>')
         if node in parent:
             ancestor = parent[node]
-            x1, x2 = x_for(ancestor), x_for(node)
-            y = top + y_positions[node] * row_space
-            negative = (node.branch_length or 0) < 0
-            css = "branch negative" if negative else "branch"
-            svg_parts.append(f'<line class="{css}" x1="{x1:.2f}" y1="{y:.2f}" x2="{x2:.2f}" y2="{y:.2f}" data-length="{float(node.branch_length or 0):.12g}"/>')
-        if not node.clades:
-            index = index_for_node[node]
-            item = metadata[index]
-            shape = "input" if item["origin"] in _INPUT_ORIGINS else "context"
-            color = colors[item["group"]]
-            y2 = top + y_positions[node] * row_space
-            x2 = x_for(node)
-            marker = (f'<path class="tip-marker {shape}" d="M {x2-5:.2f} {y2-5:.2f} L {x2+5:.2f} {y2:.2f} L {x2-5:.2f} {y2+5:.2f} Z" fill="{color}"/> '
-                      if shape == "input" else
-                      f'<circle class="tip-marker {shape}" cx="{x2:.2f}" cy="{y2:.2f}" r="4.5" fill="{color}"/> ')
-            band = (f'<rect class="tip-band" x="{x2:.2f}" y="{y2-9:.2f}" '
-                    f'width="{width-x2-8:.2f}" height="18" fill="{color}"/>')
-            svg_parts.append(f'<g class="tip" tabindex="0" role="button" data-tip="{index}" aria-label="{escape(item["label"], quote=True)}">{band}{marker}<text x="{x2+9:.2f}" y="{y2+4:.2f}">{escape(item["label"])}</text></g>')
-    svg_parts.append("</g></svg>")
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    lineage = all(group.startswith('cgLIN ') for group in group_names)
+            y = top + positions[node] * row_space
+            css = "branch negative" if (node.branch_length or 0) < 0 else "branch"
+            svg.append(f'<line class="{css}" x1="{x_for(ancestor):.6f}" y1="{y:.4f}" x2="{x_for(node):.6f}" y2="{y:.4f}" data-length="{float(node.branch_length or 0):.12g}"/>')
+    svg.append('</g><g id="tip-layer">')
+    for index, item in enumerate(metadata):
+        shape = "input" if item["origin"] in INPUT_ORIGINS else "context"
+        color = colors[item["group_id"]]
+        marker = (f'<path class="tip-marker input" d="M -5 -5 L 5 0 L -5 5 Z" fill="{color}"/>'
+                  if shape == "input" else f'<circle class="tip-marker context" r="3" fill="{color}"/>')
+        svg.append(f'<g class="tip" tabindex="-1" role="button" data-tip="{index}" aria-label="{escape(item["label"], quote=True)}"><rect class="tip-band" x="0" y="-9" width="240" height="18" fill="{color}"/>{marker}<text x="9" y="4">{escape(item["label"])}</text></g>')
+    svg.append('</g></svg>')
+    lineage = all(group.startswith('cgLIN ') for group in group_ids)
     note = ("Groups share reported cgLIN prefixes; no additional distance cutoff defines these colours."
             if lineage else "Groups defined from direct profile distances, not tree clades.")
-    document = (
-        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
-        '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        '<title>Genetic groups on NJ tree</title><style>' + report_styles() + '''
-body{background:white;padding:8px}.tree-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-button{font:inherit;padding:6px 9px;background:white;border:1px solid #aeb4bf;border-radius:4px;cursor:pointer}
-.legend{display:flex;gap:6px 10px;flex-wrap:wrap;margin:8px 0}.legend button[aria-pressed="true"]{outline:2px solid #17191f}
-.swatch{display:inline-block;width:12px;height:12px;margin-right:5px;vertical-align:-1px}
-.tree-canvas{overflow:auto;max-height:68vh;border:1px solid #d0d3da;background:white}
-.tree-canvas svg{display:block;width:100%;height:400px;max-width:none;font:12px 'Archivo',sans-serif}.tree-canvas.read-labels svg{width:max(900px,100%);height:auto}
-.branch{stroke:#68707c;stroke-width:1;fill:none}.branch.negative{stroke:#888;stroke-dasharray:4 3}
-.branch{vector-effect:non-scaling-stroke;stroke-width:.7}.tip-band{opacity:.12}.tip.selected .tip-band{opacity:.4}
-.tree-canvas:not(.read-labels) .tip text{display:none}
-.tip text{fill:#17191f}.tip{cursor:pointer}.tip:focus{outline:none}.tip:focus .tip-marker{stroke:#ffb800;stroke-width:3}.tip.selected .tip-marker{stroke-width:2}
-.tip.dimmed{opacity:.18}.tip-marker{stroke:#222;stroke-width:.65}.internal-note{color:#5f6470;font-size:.9em}
-#tip-details{min-height:2.8em;padding:8px;margin:8px 0;border:1px solid #ccd0d8;white-space:pre-wrap}
-</style></head><body><h2>Genetic groups on NJ tree</h2>
-<div class="tree-controls"><button id="fit" type="button">Fit all</button><button id="read" type="button">Read labels</button><button id="clear" type="button">Clear group highlight</button><label><input id="scroll-group" type="checkbox"> Scroll to first selected group tip</label></div>
-<div id="legend" class="legend" aria-label="Genetic group counts"></div><div class="tree-canvas" id="canvas">''' + "".join(svg_parts) + '''</div>
-<p id="tip-details" role="status" aria-live="polite">Hover, focus, or select a tip to inspect its metadata.</p>
-<p class="internal-note">''' + note + (f' Branch lengths are in {unit}.' if unit else '') + ''' Triangles mark input genomes; circles mark comparisons. Colours show direct-distance group assignment.</p>
-<script type="application/json" id="tree-data">''' + json_data + '''</script><script>
-(()=>{
-const data=JSON.parse(document.getElementById('tree-data').textContent),svg=document.getElementById('tree'),canvas=document.getElementById('canvas');
-const details=document.getElementById('tip-details'),legend=document.getElementById('legend'),tips=[...svg.querySelectorAll('.tip')];
-const counts=new Map(data.groups.map(g=>[g,0]));data.tips.forEach(t=>counts.set(t.group,(counts.get(t.group)||0)+1));
-let selected=null;
-function showTip(index){const t=data.tips[index];details.textContent=`${t.label} | Group: ${t.group} | Country: ${t.country} | Host: ${t.host} | Date: ${t.date}`}
-function send(group){if(window.parent!==window)window.parent.postMessage({type:'chronoclade-group-highlight',group},'*')}
-function highlight(group,notify){selected=group;tips.forEach(el=>{const active=group&&data.tips[Number(el.dataset.tip)].group===group;el.classList.toggle('dimmed',!!group&&!active);el.classList.toggle('selected',!!active)});legend.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.group===group)));if(notify)send(group)}
-data.groups.forEach(group=>{const button=document.createElement('button');button.type='button';button.dataset.group=group;button.setAttribute('aria-pressed','false');const swatch=document.createElement('span');swatch.className='swatch';swatch.style.backgroundColor=data.colors[group];button.append(swatch,document.createTextNode(`${group} (${counts.get(group)})`));button.addEventListener('click',()=>{const next=selected===group?null:group;highlight(next,true);if(next&&document.getElementById('scroll-group').checked){const first=tips.find(el=>data.tips[Number(el.dataset.tip)].group===next);if(first)first.scrollIntoView({block:'center'})}});legend.append(button)});
-tips.forEach(el=>{const index=Number(el.dataset.tip);el.addEventListener('pointerenter',()=>showTip(index));el.addEventListener('focus',()=>showTip(index));el.addEventListener('click',()=>{showTip(index);el.classList.toggle('selected')})});
-document.getElementById('clear').addEventListener('click',()=>highlight(null,true));
-function spacing(space,mode){const n=Math.max(1,data.tips.length),height=56+(n-1)*space,view=svg.getAttribute('viewBox').split(' ');view[3]=String(height);svg.setAttribute('viewBox',view.join(' '));svg.setAttribute('height',String(height));canvas.classList.toggle('read-labels',mode==='read');document.getElementById('layout').setAttribute('transform',`translate(0 28) scale(1 ${space/20}) translate(0 -28)`)}
-function fitAll(){const n=Math.max(1,data.tips.length),space=Math.max(1,Math.floor((400-56)/Math.max(1,n-1)));spacing(space,'fit')}
-document.getElementById('fit').addEventListener('click',fitAll);
-document.getElementById('read').addEventListener('click',()=>spacing(24,'read'));
-window.addEventListener('message',event=>{if(event.source!==window.parent||!event.data||event.data.type!=='chronoclade-group-highlight')return;const group=event.data.group===null?null:String(event.data.group);highlight(data.groups.includes(group)?group:null,false)});
-fitAll();
-})();
-</script></body></html>'''
-    )
-    if lineage:
-        document = document.replace('Genetic groups on NJ tree', 'cgLIN groups on NJ tree')
-        document = document.replace('Colours show direct-distance group assignment.', 'Colours show reported cgLIN group assignment.')
+    unit = f' Branch lengths are in {escape(str(distance_units))}.' if distance_units else ''
+    title = 'cgLIN groups on NJ tree' if lineage else 'Genetic groups on NJ tree'
+    document = ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
+                '<meta name="viewport" content="width=device-width,initial-scale=1">'
+                f'<title>{title}</title><style>' + report_styles() + group_selector_styles() + TREE_CSS +
+                f'</style></head><body><h2>{title}</h2>' + TREE_CONTROLS +
+                '<div id="legend" aria-label="Genetic group counts"></div>'
+                '<div class="tree-canvas" id="canvas" tabindex="0" aria-label="Tree viewport. Drag to pan; scroll to move; control or command scroll to zoom.">' + ''.join(svg) + '</div>'
+                '<p id="tip-details" role="status" aria-live="polite">Hover, focus, or select a tip to inspect its metadata.</p>'
+                '<p class="internal-note">' + note + unit + ' Triangles mark input genomes; circles mark comparisons. '
+                'Drag to pan; scroll to move vertically, Shift-scroll horizontally; Ctrl/Command-scroll to zoom. '
+                'Labels appear at readable spacing. Every branch and tip remains available.</p>'
+                '<script type="application/json" id="tree-data">' + _safe_json(data) + '</script><script>' +
+                group_selector_script() + TREE_SCRIPT + '</script></body></html>')
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(document, encoding="utf-8")
     return str(output_path)
 
+
+TREE_CSS = '''
+body{background:#fff;padding:8px;margin:0}h2{margin:0 0 6px;font-size:20px}.tree-controls{display:flex;gap:5px 8px;align-items:center;flex-wrap:wrap}
+button,input{font:inherit}button{padding:5px 8px;background:#fff;border:1px solid #858585;border-radius:3px;cursor:pointer}button:disabled{color:#666;cursor:default;border-color:#ccc}
+.tree-controls label{font-size:12px}.tree-controls input[type=search]{width:180px;max-width:100%;padding:5px;border:1px solid #858585}
+#view-status{font-size:12px;color:#454545}.tree-canvas{height:400px;min-height:400px;overflow:hidden;position:relative;border:1px solid #aaa;background:#fff;touch-action:none;cursor:grab}
+.tree-canvas.dragging{cursor:grabbing}.tree-canvas svg{display:block;width:100%;height:100%;max-width:none;font:12px 'Archivo',sans-serif;user-select:none}
+.branch{stroke:#68707c;stroke-width:.7;fill:none;vector-effect:non-scaling-stroke}.branch.negative{stroke:#888;stroke-dasharray:4 3}
+.tip-band{opacity:0}.tip.selected .tip-band{opacity:.16}.tip text{fill:#17191f;paint-order:stroke;stroke:white;stroke-width:2px;stroke-linejoin:round}.tip{cursor:pointer}.tip.dimmed{opacity:.18}.tip-marker{stroke:#222;stroke-width:.65}.tip:focus{outline:none}.tip:focus .tip-marker,.tip.located .tip-marker{stroke:#000;stroke-width:2}
+#tip-details{font-size:12px;line-height:1.4;min-height:2.8em;max-height:4.2em;overflow:auto;padding:6px;margin:6px 0;border:1px solid #aaa;white-space:pre-wrap}.internal-note{color:#454545;font-size:11px;line-height:1.35;margin:6px 0}
+::selection{background:#17191f;color:white}
+'''
+TREE_CONTROLS = '''<div class="tree-controls">
+<button id="fit" type="button">Fit all</button><button id="zoom-in" type="button" aria-label="Zoom in">Zoom +</button><button id="zoom-out" type="button" aria-label="Zoom out">Zoom −</button>
+<button id="read" type="button">Read labels</button><button id="zoom-inputs" type="button">Zoom to inputs</button><button id="zoom-group" type="button" disabled>Zoom to selected group</button><button id="clear" type="button">Clear highlight</button>
+<label>Find sample <input id="tip-search" type="search" placeholder="Accession or sample name" list="tip-matches"></label><datalist id="tip-matches"></datalist><button id="locate-tip" type="button">Locate</button><span id="view-status" role="status"></span></div>'''
+TREE_SCRIPT = '''
+(()=>{
+const data=JSON.parse(document.getElementById('tree-data').textContent),svg=document.getElementById('tree'),canvas=document.getElementById('canvas'),branches=document.getElementById('branches');
+const details=document.getElementById('tip-details'),tips=[...svg.querySelectorAll('.tip')],status=document.getElementById('view-status'),groupZoom=document.getElementById('zoom-group');
+let selected=null,located=null,mode='overview',view={x:0,y:0,w:data.width,h:data.height},frame=null;
+const selector=createGroupSelector({container:document.getElementById('legend'),groups:data.groups,colors:data.colors,config:data.selector,onSelect:group=>highlight(group,true)});
+const inputIndexes=data.tips.map((t,i)=>['input','local','query','focal'].includes(t.origin)?i:-1).filter(i=>i>=0);
+document.getElementById('zoom-inputs').disabled=!inputIndexes.length;
+function showTip(index){const t=data.tips[index];details.textContent=`${t.label} | Group: ${t.group} | Country: ${t.country} | Host: ${t.host} | Date: ${t.date}`}
+function send(group){if(window.parent!==window)window.parent.postMessage({type:'chronoclade-group-highlight',group},'*')}
+function highlight(group,notify){selected=group;selector.setSelected(group);groupZoom.disabled=!group;tips.forEach((el,i)=>{const active=!!group&&data.tips[i].group_id===group;el.classList.toggle('dimmed',!!group&&!active);el.classList.toggle('selected',active)});if(notify)send(group)}
+function bounds(){view.w=Math.min(data.width,Math.max(80,view.w));view.h=Math.min(data.height,Math.max(100,view.h));view.x=Math.max(0,Math.min(data.width-view.w,view.x));view.y=Math.max(0,Math.min(data.height-view.h,view.y))}
+function render(){frame=null;bounds();const w=canvas.clientWidth,h=canvas.clientHeight,sx=w/view.w,sy=h/view.h,readable=data.rowSpace*sy>=14;svg.setAttribute('viewBox',`0 0 ${w} ${h}`);branches.setAttribute('transform',`matrix(${sx} 0 0 ${sy} ${-view.x*sx} ${-view.y*sy})`);
+tips.forEach((el,i)=>{const t=data.tips[i],x=(t.x-view.x)*sx,y=(t.y-view.y)*sy,visible=y>=-15&&y<=h+15&&x>=-260&&x<=w+15;el.style.display=visible?'':'none';el.setAttribute('tabindex',visible&&readable?'0':'-1');if(!visible)return;el.setAttribute('transform',`translate(${x} ${y})`);el.querySelector('text').style.display=readable?'':'none';el.querySelector('.tip-band').style.display=readable?'':'none';const marker=el.querySelector('.tip-marker');if(marker.tagName.toLowerCase()==='circle')marker.setAttribute('r',readable?'3':'1.1');el.classList.toggle('located',i===located)});
+status.textContent=mode==='overview'?`Full tree · ${data.tips.length.toLocaleString()} tips`:`${readable?'Read labels':'Zoomed tree'} · ${Math.max(1,Math.round(data.tips.length*view.h/data.height)).toLocaleString()} tips in vertical range`;}
+function schedule(){if(frame===null)frame=requestAnimationFrame(render)}
+function fitAll(){mode='overview';view={x:0,y:0,w:data.width,h:data.height};schedule()}
+function zoom(factor,ax=.5,ay=.5,horizontal=false){mode='focused';const oldW=view.w,oldH=view.h;if(horizontal)view.w=Math.min(data.width,Math.max(80,oldW/factor));view.h=Math.min(data.height,Math.max(100,oldH/factor));view.x+=(oldW-view.w)*ax;view.y+=(oldH-view.h)*ay;schedule()}
+function focusTips(indexes){if(!indexes.length)return;mode='focused';const xs=indexes.map(i=>data.tips[i].x),ys=indexes.map(i=>data.tips[i].y),low=Math.min(...ys),high=Math.max(...ys);const height=Math.max(100,(high-low)*1.2+60);view={x:Math.max(0,Math.min(...xs)-120),y:(low+high-height)/2,w:Math.max(400,Math.max(...xs)-Math.min(...xs)+380),h:height};schedule()}
+function readLabels(){mode='labels';const center=view.y+view.h/2;view.h=Math.min(data.height,canvas.clientHeight/24*data.rowSpace);view.y=center-view.h/2;schedule()}
+function locateTip(){const query=document.getElementById('tip-search').value.trim().toLocaleLowerCase();if(!query)return;const exact=data.tips.findIndex(t=>t.label.toLocaleLowerCase()===query||t.id.toLocaleLowerCase()===query);const index=exact>=0?exact:data.tips.findIndex(t=>`${t.label} ${t.id}`.toLocaleLowerCase().includes(query));if(index<0){details.textContent='No matching sample. Search an accession or sample name.';return}located=index;focusTips([index]);showTip(index)}
+document.getElementById('fit').addEventListener('click',fitAll);document.getElementById('zoom-in').addEventListener('click',()=>zoom(2));document.getElementById('zoom-out').addEventListener('click',()=>zoom(.5));document.getElementById('read').addEventListener('click',readLabels);document.getElementById('zoom-inputs').addEventListener('click',()=>focusTips(inputIndexes));groupZoom.addEventListener('click',()=>focusTips(data.tips.map((t,i)=>t.group_id===selected?i:-1).filter(i=>i>=0)));document.getElementById('clear').addEventListener('click',()=>highlight(null,true));
+const search=document.getElementById('tip-search'),matches=document.getElementById('tip-matches');search.addEventListener('input',()=>{const query=search.value.trim().toLocaleLowerCase();matches.replaceChildren();if(query.length<2)return;data.tips.filter(t=>`${t.label} ${t.id}`.toLocaleLowerCase().includes(query)).slice(0,20).forEach(t=>{const option=document.createElement('option');option.value=t.label;matches.append(option)})});search.addEventListener('keydown',event=>{if(event.key==='Enter')locateTip()});document.getElementById('locate-tip').addEventListener('click',locateTip);
+svg.addEventListener('pointerover',event=>{const tip=event.target.closest('.tip');if(tip)showTip(Number(tip.dataset.tip))});svg.addEventListener('focusin',event=>{const tip=event.target.closest('.tip');if(tip)showTip(Number(tip.dataset.tip))});svg.addEventListener('click',event=>{const tip=event.target.closest('.tip');if(tip){located=Number(tip.dataset.tip);showTip(located);schedule()}});
+let drag=null;canvas.addEventListener('pointerdown',event=>{if(event.button!==0)return;drag={x:event.clientX,y:event.clientY,vx:view.x,vy:view.y};canvas.setPointerCapture(event.pointerId);canvas.classList.add('dragging')});canvas.addEventListener('pointermove',event=>{if(!drag)return;mode='focused';view.x=drag.vx-(event.clientX-drag.x)*view.w/canvas.clientWidth;view.y=drag.vy-(event.clientY-drag.y)*view.h/canvas.clientHeight;schedule()});function stopDrag(){drag=null;canvas.classList.remove('dragging')}canvas.addEventListener('pointerup',stopDrag);canvas.addEventListener('pointercancel',stopDrag);
+canvas.addEventListener('wheel',event=>{event.preventDefault();if(event.ctrlKey||event.metaKey){const rect=canvas.getBoundingClientRect();zoom(Math.exp(-event.deltaY*.005),(event.clientX-rect.left)/rect.width,(event.clientY-rect.top)/rect.height,true)}else{mode='focused';view.x+=(event.shiftKey?event.deltaY:event.deltaX)*view.w/canvas.clientWidth;if(!event.shiftKey)view.y+=event.deltaY*view.h/canvas.clientHeight;schedule()}},{passive:false});
+canvas.addEventListener('keydown',event=>{const directions={ArrowDown:[0,60],ArrowUp:[0,-60],ArrowLeft:[-60,0],ArrowRight:[60,0]};if(directions[event.key]){event.preventDefault();mode='focused';view.x+=directions[event.key][0]*view.w/canvas.clientWidth;view.y+=directions[event.key][1]*view.h/canvas.clientHeight;schedule()}});
+window.addEventListener('message',event=>{if(event.source!==window.parent||!event.data||event.data.type!=='chronoclade-group-highlight')return;const group=event.data.group===null?null:String(event.data.group);const match=data.groups.includes(group)?group:data.groups.find(key=>data.selector.labels[key]===group);highlight(match||null,false)});
+new ResizeObserver(schedule).observe(canvas);fitAll();
+})();
+'''
 
 def tree_viewer(cohorts, directory) -> str:
     """Return report markup embedding generated group-tree pages when available."""

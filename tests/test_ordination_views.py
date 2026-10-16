@@ -82,7 +82,7 @@ def test_interactive_viewer_exposes_sample_metadata_and_coordinate_bases(tmp_pat
     assert 'Colour category' in html and 'Samples at/near this point' in html
     assert 'aria-pressed' in html and 'Clear highlight' in html
     assert 'dateColour(r.year' in html and 'Math.max(0,Math.min(1' in html
-    assert 'linear-gradient(90deg' in html and 'max-height:150px' in html and 'max-height:180px' in html
+    assert 'linear-gradient(90deg' in html and 'max-height:140px' in html and 'max-height:180px' in html
     assert 'toPrecision(4)' in html and '#e4e6eb' in html
 
 
@@ -95,3 +95,32 @@ def test_interactive_payload_escapes_markup_and_validates_coordinate_bases(tmp_p
     with pytest.raises(ValueError, match='coordinate basis'):
         write_ordination_views(tmp_path, 'badbasis', [[0, 0]], rows,
                                coordinate_views={'nj': {'coordinates': [[np.inf, 0]]}})
+
+
+def test_512_group_view_keeps_every_point_and_bounds_searchable_legends(tmp_path):
+    count = 512
+    rows = [dict(sample_id=f's{i}', role='input' if i % 17 == 0 else 'context')
+            for i in range(count)]
+    coordinates = np.column_stack((np.arange(count), np.arange(count) * -2))
+    groups = {row['sample_id']: f'cohort_group_{i}' for i, row in enumerate(rows)}
+    path = write_ordination_views(tmp_path, 'dense', coordinates, rows, groups=groups)['pcoa_views_html']
+    html = Path(path).read_text()
+    payload = re.search(r'<script type="application/json" id="ordination-data">(.*?)</script>',
+                        html).group(1)
+    data = json.loads(payload)
+
+    assert len(data['rows']) == count
+    assert [row['id'] for row in data['rows']] == [row['sample_id'] for row in rows]
+    np.testing.assert_array_equal([row['coordinates']['ordination'] for row in data['rows']], coordinates)
+    assert [row['group_id'] for row in data['rows']] == [groups[row['sample_id']] for row in rows]
+    assert len(data['group_names']) == count
+    input_groups = {groups[row['sample_id']] for row in rows if row['role'] == 'input'}
+    largest_by_label = sorted(data['group_names'], key=lambda raw: (data['group_names'][raw], raw))[:20]
+    assert set(data['group_selector']['compactGroups']) == (
+        set(largest_by_label) | input_groups
+    )
+    static = Path(tmp_path / 'dense_pcoa_group.svg').read_text()
+    assert 'Legend shows 20 of 512 categories' in static
+    assert "Search all groups" in html and "Show all groups" in html
+    assert "max-height:140px" in html
+    assert "Search all" in html and "Show all categories" in html

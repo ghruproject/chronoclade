@@ -88,3 +88,74 @@ def test_tree_viewer_embeds_contained_file_and_parent_sync_routes_only_known_sou
     assert "frame.contentWindow===event.source" in script
     assert "frame.dataset.groupCohort===cohort" in script
     assert "typeof group!=='string'" in script and 'group.length>200' in script
+
+
+def tree_payload(html):
+    import json
+    match = re.search(r'<script type="application/json" id="tree-data">(.*?)</script>', html)
+    return json.loads(match.group(1))
+
+
+def test_large_group_selector_is_bounded_and_full_tree_is_navigable(tmp_path):
+    from Bio.Phylo.BaseTree import Clade, Tree
+
+    names = [f"sample_{index}" for index in range(512)]
+    tree = Tree(root=Clade(clades=[Clade(name=name, branch_length=index / 100)
+                                  for index, name in enumerate(names)]))
+    groups = {name: f"cohort_group_{index}" for index, name in enumerate(names)}
+    records = [{"sample_id": name, "origin": "input" if index == 511 else "context"}
+               for index, name in enumerate(names)]
+    path = write_group_tree(tree, records, {}, groups, tmp_path / "large.html")
+    html = Path(path).read_text()
+    data = tree_payload(html)
+    assert len(data["tips"]) == 512
+    assert len(data["groups"]) == 512
+    assert len(data["selector"]["compactGroups"]) == 21
+    assert "cohort_group_511" in data["selector"]["compactGroups"]
+    assert html.count('data-length="') == 512
+    assert 'max-height:140px;overflow-y:auto' in html
+    assert 'Search all groups' in html and 'Show all groups' in html
+    assert 'height="400"' in html and 'height="10276"' not in html
+    assert "let selected=null,located=null,mode='overview'" in html
+    assert "function fitAll()" in html and 'w:data.width,h:data.height' in html
+    assert "function focusTips(indexes)" in html
+    assert "function readLabels()" in html
+    assert "data.rowSpace*sy>=14" in html
+    assert "matrix(${sx} 0 0 ${sy}" in html
+    assert "translate(${x} ${y})" in html  # Unscaled text and marker layer.
+    assert "scale(1 ${space/20})" not in html
+    for control in ('zoom-in', 'zoom-out', 'zoom-inputs', 'zoom-group', 'locate-tip'):
+        assert f'id="{control}"' in html
+    assert "addEventListener('wheel'" in html
+    assert "addEventListener('pointermove'" in html
+    assert "event.shiftKey?event.deltaY:event.deltaX" in html
+    assert "event.source!==window.parent" in html
+    assert "data.tips[i].group_id===group" in html
+
+
+def test_group_counts_rank_before_names_and_aliases_keep_identity(tmp_path):
+    from Bio.Phylo.BaseTree import Clade, Tree
+    from chronoclade.report_components.group_controls import (
+        group_colors, group_label_map, group_selector_config,
+    )
+
+    ids = [f"cohort_group_{i}" for i in range(30)]
+    labels = group_label_map(ids)
+    rows = [{"group_id": name, "origin": "context"} for name in ids]
+    rows += [{"group_id": ids[-1], "origin": "context"}] * 3
+    config = group_selector_config(rows, group_key="group_id", labels=labels)
+    assert config["compactGroups"][0] == ids[-1]
+    assert len(config["compactGroups"]) == 20
+    assert config["compactGroups"][1] == "cohort_group_0"
+    raw = ["first_group_1", "second_group_1"]
+    names = group_label_map(raw)
+    assert names == {key: f"Group 1 [{key}]" for key in raw}
+    tree = Tree(root=Clade(clades=[Clade(name="a", branch_length=1),
+                                  Clade(name="b", branch_length=2)]))
+    path = write_group_tree(tree, [{"sample_id": "b"}, {"sample_id": "a"}], {},
+                            dict(zip(["a", "b"], raw)), tmp_path / "aliases.html")
+    data = tree_payload(Path(path).read_text())
+    assert [row["id"] for row in data["tips"]] == ["a", "b"]
+    assert data["groups"] == raw
+    assert data["selector"]["labels"] == names
+    assert data["colors"] == group_colors(raw, labels=names)

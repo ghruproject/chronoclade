@@ -79,6 +79,10 @@ def test_report_orders_dataset_relationships_network_subsamples_and_evidence(tmp
     assert html.index("id=\"summary\"") < html.index("id=\"geography\"")
     assert html.index("id=\"geography\"") < html.index("id=\"nearest\"")
     assert html.index("id=\"figures\"") < html.index("id=\"nearest\"")
+    assert html.index('href="#temporal"') < html.index('href="#network"')
+    assert html.index('id="figures"') < html.index('id="temporal"') < html.index('id="network"')
+    assert "Do allele differences accumulate with time?" in html
+    assert html.index('id="root-to-tip"') > html.index('id="temporal"')
     assert html.index("id=\"nearest\"") < html.index("id=\"groups\"")
     assert 'id="persistence"' not in html
     assert "Concentration in time and place" in html

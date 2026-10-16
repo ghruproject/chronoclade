@@ -35,7 +35,7 @@ def assign_lineage_groups(analysis, records):
     return {ident: label for label, ids in members.items() for ident in ids}
 
 
-def render_lineage_groups(analysis, records, directory):
+def render_lineage_groups(analysis, records, directory, *, reuse_coordinates=False):
     """Refresh presentation only from saved tree and distance-coordinate evidence."""
     from .group_tree import write_group_tree
     from .ordination import write_ordination_views
@@ -56,7 +56,22 @@ def render_lineage_groups(analysis, records, directory):
             direct = {row['sample_id']: [float(row['axis_1']), float(row['axis_2'])]
                       for row in csv.DictReader(handle)}
         tree = Phylo.read(local_path(cohort['tree_path']), 'newick')
-        coords, _, bases = ordination_bases(tree, rows, np.array([direct[row['sample_id']] for row in rows]))
+        direct_coords = np.array([direct[row['sample_id']] for row in rows])
+        if reuse_coordinates:
+            with local_path(cohort['pcoa_csv']).open(newline='') as handle:
+                saved = {row['sample_id']: [float(row['axis_1']), float(row['axis_2'])]
+                         for row in csv.DictReader(handle)}
+            coords = np.array([saved[row['sample_id']] for row in rows])
+            bases = {
+                'nj_tree': {'coordinates': coords, 'label': 'NJ-tree distances',
+                            'axis_labels': ('MDS axis 1', 'MDS axis 2'),
+                            'note': 'Saved NJ-tree distance projection. Negative branches were set to zero for ordination only; the saved tree is unchanged. The two-dimensional projection is approximate.'},
+                'direct': {'coordinates': direct_coords, 'label': 'Direct profile distances',
+                           'axis_labels': ('PCoA axis 1', 'PCoA axis 2'),
+                           'note': 'Saved direct pairwise profile distance projection, before NJ fitting. Changing projection does not redefine the displayed groups.'},
+            }
+        else:
+            coords, _, bases = ordination_bases(tree, rows, direct_coords)
         stem = cohort['cohort_id']
         cohort['tree_groups_html'] = write_group_tree(tree, rows, analysis['sample_labels'], assignments,
             directory / f'{stem}_tree_groups.html', distance_units=analysis.get('distance_units'))

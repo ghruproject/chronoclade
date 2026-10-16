@@ -30,14 +30,31 @@ def test_refresh_preserves_numeric_tree_and_selection(tmp_path):
     analysis = json.loads((directory/'profile_analysis.json').read_text())
     tree = directory / analysis['cohorts'][0]['tree_path']
     selection = directory/'selection_bundle/ensemble.json'
-    snapshots = [tree.read_bytes(), selection.read_bytes()]
+    coordinates = [directory / analysis['cohorts'][0][key]
+                   for key in ('pcoa_csv', 'direct_pcoa_csv')]
+    frozen = [tree, selection, *coordinates]
+    snapshots = [file.read_bytes() for file in frozen]
     result = refresh_clock_reports(path)
-    assert snapshots == [tree.read_bytes(),selection.read_bytes()]
+    assert snapshots == [file.read_bytes() for file in frozen]
     assert result['clock_diagnostic_refresh']['blocks'][0]['sample_count']==4
     report = Path(path.parent/result['blocks'][0]['report']).read_text()
     assert 'Clock-compatible (date-optimised)' in report
     assert 'Archivo' in report
     assert '1 input genomes · 3 public comparisons' in report
+    assert 'Browse output files by type' in report
+    assert (directory / 'README.md').is_file()
+    assert (path.parent / 'files/index.html').is_file()
+
+
+def test_refresh_rejects_changed_coordinates(tmp_path):
+    path = completed_run(tmp_path)
+    manifest = json.loads(path.read_text())
+    directory = path.parent / manifest['blocks'][0]['block_id']
+    analysis = json.loads((directory/'profile_analysis.json').read_text())
+    coordinates = directory / analysis['cohorts'][0]['pcoa_csv']
+    coordinates.write_text(coordinates.read_text().replace('0.', '1.'))
+    with pytest.raises(WorkflowError, match='numerical checkpoint'):
+        refresh_clock_reports(path)
 
 
 def test_refresh_rejects_changed_source_tree(tmp_path):
