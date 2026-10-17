@@ -1,5 +1,10 @@
 # Running an analysis
 
+For the current four-module workflow, start with [the independent suite](independent-suite.md):
+`prepare`, `cgmlst`, `tree`, then `time`. Each accepts the previous stage's saved
+manifest and writes a separate report. The commands below describe the older
+`run` interface; its defaults and paths do not apply to the independent modules.
+
 ## Choose the stopping stage
 
 `chronoclade run` defaults to `fast`, the profile-first analysis. Use `full` to

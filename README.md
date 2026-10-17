@@ -1,34 +1,25 @@
 # ChronoClade
 
-ChronoClade first compares cgMLST profiles, then adds public context assemblies
-and a recombination-corrected whole-genome tree when requested. Dating is a
-separate final stage: TreeTime estimates a dated phylogeny only when the
-temporal-signal test passes.
+ChronoClade compares bacterial genomes with public context using cgMLST profiles,
+then builds recombination-adjusted SNP trees and assesses whether sampling dates
+support a time tree. Four commands save separate datasets, reports and manifests:
 
-`fast` is the default and builds a profile-first report without downloading
-context assemblies. `full` adds up to 50 selected public context assemblies per
-lineage and runs the corrected genomic analysis; it does not run date tests.
-`finish` runs that same genomic analysis and then evaluates temporal signal,
-creating a time-scaled tree only when the gate passes. Profile reports describe
-genetic groups, recurrence across observed years, and concentration in time and
-place separately. These summaries do not establish persistence, outbreaks or
-transmission on their own.
+| Command | Purpose | Next-stage input |
+| --- | --- | --- |
+| `prepare` | Resolve input genomes, typing and metadata | `prepared/dataset.json` |
+| `cgmlst` | Retrieve matching context profiles, analyse relationships and select representative sets | `cgmlst/BLOCK/selection_bundle/ensemble.json` |
+| `tree` | Acquire the selected assemblies, build corrected SNP trees and assess temporal signal | `tree/tree_ensemble.json` |
+| `time` | Date supported trees and compare alternative selections | `time/time_ensemble.json` and its linked report |
 
-The workflow is intended for longitudinal surveillance within a species and
-lineage, such as an MLST sequence type. Public context genomes can be added to
-help distinguish a sampled local lineage from separate introductions. The final
-profile report starts with input coverage, countries and figures before nearest
-profile relatives. The corrected report adds recombination-filtered genetic
-distances and context; the finish report adds temporal evidence when assessed.
-Detailed methods and the full public country atlas are available separately.
+Allele-profile distance is the cgMLST default. An optional direct-DNA mode compares
+nucleotide sequences within the same cgMLST genes. Sequence embeddings are parked
+as [research notes](docs/research/parked-sequence-embeddings.md), with no active
+embedding workflow.
 
-ChronoClade does not infer direct transmission. A dated tree estimates ancestral
-times under a molecular-clock model; it does not identify who infected whom.
+## Install
 
-## Installation
-
-[Pixi](https://pixi.sh/) installs ChronoClade and its native dependencies on
-macOS or Linux.
+[Pixi](https://pixi.sh/) installs the Python package and native dependencies on
+macOS or Linux. Windows users can use WSL2.
 
 ```bash
 git clone https://github.com/ghruproject/chronoclade.git
@@ -37,170 +28,127 @@ pixi install
 pixi run chronoclade preflight
 ```
 
-Windows users can run the Pixi environment under WSL2.
+Large cgMLST blocks require RapidNJ. On supported macOS hosts, run
+`pixi run chronoclade setup-scale`; Apple Silicon currently requires Rosetta.
+See [installation](docs/installation.md) and [large-block analysis](docs/cgmlst-scale.md).
+Separate Pixi environments are available for each stage.
 
-## Basic use
+## Prepare your input genomes
 
-ChronoClade reads a CSV containing one row per assembly. Samples are analysed
-separately by `species` and `lineage`.
-
-```csv
-sample_id,assembly,collection_date,location,species,lineage,origin,is_reference,patient_id
-KPN001,assemblies/KPN001.fasta,2023-03,KIMS,Klebsiella_pneumoniae,ST15,local,true,P001
-KPN002,assemblies/KPN002.fasta,2024-01-17,KIMS,Klebsiella_pneumoniae,ST15,local,false,P002
-KPN_REF,context/KPN_REF.fasta,2021,Philippines,Klebsiella_pneumoniae,ST15,context,false,
-```
-
-Check the metadata and planned analyses before running the workflow:
+Supply a Pathogenwatch collection UUID or full collection URL, an accession list,
+assembly metadata, or a frozen profile bundle. For example:
 
 ```bash
-pixi run chronoclade validate metadata.csv
-pixi run chronoclade run metadata.csv --dry-run
+pixi run chronoclade prepare accessions.csv --input-kind accessions \
+  --species "Klebsiella pneumoniae" --metadata study-metadata.csv --out prepared
 ```
 
-Run the analysis:
+Or start from a collection:
 
 ```bash
-pixi run chronoclade run metadata.csv \
-  --output chronoclade_results \
-  --mode finish \
-  --threads 8 \
-  --lineage-jobs 2 \
-  --randomisation-jobs 4 \
-  --date-randomisations 100
+pixi run chronoclade prepare \
+  https://next.pathogen.watch/collections/jX5cwsoyJ1KDquMqssUzAD-ellington-et-al-2015 \
+  --input-kind collection --out prepared-collection
 ```
 
-For a quick screen:
+Preparation retrieves available typing and metadata for the input genomes. New
+assemblies require a declared species, configured typing tools and ready reference
+databases. Installation and reference access are separate requirements. Use
+`setup-typing` to install the upstream cgMLST/LIN/HierCC tools; see
+[input preparation](docs/prepare.md) and [query typing](docs/query-typing.md).
+
+Pathogenwatch credentials come from `PATHOGENWATCH_API_KEY` or a protected local
+configuration file. Keep credentials outside input files and version control.
+See [Pathogenwatch access](docs/pathogenwatch.md).
+
+## Analyse profiles and choose representative sets
 
 ```bash
-pixi run chronoclade run metadata.csv --mode fast --output chronoclade_results
+pixi run chronoclade cgmlst prepared/dataset.json --fetch-context \
+  --lin-level 5 --subsamples 5 --context-size 50 \
+  --representative-reserve 50 --out cgmlst
 ```
 
-For a corrected genomic analysis without date testing:
+Species and MLST ST define the public candidate pool; compatible LIN prefixes or
+an explicit HierCC level refine it. The requested LIN depth is fixed: 5 by default,
+with 6 and 7 available. The command retrieves matching context profiles and metadata;
+context assemblies are acquired by the later tree stage. Omit `--fetch-context`
+when the prepared bundle already contains the desired public comparisons.
+
+Open `cgmlst/index.html` for the partition summary and links to each block report.
+The report presents the combined input/context dataset, nearest relatives, the full
+NJ tree, NJ-distance MDS, exploratory date regression, location/host state-change
+networks, and the selections for SNP-tree analysis. It retains the existing report
+style and uses accessions where available.
+
+Tables have search, sorting and a 10-row default. NJ opens as a complete overview,
+with zoom to inputs, a group or a sample. NJ and MDS share group highlighting;
+their selectors show the 20 largest groups plus all input-containing groups, with
+search across the complete group list. Displayed Klebsiella groups use reported
+level-7 cgLIN prefixes. Nearest relatives rank by actual distances, with coverage
+and ties retained.
+
+Every comparable profile remains in the guide analysis. Subsampling applies to the
+next stage. All inputs and required neighbours are retained; `--context-size` is a
+context budget that can expand for mandatory neighbours. The example reserves
+room for 50 optional representatives beyond those required neighbours. Multiple
+sets vary their optional representatives to assess selection sensitivity.
+
+See [cgMLST options and distance modes](docs/cgmlst.md).
+
+## Build SNP trees, then time trees
+
+Replace `BLOCK` with a block directory listed in `cgmlst/index.html`:
 
 ```bash
-pixi run chronoclade run metadata.csv \
-  --mode full \
-  --output chronoclade_results
+pixi run chronoclade tree cgmlst/BLOCK/selection_bundle/ensemble.json \
+  --out tree --threads 4 --randomisations 100 --ensemble-jobs 1
+
+pixi run chronoclade time tree/tree_ensemble.json --out time --ensemble-jobs 1
 ```
 
-To run the temporal tests after the corrected analysis:
+Tree acquires assemblies for the exact selected IDs, runs SKA2, IQ-TREE and
+ClonalFrameML, and assesses temporal signal. Alternative selections share a
+verified assembly cache, mapping reference and recorded seed policy. Time reads
+the saved results and uses TreeTime when the temporal assessment supports dating.
+It also writes an ensemble comparison report. A single selection manifest is
+accepted too; that route produces `tree.json` and `time.json`.
 
-```bash
-pixi run chronoclade run metadata.csv \
-  --mode finish \
-  --date-randomisations 100 \
-  --output chronoclade_results
-```
+Differences between alternative selections describe subsampling sensitivity.
+They are not confidence intervals or proof of convergence. cgMLST date regressions
+are exploratory; an improved regression alone does not establish temporal signal.
+State-change networks describe reconstructed metadata changes on a rooted tree
+and do not prove transmission.
 
-After SKA mapping, ChronoClade checks whether any genome is an extreme
-raw-distance outlier within its declared lineage. A failed check stops before
-IQ-TREE and ClonalFrameML and records the per-genome evidence in
-`lineage_coherence.tsv`; verify the accession and lineage assignment before
-rerunning. A second check on the recombination-filtered alignment writes
-`clonal_lineage_coherence.tsv` before temporal analysis.
+See the [complete workflow](docs/independent-suite.md), [tree stage](docs/tree-stage.md)
+and [time stage](docs/time-stage.md). The same commands run locally or through
+[generated SLURM job scripts](docs/independent-suite.md#local-and-slurm-jobs).
 
-Open `chronoclade_results/index.html` when the run completes. Each lineage has
-its own report and a ZIP archive containing the figures, tables, trees and
-machine-readable results used in that report.
+## Reports and output folders
 
-Full reports also include an exploratory country network, with dashed links for
-uncertain ancestral location assignments, SVG/PNG figures and downloadable
-branch and node uncertainty tables. This uses the locations supplied in your
-metadata and remains available when dating is unsupported. Inferred location
-changes are not confirmed transmission routes; see the [report guide](docs/report.md).
+Each module writes its own report and machine-readable stage result. cgMLST runs
+also include root/block `README.md` files and a `files/index.html` browser grouping
+tables, trees, figures, networks, subsamples and methods. Original evidence stays
+at its recorded paths so hashes and downstream manifests remain valid.
 
-## Public context genomes
+Report figures and interactive views are embedded in the HTML and can be opened
+without a server. Keep the output folder for downloads and subsequent stages.
+Large distance matrices can occupy several gigabytes; avoid retaining unnecessary
+copies of complete runs. See [output files](docs/outputs.md) and
+[reading the reports](docs/report.md).
 
-Pathogenwatch is the public-context provider for *Klebsiella pneumoniae* and
-*Escherichia coli*. ChronoClade freezes the full public same-ST catalogue, then
-prioritises compatible cgMLST, cgLIN or HierCC context while retaining a bounded
-country/year-balanced background for SKA screening. Country figures use QC-passing,
-accession-deduplicated public records, including undated records, before
-selection. cgLIN depths are prefix levels, not SNP cutoffs or transmission groups.
+## Older run interface
 
-```bash
-pixi run chronoclade prepare-context focal_metadata.csv \
-  --scheme klebsiella --st 147 --output context/ST147 \
-  --candidate-pool 40 --max-context 12 --threads 4 --dry-run
+`chronoclade run --mode fast|full|finish` and `prepare-context` remain available.
+Their defaults, context limits and output paths differ from the independent
+commands above. See [the older staged workflow](docs/staged-workflow.md).
 
-# Inspect the frozen catalogue and audit, then rerun without --dry-run.
-pixi run chronoclade prepare-context focal_metadata.csv \
-  --scheme klebsiella --st 147 --output context/ST147 \
-  --candidate-pool 40 --max-context 12 --threads 4
+## Documentation and development
 
-pixi run chronoclade run context/ST147/combined_metadata.csv \
-  --context-manifest context/ST147/context_manifest.tsv \
-  --output chronoclade_results --threads 4
-```
-
-Downloads use `PATHOGENWATCH_API_KEY` or a user-only configuration file; see the
-[provider documentation](docs/pathogenwatch.md). A validated `--cglin-export`
-and `--focal-crosswalk` can supply assignments without uploading focal genomes.
-Missing assignments remain explicit. See the [country figures](docs/context-geography.md)
-and [laptop/SLURM pilot](docs/pathogenwatch-pilot.md).
-
-For new assemblies, `chronoclade setup-typing` installs Pathogenwatch's own
-cgMLST caller, Klebsiella `plincer` and E. coli `hclink`, using uv for the Python
-tools. Reference databases are prepared separately and their readiness is checked.
-Use `type-queries` for frozen typing results or `prepare-context --typing-config`
-to type queries and the bounded public pool with the same databases. See
-[new assembly typing and HierCC](docs/query-typing.md) for installation and data access.
-
-Pathogenwatch is the only built-in public-context provider. Context preparation
-currently supports *K. pneumoniae* with `--scheme klebsiella`; other organisms
-or schemes return an explicit unsupported-provider error. The main analysis
-still accepts local genomes for any validated species and lineage.
-
-## Worked example
-
-The repository contains a real-data analysis of 72 *Staphylococcus aureus*
-ST239 genomes sampled between 1980 and 2012. The estimated clock rate was
-1.693 x 10^-6 substitutions per site per year, the inferred root date was 1946,
-and the date-randomisation p-value was 0.0099. These estimates agree closely
-with the published analysis of the collection.
-
-The [worked example](https://ghruproject.github.io/chronoclade/worked-example/)
-shows the commands, root-to-tip plot, randomisation result, dated tree with node
-intervals, clonal distances and the resulting public-health interpretation.
-
-The repository also includes an
-[accession-defined ST131-H30 validation](validation/komori2024_st131/README.md)
-against the 96 C0/C1 chromosomes from Komori et al. (2024). It records the
-identity audit, both lineage-coherence checks and the distinction between
-detectable temporal signal and an imprecise TreeTime root date.
-
-## Documentation
-
-The [ChronoClade documentation](https://ghruproject.github.io/chronoclade/)
-covers input preparation, temporal-signal testing, report interpretation and
-the command-line interface.
-
-To build it locally:
-
-```bash
-pixi run docs
-```
-
-## Methods and limitations
-
-ChronoClade uses SKA2 for reference-ordered whole-genome alignment, IQ-TREE for
-the starting maximum-likelihood phylogeny, ClonalFrameML to account for
-recombination, and TreeTime for clock analysis and time scaling in `finish`.
-The default finish-stage screen requires a positive clock rate and an empirical
-R² permutation p-value of 0.05 or less. The optional full-tree test reruns the
-complete TreeTime fit for each permutation and applies the stricter CR2
-rate-interval rule.
-
-Root-to-tip regression is a diagnostic rather than a formal test. Population
-structure, biased sampling, date uncertainty and residual recombination can all
-affect molecular-clock estimates. ChronoClade retains the source tables and
-figures so these assumptions can be reviewed.
-
-See the [methods page](https://ghruproject.github.io/chronoclade/methods/) for
-the full workflow and references.
-
-## Development
+The [documentation site](https://ghruproject.github.io/chronoclade/) includes
+installation, methods, command reference and the [worked example](docs/worked-example.md).
+Documentation changes on a pull request reach the published site after merging
+into `main` and successful deployment.
 
 ```bash
 pixi run lint
@@ -208,6 +156,5 @@ pixi run test
 pixi run docs
 ```
 
-ChronoClade is under active development. Validate results against epidemiology
-and the underlying phylogenetic outputs before using them to guide an
-investigation.
+ChronoClade is under active development. Interpret results against the sampling
+frame, metadata quality and local epidemiology.

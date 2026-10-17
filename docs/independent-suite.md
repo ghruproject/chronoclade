@@ -1,6 +1,6 @@
 # Independent analysis modules
 
-ChronoClade saves four independent modules: **prepare**, **cgmlst**, **tree** and
+ChronoClade provides four independent modules: **prepare**, **cgmlst**, **tree** and
 **time**. The cgMLST module uses allele profiles by default. You can choose direct
 DNA comparisons over the same cgMLST genes when an allele sequence catalogue is
 available. Both modes produce saved selections that pass to **tree**, followed
@@ -97,8 +97,18 @@ The report shows the cgLIN grouping level beside the ordination. Full prefixes
 identify the groups, using the prepared typing assignments. The complete
 NJ tree uses the same group colours; selecting a group in either the tree or the
 ordination highlights its genomes in both. Groups need not be single tree clades.
-The same reported groups supply selection strata. The tree offers a full overview and a separate label-reading mode, while keeping
-the saved topology and signed branch lengths unchanged.
+The same reported groups supply selection strata. The tree opens with a full
+overview. Zoom to inputs, a selected group or a
+sample accession, then read tip labels without changing the saved topology or
+signed branch lengths. NJ and MDS show the 20 largest groups plus all
+input-containing groups initially; search and a scrollable full list retain
+access to every group. Tables default to 10 rows. Region/NUTS2 detail is shown
+only for reported values. The date regression has its own Temporal section;
+root-sensitivity comparisons remain in saved evidence, outside the report.
+
+The run and block folders include READMEs and categorized file browsers. These
+link to original evidence without moving or duplicating large matrices. See
+[the output layout](outputs.md#independent-module-outputs).
 
 Multiple selections are alternative representative sets from the same block.
 Every input, pinned context and required closest relative is retained, including

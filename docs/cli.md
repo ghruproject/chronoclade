@@ -1,5 +1,37 @@
 # Command line
 
+## Independent module commands
+
+Use these commands for the four-module workflow:
+
+| Command | Input | Purpose |
+| --- | --- | --- |
+| `prepare SOURCE --out prepared` | Collection, accessions, assemblies or frozen profiles | Resolve input typing and metadata |
+| `cgmlst prepared/dataset.json --out cgmlst` | Prepared bundle | Analyse compatible profiles and save selections |
+| `tree SELECTION --out tree` | Selection JSON or `ensemble.json` | Build corrected SNP trees and assess dates |
+| `time TREE --out time` | `tree.json` or `tree_ensemble.json` | Date supported trees and compare alternatives |
+
+`cgmlst --fetch-context` retrieves matching public profiles and metadata;
+assembly acquisition happens in `tree`. `--subsamples` defaults to 1 and requests
+alternative sets from the same block. `--context-size` defaults to 50, with
+mandatory neighbours retained even when they exceed that budget.
+`--representative-reserve` defaults to 0; set it explicitly to retain room for
+optional representatives beyond required neighbours. See [cgMLST](cgmlst.md),
+[tree](tree-stage.md) and [time](time-stage.md) for stage options and examples.
+
+Report and diagnostic utilities:
+
+| Command | Purpose |
+| --- | --- |
+| `refresh-cgmlst-report CGMLST_JSON` | Refresh report views and diagnostics from checked saved tree/coordinates; retain selections |
+| `time-compare ENSEMBLE --run TIME_JSON ... --out comparison` | Compare checked completed time runs |
+| `compare-clocks TREE_ENSEMBLE --out comparison` | Compare cgMLST and corrected SNP diagnostics on identical selected genomes/dates |
+| `calibrate-lin ENSEMBLE --folds 3 --output calibration` | Experimental held-out-date checks for finer LIN groups; does not set biological cutoffs |
+| `job ...` | Save a local/SLURM stage script and resource manifest without submitting |
+
+Run `chronoclade COMMAND --help` for the installed options. The older `run` and
+`prepare-context` commands below have different context limits and output paths.
+
 ## Native query typing
 
 `setup-typing` installs pinned Pathogenwatch tools with uv-managed Python

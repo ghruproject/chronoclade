@@ -93,8 +93,10 @@ callable-count evidence where available. They do not acquire an invented distanc
 Each cohort also stores a square distance matrix and condensed vector. Complete
 linkage grouping uses compiled SciPy routines and reports threshold sensitivity.
 Input ordering fixes its tie behaviour, although an exact tied merge may differ
-from the legacy Python implementation. The groups remain descriptive, without
-claiming outbreak, transmission or biological calibration.
+from the legacy Python implementation. These optional cutoff groups are
+descriptive and remain separate from the
+reported cgLIN prefixes used for display; they do not establish outbreaks or
+transmission.
 
 RapidNJ consumes streamed PHYLIP distances with safe temporary tip names, restores
 original IDs and verifies the complete output tip set. The Newick is downloadable.
@@ -102,7 +104,9 @@ Input values are written with 17 significant digits; upstream RapidNJ uses float
 internally. Negative branches are retained and flagged. The temporary text matrix
 is removed after a successful tree, while the binary evidence remains.
 
-PCoA uses ARPACK leading eigenpairs of the exact centered squared-distance operator.
+Large-block ordination uses ARPACK leading eigenpairs of the exact centered
+squared-distance operator. The report defaults to NJ-tree distances and retains
+direct profile-distance PCoA as an alternative.
 Each matrix operation runs in bounded row batches; there is no dense full Gram
 matrix or full eigendecomposition. All cohort genomes receive coordinates. The
 saved solver tolerance is explicit. Total positive inertia and the complete
@@ -111,17 +115,22 @@ shown. Iterative convergence failure remains a failure.
 
 The full tree is rooted at the lexicographically first input tip, or first eligible
 tip in a cohort without inputs. Root provenance and sensitivity are recorded.
-Exploratory date diagnostics use declared allele-distance units on a fixed fully
-called panel. When callable denominators vary, the mismatch fraction is multiplied
-by the recorded locus-universe size and labelled **scheme-equivalent** allele
-units per year; it is not an observed mutation or allele-change rate. Date
+Exploratory date diagnostics use the saved distance and locus-coverage evidence.
+When callable denominators vary, the mismatch fraction is multiplied by the
+recorded locus-universe size and labelled **scheme-equivalent** allele units per
+year; it is not an observed mutation or allele-change rate. Date
 intervals, the fitted line, unsupported slopes and exclusions remain visible.
 
 Country reconstruction uses the existing full-tree state-change network, exact
 optimal-history pair ranges, root sensitivity, centrality metrics and approved
 styling. Indexed exact tree distances accelerate root selection without changing
-its answers. The standalone country-coloured tree lazily expands clades, retaining
-all IDs and repeated profiles. It uses the same representative ancestral country
+its answers. The report's cgLIN-coloured NJ viewer opens with a complete
+overview and supports
+input/group focus, accession lookup, readable labels and pan/zoom. Its compact
+legend retains the 20 largest groups and every input-containing group, with
+search across all groups. A separate country-coloured tree lazily expands
+clades, retaining all IDs and repeated profiles. It uses the same representative
+ancestral country
 states and palette as the network. No enormous static all-tip SVG is generated.
 
 ## Measured synthetic resource evidence

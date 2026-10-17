@@ -1,236 +1,123 @@
-# Reading the report
+# Reading the reports
 
-The report starts with what was found, the countries represented and the closest
-analysed relatives. Dating comes afterwards: genetic relationships remain useful
-when collection dates cannot support reliable estimates of ancestral times.
+Each module has its own report: preparation, cgMLST, corrected SNP tree, and time
+tree. Start with the module's saved manifest or report index. The cgMLST index
+lists the input partitions and links to each block; **All groups** returns from a
+block report to that summary.
 
 Genome labels prefer a sequencing-run accession (SRR, ERR or DRR), then a
 BioSample accession, then an assembly accession when available. User-supplied
-focal sample names are retained. Internal Pathogenwatch IDs remain in the
-machine-readable results and label mapping; repeated accessions are disambiguated
-so separate genome records remain identifiable. The fast report includes
-`sample_labels.csv`, and assembly-stage snapshots retain `sample_labels.json`.
+input names are retained. Internal IDs remain in evidence and label mappings so
+separate records stay traceable. See `sample_labels.csv` in a cgMLST block.
 
-## Start with the summary
+## cgMLST report order
 
-The opening summary separates your focal samples (the genomes you want to
-investigate) from context genomes (the comparison set). It states whether dating
-is supported. An unsupported dating result means the analysis completed but did
-not establish enough clock information; it does not mean the software failed.
+### Dataset
 
-Public-data demonstrations are labelled explicitly. Their focal genomes are
-stand-ins, not a defined outbreak or patient cohort, and their automated
-interpretations must not be treated as epidemiological findings.
+The opening section summarizes input and public comparison genomes together,
+before assembly subsampling. Country totals distinguish those roles. Region and
+NUTS2 detail shows only reported values and disappears when there is no data;
+unknown countries remain in the country denominator. Host/date coverage shows
+what is available for later views.
 
-## Countries and genetic groups
+Counts describe the retrieved, usable evidence. They do not measure population
+prevalence or surveillance completeness. Country metadata does not establish
+where infection was acquired.
 
-For Pathogenwatch runs with a selection audit, the report shows the matching
-record count, eligible sample count, screened pool and final comparison count
-before the country figures. Expand the filtering steps to see quality checks,
-duplicate removal, focal exclusions, usable-date requirements and metadata
-filters. The download pool is sampled across country/year groups with a fixed
-seed; closest screened candidates are retained first, with shared neighbours
-counted once, and remaining places filled by background comparisons. Pool and
-comparison limits are run settings, not fixed biological thresholds.
+### Genetic relationships
 
-Country counts first compare focal samples with the context genomes selected for
-the tree. A separate figure describes public genomes in the cgLIN groups matching
-the focal samples. cgLIN codes describe genetic groups at increasingly specific
-levels; they are not SNP-distance cutoffs or transmission clusters.
+The nearest-relative table ranks comparable public genomes by raw allele
+mismatches, or raw gene-panel SNP counts in direct-DNA mode. It retains tied
+neighbours and the jointly compared loci or nucleotide sites.
 
-Keep the denominators separate. A tree may contain seven analysed genomes while
-the public catalogue contains thousands of quality-checked, deduplicated sample
-units. Country percentages within a public group describe that available group,
-not the selected tree participants. Unknown countries remain in the denominator.
-The full catalogue atlas and source tables are available separately.
+The complete NJ tree uses every usable profile in its comparison cohort. It opens
+as an overview. Use **Zoom to inputs**, **Zoom to selected group**, **Read labels**,
+or find an accession and **Locate** it. Zoom and pan affect the viewport only.
+Branches describe genetic distance; they do not represent calendar time.
 
-These figures describe submitted sequence records. Surveillance and submission
-coverage affect the proportions; country metadata does not establish where an
-infection was acquired, migration direction or population prevalence.
+MDS defaults to distances along that NJ tree. Negative branches are set to zero
+for the ordination calculation only; the saved NJ tree keeps its signed branch
+lengths. Direct profile-distance PCoA remains available through the coordinate
+selector. Both are approximate two-dimensional projections, so points can overlap.
+Hover, focus or select a point to inspect the accessions and metadata.
 
-## Adaptive LIN context in the fast report
+For Klebsiella blocks, displayed groups use compatible reported cgLIN level-7
+prefixes. They are not inferred from the ordination or a 2% distance cutoff.
+Group colours match between NJ and MDS; selecting a group highlights it in both.
+The selectors initially show the 20 largest groups plus every input-containing
+group. Search covers all groups, and **Show all groups** opens a bounded list.
+Every group and genome remains available. Groups need not form a single tree clade.
 
-For Klebsiella inputs with compatible cgLIN assignments, the fast report first
-shows the datasets separated by MLST ST and clonal group. A compact selection
-table lists available comparisons at levels 5, 6 and 7 and the level chosen for
-each input level-5 subgroup. Selection starts at level 7 and widens until each
-represented input prefix has the configured minimum number of public comparisons
-(default 20), or reaches level 5. This minimum is a sampling choice, not a
-biological threshold. Sparse subgroups remain labelled as limited context.
+Colour by dataset, country, region, host or date without changing the coordinates
+within a chosen basis. Triangles mark inputs and circles mark public comparisons.
 
-The chosen prefixes are combined and deduplicated within each clonal-group
-dataset. Country and collection-year summaries describe that complete chosen
-pool, before NJ-tree subsampling. The wider public clonal-group pool is reported
-separately. One PCoA and one NJ view are produced per analysable dataset, rather
-than a new set of figures for every LIN level. Missing profiles and metadata are
-retained in the coverage tables.
+### Temporal
 
-LIN codes define the context search groups; they do not rank closest relatives.
-The fast nearest-neighbour table uses actual cgMLST allele differences and
-reports jointly compared loci and all ties within the searched profile pool.
+The exploratory date-versus-distance plot has its own section. Collection-date
+intervals use their midpoints; pre-1900 dates are excluded from this regression
+and retained elsewhere. A scaled allele-distance slope depends on locus coverage
+and is not a direct mutation-rate estimate. Root-to-tip points share ancestry;
+a fitted line alone does not establish temporal signal.
 
-## Closest relatives and the genetic tree
+Root-comparison tables, sensitivity figures and their methodological discussion
+are omitted from the report. The saved diagnostic evidence remains available.
+Formal temporal assessment belongs to the corrected SNP-tree stage.
 
-The first tree shows genetic relationships before time scaling. Its branch
-lengths represent model-estimated substitutions per site, not years. Focal tips
-are distinguished from comparison genomes and labelled with country and date.
+### State network
 
-Per-sample neighbour tables use the final recombination-filtered SNP comparisons.
-A SNP is a differing DNA base at a position that can be compared between the two
-genomes. The callable-site count states how much sequence was comparable. Pairs
-with no comparable sites cannot establish closeness. Exact distance ties remain
-visible; the nearest rows are not a unique winner when several genomes tie.
+Choose location or host where available. The interactive view reconstructs
+metadata state changes along the rooted tree. Dashed/alternative links expose
+uncertainty across optimal assignments. Select nodes, change the centrality
+measure, drag, zoom or pan, then save PNG or interactive HTML from the view.
+The report does not repeat the network as a second static figure.
 
-A separate ranking uses patristic distance: the total length of branches linking
-two tips in the genetic tree. SNP counts and tree distances can rank relatives
-differently because they are different measures. Neither requires a dated tree.
-The earlier SKA distances were used to select a screening pool; they are not the
-final recombination-filtered relatedness result.
+Arrows describe reconstructed ancestral-to-descendant state changes. They depend
+on the tree, root, metadata and sampling frame, and do not prove transmission.
 
-“Closest” always means among the genomes analysed in this run. A bounded context
-selection cannot establish the globally nearest public genome. Close genetic
-relationships alone do not establish transmission or infection direction.
+### Subsamples
 
-## Country network
+This section states how many inputs and public comparisons enter each saved
+assembly selection, how many neighbours are mandatory, and how much alternatives
+overlap. All inputs, pinned records and required neighbours are retained. The
+context budget can expand to preserve required ties and an explicitly requested
+representative reserve. Optional representatives vary across reproducible seeds.
 
-The full report may include a StrainHub-style view of location states on the
-rooted analysed tree. It uses the `location` values in the analysis metadata as
-supplied; there is no automatic lookup or conversion through a geography
-hierarchy. Supply country labels for a country-level network. City, hospital or
-other location labels produce a network at that level. Nodes summarise the
-locations represented by sampled tips and their sample counts. Arrows summarise
-representative ancestral state changes in the tree; they are not proven
-transmission links, migration routes, country of acquisition or estimates of
-national prevalence. Unknown or missing location values are excluded from the
-network rather than treated as a location state.
+Download a selection or the ensemble manifest to run the separate `tree` module.
+The full cgMLST NJ/MDS views remain based on the complete comparable profile pool.
+Variation between selections measures sampling sensitivity; it is not a confidence
+interval or proof of convergence.
 
-TreeTime assigns marginal probabilities to ancestral location states. A solid
-arrow means both endpoint states have a unique assignment with probability at
-least 0.9. Dashed arrows mark an ambiguous assignment or an endpoint below that
-threshold. Endpoint confidence is not the joint probability of the transition. Ties between states remain ambiguous. These
-probabilities are conditional on the rooted tree, its sampling and the location
-states supplied to the model; they do not capture uncertainty in those inputs.
-The view uses TreeTime's maximum-likelihood ancestral reconstruction, not
-StrainHub's parsimony algorithm. It is available after an unsupported dating
-result because it uses the rooted genetic tree and does not require dates.
+### Methods and files
 
-The profile-first `fast` report follows the StrainHub state-change workflow:
-reconstruct countries at ancestral nodes, record parent-to-child country changes
-on branches, then aggregate those changes into a directed, weighted network.
-It shows that representative history on the selected rooted cgMLST NJ tree.
-The complete network is interactive by default, using the same vis-network
-repulsion layout approach as StrainHub. Countries can be dragged, the view can
-be zoomed and panned, and selecting a country highlights its direct neighbours.
-The displayed NJ tree and its country-coloured version use the same selected
-genome IDs planned for full and finish. Selection occurs once during fast and is
-recorded in `context_selection.json`; the country network, PCoA and neighbour
-comparisons still use the complete usable profile pool. The full-pool NJ Newick
-is retained. Selected genomes without comparable profiles are explicitly listed
-as absent from the NJ display and retained for assembly analysis.
-Node sizes follow the selected centrality metric: indegree, outdegree, degree,
-betweenness, closeness or source/hub ratio. The JavaScript library is bundled
-locally; the report requires no Internet connection. Static figures remain
-available for export and readers without JavaScript. Input-country links and
-alternative possible links are optional views, and each input LIN subgroup has
-its own viewer. Node colours identify country states; a dark outline marks a
-country containing input genomes. Unknown-country sample tips remain grey and
-unassigned. Arrows run from the ancestral country to the descendant country.
-Link thickness counts changes in the displayed coherent history;
-dashed links show variation across equally optimal histories.
+Tables default to 10 rows and support search, column sorting and page-size
+selection. Detailed coverage and optional distance-cutoff diagnostics remain
+expandable. Those optional cuts do not define the displayed cgLIN groups.
 
-The reported minimum and maximum changes for every country pair are exact
-counts for ordered source-to-target pairs across all equally optimal parsimony
-assignments, conditional on the fixed rooted NJ tree and observed tip countries.
-The fast NJ root is arbitrary; arrows describe transitions conditional on that
-root, rather than independently establishing epidemiological direction.
-A possible-link view adds pairs
-whose maximum is nonzero even when the representative history has no such
-change. These ranges are not probabilities or confidence, and possible links
-do not all occur together in one history. Deterministic seeded tie-breaking
-selects a coherent representative without assigning ties by country name.
-Alternate roots are retained as a diagnostic and do not support the
-representative reconstruction. The calculation does not quantify tree
-topology, sampling or metadata uncertainty, and does not establish transmission,
-movement direction, acquisition location or prevalence. A nearest-country
-table separately reports observed input-to-relative comparisons from cgMLST
-distances, including ties and callable-locus denominators.
+**Browse output files by type** opens categorized links; **Output folder guide**
+opens the block README. Report figures and interactive views are embedded in the
+HTML. Keep neighboring files for evidence downloads and stage handoffs. See the
+[output layout](outputs.md#independent-module-outputs).
 
-An expandable metrics table and CSV report incoming/outgoing connections,
-incoming/outgoing branch changes, degree, betweenness, closeness and the source/hub ratio.
-As in StrainHub, centralities use unweighted links: betweenness follows directed
-shortest paths, while closeness traverses links in either direction and is the
-reciprocal of the sum of distances to reachable countries. The ratio uses
-outgoing links divided by incoming plus outgoing links in the displayed
-history; it is undefined for an isolated country. The network method follows
-[StrainHub](https://github.com/abschneider/StrainHub), while the exact conditional
-count ranges retain ancestral-state ambiguity instead of silently fixing ties.
+## SNP-tree and time reports
 
-A separate table reports input-country/nearest-relative-country comparisons
-from actual cgMLST distances, with all ties and callable-locus denominators.
-Subgroup filtering selects input genomes while retaining their nearest matches
-across the complete selected CG pool, even outside the subgroup tree. Unknown
-countries remain visible in this observed comparison table. Downloads retain
-the reconstruction audit and nearest-country comparison data.
+The tree module reports the selected assembly set, recombination adjustment,
+corrected distances, relationships, state-change network and temporal assessment.
+Raw and corrected lineage-coherence screens detect grossly divergent genomes;
+they do not verify every metadata value. Review flagged accessions and lineage
+assignments before overriding a strict screen.
 
-Older assembly-based fast-screen reports do not include the full-report network.
+Time reads the saved corrected tree and assessment. Supported dating produces a
+calendar tree and model intervals. Unsupported evidence remains explicit. A
+successful execution does not establish precise ancestral dates.
 
-## Interpretation
+The ensemble comparison uses exact shared anchors. It distinguishes within-run
+model uncertainty from variation between alternative selections; whole-selection
+roots can describe different ancestors. See [tree](tree-stage.md) and
+[time](time-stage.md) for the recorded checks and comparison policies.
 
-The working interpretation combines the corrected topology, SNP comparisons,
-sampling span and comparison genomes. Detailed evidence states what is available
-and what is missing. Automated labels are provisional: compare them with patient
-movement, referral, travel and sampling information.
+## Older reports
 
-| Label | Sampled pattern |
-| --- | --- |
-| Persistent local lineage | One focal-only group spans more than one sampling date |
-| Multiple introductions | Focal isolates form at least two separated groups and none spans dates |
-| Mixed | Several focal groups are present and at least one spans dates |
-| Indeterminate | Focal, longitudinal or contextual evidence is insufficient |
-
-## Can this tree be placed on a calendar?
-
-The report then explains whether genetic divergence increases with collection
-time and whether the observed relationship is stronger than results with shuffled
-dates. In the default root-to-tip screen, R² describes the fit and the empirical
-p-value compares it with the shuffled results. R² alone is not a pass criterion.
-Full TreeTime refits use the separately documented rate-interval criterion.
-
-Passing datasets receive a second view: the genetic tree placed on a calendar
-axis by TreeTime. This estimates ancestral dates under a clock model; it is not
-an independent confirmation of the topology or a transmission tree. Date
-intervals are conditional on the model, sampling dates and supplied topology.
-Unsupported datasets retain their genetic tree and neighbour analyses, with no
-endorsed ancestral calendar dates.
-
-## Methods and downloads
-
-Detailed alignment checks, recombination maps, coordinate tables and clock
-statistics are expandable. Raw and corrected distance screens detect grossly
-divergent genomes; they do not prove every accession or metadata value is correct.
-
-ClonalFrameML's shared filtered alignment removes a column from every genome when
-an import is inferred on any branch. Ambiguous-base filtering is counted
-separately. Multi-record reference joins are flagged for review because artificial
-adjacency can affect inferred intervals.
-
-Figures are exported as SVG and PNG, numerical values as CSV/TSV, trees as
-Newick/Nexus and decisions as JSON. The supporting-results ZIP holds the evidence
-actually available for that run.
-
-## Staged reports
-
-The public `fast` report is profile-first: it describes profile coverage,
-country/region composition, exploratory PCoA and neighbour-joining views,
-descriptive genetic groups, profile neighbours and time/place concentration.
-Genetic group stability under locus resampling and time/place concentration
-answer separate questions. Selected genome counts and dated-tip spans cannot
-establish illness trends or outbreaks. Profile-stage root-to-tip diagnostics and location networks
-are exploratory, not clock gates or transmission evidence.
-
-`full` produces corrected assembly-based genomic evidence but does not assess
-dates. `finish` adds date randomisation and a dated tree only when the temporal
-evidence gate passes. See [the staged workflow](staged-workflow.md) for the
-inputs, outputs and limitations of each mode. Older PhiPack screening files,
-where present in preserved results, belong to the legacy per-lineage fast
-screen and are not outputs of the current public `fast` mode.
+The older `run --mode fast|full|finish` interface uses different stage paths and
+may retain older report sections. See [the staged workflow](staged-workflow.md).
+Preserved PhiPack results belong to the earlier assembly-screen workflow, not the
+current independent cgMLST module.

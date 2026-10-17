@@ -1,5 +1,72 @@
 # Output files
 
+## Independent module outputs
+
+Each command owns a separate output directory. Follow the report paths recorded
+in its manifest; a single selection and an ensemble produce different manifests.
+
+| Stage | Entry points | Handoff |
+| --- | --- | --- |
+| `prepare` | `report.html`, `readiness.json`, `prepare.json` | `dataset.json` and its referenced files |
+| `cgmlst` | `index.html`, `README.md`, `files/index.html`, `cgmlst.json` | Each block's `selection_bundle/ensemble.json` or individual selection JSON |
+| `tree` | Report linked from `tree.json` or `tree_ensemble.json` | The same tree manifest plus referenced evidence |
+| `time` | Report linked from `time.json` or `time_ensemble.json` | Dating evidence and, for an ensemble, its comparison report |
+
+A cgMLST run has this layout (`BLOCK` represents a generated partition directory):
+
+```text
+cgmlst/
+  index.html                   # Summary of all blocks
+  README.md                    # Start here and stage handoffs
+  cgmlst.json                  # Run parameters, identities and block references
+  partitions.json              # Partition counts, membership and exclusions
+  files/index.html             # Navigation to each block
+  BLOCK/
+    profile_report.html        # Self-contained cgMLST report
+    README.md                  # Block guide
+    profile_analysis.json      # Report data and diagnostics
+    numerical_analysis.json    # Frozen numerical checkpoint and checksums
+    sample_labels.csv          # Display labels and stable internal IDs
+    cohort_1_nj.nwk            # Complete cohort NJ tree
+    cohort_1_tree_groups.html   # Standalone interactive NJ viewer
+    cohort_1_ordination.html    # Standalone interactive MDS/PCoA viewer
+    binary_distances/           # Full, potentially large distance evidence
+    selection_bundle/
+      ensemble.json            # Handoff to tree for all alternatives
+      selections/
+        selection-001.json     # Handoff for one alternative
+    files/
+      index.html
+      tables/index.html
+      trees/index.html
+      figures/index.html
+      networks/index.html
+      subsamples/index.html
+      methods/index.html
+```
+
+Cohort names and optional artifacts depend on the available data. The categorized
+`files/` folders contain navigation pages linking to original artifacts. They do
+not relocate evidence or make extra matrix copies. Saved root-sensitivity
+calculations remain evidence files; that comparison is omitted from the cgMLST
+report itself.
+
+Report images and interactive views are embedded, so opening the HTML does not
+require a server. Links to downloads, block indexes and file browsers still need
+the corresponding output files. Share the report alone for viewing, or keep the
+common parent directory with prepared data, selections and stage outputs for
+reproducibility and subsequent stages.
+
+Distance matrices grow quadratically. Copy-on-write selection snapshots reduce
+duplication where supported, but repeated completed runs can still use several
+gigabytes. Avoid editing or removing manifest-referenced evidence from runs you
+intend to resume or pass downstream. See [large-block evidence](cgmlst-scale.md).
+
+## Older run interface outputs
+
+The paths below describe `run --mode fast|full|finish` and the older
+`prepare-context` interface. They differ from the independent module layout above.
+
 The top-level `index.html` links the report for each species/lineage group.
 `summary.json` records analysed and skipped groups.
 
