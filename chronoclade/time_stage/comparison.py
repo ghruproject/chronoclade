@@ -24,6 +24,7 @@ from chronoclade.time_stage.comparison_evidence import (
     split_occurrence,
 )
 from chronoclade.time_stage.comparison_report import write_comparison_report
+from chronoclade.sample_labels import sample_labels
 
 
 def _spread(values):
@@ -107,6 +108,7 @@ def compare_time_runs(
     _, coverage = selection_coverage(ensemble_path, ensemble, output)
     coverage_by_id = {row["selection_id"]: row for row in coverage["runs"]}
     runs, splits_by_run, tree_union = [], {}, set()
+    labels = {}
     anchors, targets = ensemble["common_anchor_ids"], ensemble["target_ids"]
     for selection_entry in ensemble["selections"]:
         ident = selection_entry["selection_id"]
@@ -135,6 +137,8 @@ def compare_time_runs(
         path, result = available[ident]
         tree_path = _resolve(path.parent, result["source"]["tree"], "source.tree", external=True)
         tree = load_tree_result(tree_path)
+        metadata_path = _resolve(tree_path.parent, tree["metadata"], "metadata")
+        labels.update(sample_labels(json.loads(metadata_path.read_text(encoding="utf-8"))))
         if tree["source"]["selection"]["sha256"] != selection_entry["sha256"]:
             raise WorkflowError("Time tree references a different selection checksum")
         base.update(tree_audit(tree_path, tree, output))
@@ -191,6 +195,7 @@ def compare_time_runs(
         "source": {"ensemble": reference(output, ensemble_path)},
         "common_anchor_ids": anchors,
         "target_ids": targets,
+        "sample_labels": labels,
         "requested_runs": len(runs),
         "dated_runs": len(assessable),
         "runs": runs,

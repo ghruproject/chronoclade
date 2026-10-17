@@ -31,6 +31,13 @@ def dataset_records(dataset):
     by_id = {row["sample_id"]: row for row in rows}
     allowed = {
         "source_genome_id",
+        "numeric_source_id",
+        "source_checksum",
+        "source_length",
+        "source_n50",
+        "source_contigs",
+        "qc_pass",
+        "source_qc",
         "aliases",
         "accession",
         "run_accession",

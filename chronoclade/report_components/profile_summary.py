@@ -52,6 +52,13 @@ def _known_count(counts: dict[str, int], field: str) -> int | str:
     return "Not fully classified" if counts["other"] else counts[field]
 
 
+def _reported(value: object) -> bool:
+    if value is None:
+        return False
+    text = str(value).strip()
+    return text.casefold() not in {"", "unknown", "unavailable", "not reported", "none", "null", "n/a", "na", "—", "–", "-"}
+
+
 def _geography_rows(data: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     aggregate: dict[tuple[str, tuple[str, ...]], dict[str, int]] = defaultdict(lambda: {"input": 0, "context": 0, "other": 0})
     countries: dict[str, dict[str, int]] = defaultdict(lambda: {"input": 0, "context": 0, "other": 0})
@@ -64,16 +71,18 @@ def _geography_rows(data: dict[str, Any]) -> tuple[list[dict[str, Any]], list[di
         country = str(row.get("country") or "Unknown")
         role = _origin(row)
         countries[country][role] += count
-        region = str(row.get("region") or "Unknown")
-        nuts2 = str(row.get("nuts2") or "Unknown")
-        for level, key in (("country", (country,)), ("region", (country, region)),
-                           ("nuts2", (country, region, nuts2))):
-            aggregate[(level, key)][role] += count
+        region = row.get("region")
+        nuts2 = row.get("nuts2")
+        if _reported(region):
+            aggregate[("region", (country, str(region).strip()))][role] += count
+        if _reported(nuts2):
+            location = (country, str(region).strip(), str(nuts2).strip()) if _reported(region) else (country, str(nuts2).strip())
+            aggregate[("nuts2", location)][role] += count
 
     detail = []
     for (level, location), counts in sorted(aggregate.items()):
         detail.append({
-            "level": {"country": "Country", "region": "Region", "nuts2": "NUTS2"}[level],
+            "level": {"region": "Region", "nuts2": "NUTS2"}[level],
             "place": " · ".join(location),
             "inputs": _known_count(counts, "input"),
             "context": _known_count(counts, "context"),
@@ -104,7 +113,7 @@ def _metadata_coverage(data: dict[str, Any]) -> str:
         return ""
     columns = [("field", "Metadata"), ("total", "Samples"), ("reported", "Reported"),
                ("missing", "Missing"), ("coverage", "Coverage")]
-    present = [column for column in columns if column[0] == "field" or any(column[0] in row for row in rows)]
+    present = [column for column in columns if column[0] == "field" or any(column[0] in row and _reported(row[column[0]]) for row in rows)]
     return '<h3>Host and collection-date coverage</h3>' + _table(
         rows, present, empty="No metadata coverage summary is available."
     )
@@ -123,12 +132,12 @@ def combined_dataset_summary(data: object) -> str:
              ("total", "Total")],
             empty="No country totals are available.",
         ))
-        detail = [row for row in geography if row["level"] != "Country"]
+        detail = geography
         if detail:
             output.append('<details class="coverage-details"><summary>Region and NUTS2 detail</summary>')
             output.append(_table(
                 detail,
-                [("level", "Level"), ("place", "Country · region · area"), ("inputs", "Inputs"),
+                [("level", "Level"), ("place", "Reported location"), ("inputs", "Inputs"),
                  ("context", "Context"), ("total", "Total")],
                 empty="No region or NUTS2 metadata is available.",
             ))

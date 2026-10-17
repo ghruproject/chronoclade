@@ -15,13 +15,13 @@ from pathlib import Path, PurePosixPath
 import re
 import shutil
 import tempfile
-import sys
 from collections import Counter
 
 from chronoclade import __version__
 from chronoclade.artifacts import file_sha256, write_json
 from chronoclade.datasets import DatasetError, load_dataset
 from chronoclade.errors import WorkflowError
+from chronoclade.file_snapshots import copy_evidence_snapshot
 from chronoclade.selections import (
     read_distance_evidence,
     representative_coverage,
@@ -31,38 +31,6 @@ from chronoclade.selections import (
 SCHEMA_VERSION = 1
 SELECTION_SCHEMA = "chronoclade.selection"
 ENSEMBLE_SCHEMA = "chronoclade.selection-ensemble"
-
-
-def _clone_file(source: Path, destination: Path) -> bool:
-    """Try an independent copy-on-write snapshot on supported filesystems."""
-    try:
-        if sys.platform == "darwin":
-            import ctypes
-
-            clonefile = ctypes.CDLL(None, use_errno=True).clonefile
-            clonefile.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_int]
-            clonefile.restype = ctypes.c_int
-            return clonefile(os.fsencode(source), os.fsencode(destination), 0) == 0
-        if sys.platform.startswith("linux"):
-            import fcntl
-
-            with source.open("rb") as original, destination.open("xb") as cloned:
-                fcntl.ioctl(cloned.fileno(), 0x40049409, original.fileno())  # FICLONE
-            return True
-    except (OSError, AttributeError):
-        pass
-    return False
-
-
-def copy_evidence_snapshot(source: Path, destination: Path) -> str:
-    """Copy evidence cheaply where possible, never sharing mutable inodes."""
-    if destination.exists():
-        raise WorkflowError(f"Evidence destination already exists: {destination}")
-    if _clone_file(source, destination):
-        return "copy_on_write"
-    destination.unlink(missing_ok=True)
-    shutil.copyfile(source, destination)
-    return "copy"
 
 
 def _read(path):

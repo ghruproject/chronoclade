@@ -44,6 +44,8 @@ class ContextCandidate:
     source: str = "pathogenwatch"
     source_genome_id: str = ""
     source_numeric_id: str = ""
+    source_checksum: str = ""
+    source_length: str = ""
     sample_accession: str = ""
     run_accession: str = ""
     assembly_accession: str = ""

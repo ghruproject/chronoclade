@@ -28,6 +28,29 @@ def test_combined_dataset_summary_puts_country_totals_first_and_collapses_subreg
     })
 
 
+def test_region_detail_omits_unknown_rows_but_keeps_reported_nuts2_and_unknown_country():
+    html = combined_dataset_summary({"metadata_geography": [
+        {"origin": "local", "country": "Unknown", "region": "Unknown", "nuts2": "Unknown", "count": 2},
+        {"origin": "context", "country": "Greece", "region": "Unknown", "nuts2": "EL54", "count": 3},
+    ]})
+
+    assert "Unknown" in html  # country metadata remains visible in country totals
+    assert "Region and NUTS2 detail" in html
+    assert "EL54" in html
+    detail = html.split("Region and NUTS2 detail", 1)[1]
+    assert "Unknown" not in detail
+
+
+def test_region_detail_is_hidden_when_only_unknown_locations_are_reported():
+    html = combined_dataset_summary({"metadata_geography": [
+        {"origin": "local", "country": "Kenya", "region": "Unknown", "nuts2": "", "count": 1},
+    ]})
+
+    assert "Country totals" in html
+    assert "Kenya" in html
+    assert "Region and NUTS2 detail" not in html
+
+
 def test_subsample_summary_reports_exact_counts_links_and_collapsed_metadata(tmp_path):
     bundle = tmp_path / "selection_bundle"
     (bundle / "selections").mkdir(parents=True)

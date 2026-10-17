@@ -3,19 +3,23 @@
 from __future__ import annotations
 
 import gzip
+import fcntl
 import hashlib
 import io
 import json
 import re
-import shutil
 import time
 import uuid
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
+
+from chronoclade.file_snapshots import copy_evidence_snapshot
+from chronoclade.pathogenwatch_identity import PublicIdentityError, resolve_public_source_identity
 
 
 class DownloadError(RuntimeError):
@@ -25,6 +29,18 @@ class DownloadError(RuntimeError):
 class _NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
+
+
+@contextmanager
+def _source_cache_lock(cache_dir: Path, source: str):
+    """Serialize cache lookup and production for one source across threads/processes."""
+    lock_path = cache_dir / f".{source}.lock"
+    with lock_path.open("a+b") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
 def request_download(
@@ -147,12 +163,17 @@ def download_assemblies(
     workers: int = 2,
     base_url: str = "https://pathogen.watch",
     fetch=None,
+    identity_fetch=None,
+    require_public_identity: bool = False,
 ) -> tuple[dict[str, Path], list[dict]]:
-    """Use verified single-ID downloads; resume only checksum-valid cached files."""
+    """Use public-identity and content checks before accepting any cached assembly."""
     output.mkdir(parents=True, exist_ok=True)
     cache_dir.mkdir(parents=True, exist_ok=True)
 
     def one(row):
+        # Identity lookups enrich only this worker's verification state. The
+        # canonical prepared metadata remains exactly as supplied by its owner.
+        verification_row = dict(row)
         source = str(row["source_genome_id"])
         if not re.fullmatch(r"[A-Za-z0-9_.-]+", source):
             return (
@@ -166,78 +187,124 @@ def download_assemblies(
         requests = 0
         stats = {}
         try:
-            data = None
-            if metadata.is_file():
-                try:
-                    saved = json.loads(metadata.read_text())
-                    blob = cache_dir / (saved["sha256"] + ".fasta")
-                    existing = blob.read_bytes()
-                    if (
-                        saved["source_genome_id"] == source
-                        and saved.get("source_checksum") == row.get("source_checksum")
-                        and hashlib.sha256(existing).hexdigest() == saved["sha256"]
-                    ):
-                        data = validate_fasta(existing)
-                        cached = True
-                except (ValueError, KeyError, OSError, DownloadError):
-                    pass
-            if data is None:
-                stats = {}
-                if fetch:
-                    requests = 1
-                    data = validate_fasta(fetch(source))
-                else:
-                    data = validate_fasta(
-                        request_download(
-                            f"/api/genomes/download/{source}",
-                            api_key=api_key,
-                            base_url=base_url,
-                            stats=stats,
-                        )
+            with _source_cache_lock(cache_dir, source):
+                expected = str(verification_row.get("source_checksum") or "")
+                checksum_pattern = r"[a-fA-F0-9]{40}"
+                identity_verified = bool(re.fullmatch(checksum_pattern, expected))
+                identity_metadata = {}
+                if require_public_identity and not identity_verified:
+                    if identity_fetch is None:
+                        from chronoclade.pathogenwatch import PathogenwatchClient
+
+                        identity_client = PathogenwatchClient(base_url=base_url, api_key="")
+                        def details(source_id):
+                            return identity_client.request_json(
+                                "GET",
+                                "/api/genomes/details",
+                                params={"id": source_id},
+                                authenticated=False,
+                            )
+                    else:
+                        details = identity_fetch
+                    try:
+                        detail = details(source)
+                    except Exception as error:
+                        raise PublicIdentityError("public_identity_unavailable") from error
+                    identity_metadata = resolve_public_source_identity(
+                        source, verification_row, detail
                     )
-                    requests = stats.get("requests", 0)
-            expected = str(row.get("source_checksum") or "")
-            if re.fullmatch(r"[a-fA-F0-9]{40}", expected):
-                if hashlib.sha1(data).hexdigest() != expected.lower():
+                    expected = str(identity_metadata.get("source_checksum") or "")
+                    identity_verified = bool(re.fullmatch(checksum_pattern, expected))
+                    requests += 1
+                    if not identity_verified:
+                        raise PublicIdentityError("public_identity_checksum_unavailable")
+                data = None
+                saved = None
+                if metadata.is_file():
+                    try:
+                        saved = json.loads(metadata.read_text())
+                        blob = cache_dir / (saved["sha256"] + ".fasta")
+                        existing = blob.read_bytes()
+                        if (
+                            saved["source_genome_id"] == source
+                            and hashlib.sha256(existing).hexdigest() == saved["sha256"]
+                            and (
+                                hashlib.sha1(existing).hexdigest() == expected.lower()
+                                if identity_verified
+                                else saved.get("source_checksum") == verification_row.get("source_checksum")
+                            )
+                        ):
+                            data = validate_fasta(existing)
+                            cached = True
+                    except (ValueError, KeyError, OSError, DownloadError):
+                        pass
+                if data is None:
+                    stats = {}
+                    if fetch:
+                        requests = 1
+                        data = validate_fasta(fetch(source))
+                    else:
+                        data = validate_fasta(
+                            request_download(
+                                f"/api/genomes/download/{source}",
+                                api_key=api_key,
+                                base_url=base_url,
+                                stats=stats,
+                            )
+                        )
+                        requests = stats.get("requests", 0)
+                if identity_verified and hashlib.sha1(data).hexdigest() != expected.lower():
                     raise DownloadError("source_checksum_mismatch")
-            sequence_bases = sum(
-                len(line.strip()) for line in data.splitlines() if not line.startswith(b">")
-            )
-            source_length = row.get("source_length")
-            if source_length is not None and sequence_bases != int(source_length):
-                raise DownloadError("source_length_mismatch")
-            digest = hashlib.sha256(data).hexdigest()
-            blob = cache_dir / f"{digest}.fasta"
-            if not cached:
-                _atomic(blob, data)
-                _atomic(
-                    metadata,
-                    json.dumps(
-                        {
-                            "source_genome_id": source,
-                            "sha256": digest,
-                            "source_checksum": row.get("source_checksum"),
-                        }
-                    ).encode(),
+                sequence_bases = sum(
+                    len(line.strip()) for line in data.splitlines() if not line.startswith(b">")
                 )
-            destination = output / f"{source}.fasta"
-            shutil.copyfile(blob, destination.with_suffix(".fasta.partial"))
-            destination.with_suffix(".fasta.partial").replace(destination)
-            return (
-                source,
-                destination.resolve(),
-                {
+                source_length = verification_row.get("source_length")
+                if source_length is None:
+                    source_length = identity_metadata.get("source_length")
+                if source_length is not None and sequence_bases != int(source_length):
+                    raise DownloadError("source_length_mismatch")
+                digest = hashlib.sha256(data).hexdigest()
+                blob = cache_dir / f"{digest}.fasta"
+                cache_record = {
                     "source_genome_id": source,
-                    "status": "cached" if cached else "downloaded",
                     "sha256": digest,
-                    "bytes": len(data),
-                    "sequence_bases": sequence_bases,
-                    "source_checksum_verified": bool(re.fullmatch(r"[a-fA-F0-9]{40}", expected)),
-                    "requests": requests,
-                    "seconds": round(time.monotonic() - started, 3),
-                },
-            )
-        except (DownloadError, OSError, ValueError) as error:
+                    "source_checksum": expected.lower() if identity_verified else verification_row.get("source_checksum"),
+                    "identity_verified": identity_verified,
+                    "source_length": source_length,
+                    "raw_details_sha256": identity_metadata.get("raw_details_sha256")
+                    or verification_row.get("raw_details_sha256"),
+                }
+                if not cached:
+                    _atomic(blob, data)
+                if not cached or (
+                    identity_verified and saved.get("source_checksum") != expected.lower()
+                ):
+                    _atomic(metadata, json.dumps(cache_record).encode())
+                destination = output / f"{source}.fasta"
+                partial = destination.with_suffix(".fasta.partial")
+                partial.unlink(missing_ok=True)
+                copy_method = copy_evidence_snapshot(blob, partial)
+                partial.replace(destination)
+                return (
+                    source,
+                    destination.resolve(),
+                    {
+                        "source_genome_id": source,
+                        "status": "cached" if cached else "downloaded",
+                        "sha256": digest,
+                        "bytes": len(data),
+                        "sequence_bases": sequence_bases,
+                        "source_checksum_verified": identity_verified,
+                        "source_identity_verified": identity_verified,
+                        "source_checksum": expected.lower() if identity_verified else None,
+                        "source_length": source_length,
+                        "raw_details_sha256": identity_metadata.get("raw_details_sha256"),
+                        "copy_method": copy_method,
+                        "requests": requests,
+                        "seconds": round(time.monotonic() - started, 3),
+                    },
+                )
+        except (DownloadError, PublicIdentityError, OSError, ValueError) as error:
             requests = stats.get("requests", requests)
             return (
                 source,
@@ -246,7 +313,14 @@ def download_assemblies(
                     "source_genome_id": source,
                     "status": "failed",
                     "reason": str(error)
-                    if str(error) in {"source_checksum_mismatch", "source_length_mismatch"}
+                    if str(error) in {
+                        "source_checksum_mismatch",
+                        "source_length_mismatch",
+                        "public_identity_unverified",
+                        "public_identity_scope_mismatch",
+                        "public_identity_checksum_unavailable",
+                        "public_identity_unavailable",
+                    }
                     else "download_or_validation_failed",
                     "requests": requests,
                     "seconds": round(time.monotonic() - started, 3),

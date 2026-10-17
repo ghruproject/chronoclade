@@ -11,6 +11,10 @@ import numpy as np
 
 from chronoclade.metadata_dates import sample_date_interval
 from chronoclade.sample_labels import sample_labels
+from chronoclade.report_components.group_controls import (
+    group_colors, group_label_map, group_selector_config, group_selector_script,
+    group_selector_styles,
+)
 
 _INPUT_ORIGINS = {"input", "local", "query", "focal"}
 
@@ -75,11 +79,11 @@ def write_ordination_views(output, prefix, coordinates, records, *,
         "host": [str(row.get("host") or "Unknown host") for row in records],
     }
     if groups is not None:
-        def group_label(ident):
-            value = str(groups.get(ident, "Ungrouped"))
-            match = re.search(r"(?:^|_)group_(\d+)$", value, re.IGNORECASE)
-            return f"Group {match.group(1)}" if match else value
-        categories["group"] = [group_label(ident) for ident in ids]
+        raw_group_ids = {ident: str(groups.get(ident, "Ungrouped")) for ident in ids}
+        group_names = group_label_map(set(raw_group_ids.values()))
+        categories["group"] = [raw_group_ids[ident] for ident in ids]
+    else:
+        raw_group_ids, group_names = {}, {}
     paths, views = {}, []
     for view in [*categories, "date"]:
         fig, ax = plt.subplots(figsize=(9, 6))
@@ -108,9 +112,15 @@ def write_ordination_views(output, prefix, coordinates, records, *,
             colours = {value: palette(i) for i, value in enumerate(unique)}
             if view == "dataset":
                 colours = {"Input genomes": "#2166ac", "Public comparisons": "#666666"}
+            elif view == "group":
+                colours = group_colors(unique, labels=group_names)
             counts = Counter(values)
-            shown = sorted(unique, key=lambda value: (-counts[value], value))[:20]
-            handles = [Line2D([], [], color=colours[value], marker="o", linestyle="None", label=value)
+            shown = sorted(
+                unique,
+                key=lambda value: (-counts[value], group_names[value] if view == "group" else value, value),
+            )[:20]
+            handles = [Line2D([], [], color=colours[value], marker="o", linestyle="None",
+                              label=group_names[value] if view == "group" else value)
                        for value in shown]
             # One scatter per role avoids quadratic scans and thousands of artists.
             for role, marker in markers.items():
@@ -153,7 +163,8 @@ def write_ordination_views(output, prefix, coordinates, records, *,
             "date": (f'{dates[i]["start"]} to {dates[i]["end"]}'
                      if dates[i].get("status") == "valid" else "Unknown date"),
             "year": (float(years[i]) if np.isfinite(years[i]) else None),
-            "group": (categories["group"][i] if "group" in categories else "Ungrouped"),
+            "group": (group_names[raw_group_ids[ids[i]]]
+                      if "group" in categories else "Ungrouped"),
             "group_id": str(groups.get(ids[i], "Ungrouped")) if groups is not None else "Ungrouped",
         }
         item["coordinates"] = {key: value["coordinates"][i].tolist() for key, value in bases.items()}
@@ -166,11 +177,20 @@ def write_ordination_views(output, prefix, coordinates, records, *,
         "default_view": "group" if groups is not None else "dataset",
         "views": list(categories) + ["date"], "rows": rows,
     }
+    group_values = sorted(group_names) if groups is not None else []
+    viewer_data["group_names"] = group_names
+    viewer_data["group_colors"] = group_colors(group_values, labels=group_names)
+    viewer_data["group_selector"] = group_selector_config(
+        [{"group_id": row["group_id"], "role": row["role"]} for row in rows],
+        group_key="group_id", role_key="role", labels=group_names,
+    ) if groups is not None else None
+    if groups is not None:
+        viewer_data["group_selector"]["labels"] = group_names
     basis_options = "".join(
         f'<option value="{escape(key, quote=True)}"{" selected" if key == default_basis else ""}>'
         f'{escape(value["label"])}</option>' for key, value in bases.items())
-    group_name = 'cgLIN group' if groups and all(str(value).startswith('cgLIN ') for value in groups.values()) else 'Group'
-    view_options = "".join(f'<option value="{escape(view, quote=True)}">{escape(group_name if view == "group" else view.title())}</option>'
+    group_axis_label = 'cgLIN group' if groups and all(str(value).startswith('cgLIN ') for value in groups.values()) else 'Group'
+    view_options = "".join(f'<option value="{escape(view, quote=True)}">{escape(group_axis_label if view == "group" else view.title())}</option>'
                            for view in viewer_data["views"])
     view_options = view_options.replace(
         f'value="{viewer_data["default_view"]}"',
@@ -185,7 +205,10 @@ def write_ordination_views(output, prefix, coordinates, records, *,
                 'fieldset{border:0;border-bottom:1px solid #ccc;padding:8px 0}label{font-weight:700}'
                 'select,button{font:inherit;padding:5px}.plot-wrap{position:relative;width:100%;overflow:hidden}'
                 'svg{display:block;width:100%;height:min(52vh,400px);min-height:320px;background:#fff}'
-                '.legend{display:flex;gap:6px 12px;flex-wrap:wrap;max-height:150px;overflow-y:auto;margin:8px 0}.legend button{border:1px solid #bbb;background:white;cursor:pointer}'
+                '.legend{display:flex;gap:6px 12px;flex-wrap:wrap;margin:8px 0}.legend button{border:1px solid #bbb;background:white;cursor:pointer}'
+                '.category-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.category-options{display:flex;gap:5px 8px;flex-wrap:wrap;max-height:140px;overflow-y:auto;margin:4px 0}'
+                '.category-options button{border:1px solid #bbb;background:white;cursor:pointer}'
+                + group_selector_styles() +
                 '.legend button[aria-pressed="true"]{outline:2px solid #17191f}.swatch{display:inline-block;width:12px;height:12px;margin-right:5px;vertical-align:-1px}'
                 '#details{min-height:3em;max-height:180px;overflow-y:auto;padding:8px;border:1px solid #ccd0d8;white-space:pre-wrap}.point:focus{outline:none;stroke:#ffb800;stroke-width:3px}'
                 '</style></head><body>'
@@ -199,7 +222,7 @@ def write_ordination_views(output, prefix, coordinates, records, *,
                 '<p id="note" class="muted"></p><p class="muted">Triangles mark input genomes; circles mark public comparisons. '
                 'Point colour reflects the selected field. Dates use collection-interval midpoints.</p>'
                 f'<script type="application/json" id="ordination-data">{payload}</script>'
-                '<script>' + _ORDINATION_SCRIPT + '</script></body></html>')
+                '<script>' + group_selector_script() + _ORDINATION_SCRIPT + '</script></body></html>')
     viewer = output / f"{prefix}_ordination.html"
     viewer.write_text(document)
     paths["pcoa_views_html"] = str(viewer)
@@ -213,12 +236,13 @@ const svg=document.getElementById('plot'), details=document.getElementById('deta
 const basis=document.getElementById('basis'), colour=document.getElementById('colour');
 const legend=document.getElementById('legend'), note=document.getElementById('note');
 const ns='http://www.w3.org/2000/svg', palette=['#2166ac','#b2182b','#1b7837','#762a83','#e08214','#008080','#c51b7d','#4d4d4d','#a6d854','#3288bd','#f46d43','#66c2a5'];
-let points=[], highlight=null, cursor=0;
+let points=[], highlight=null, cursor=0, groupSelector=null;
 const svgEl=(tag,attrs={})=>{const e=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,String(v));return e};
-const fieldValue=(r,f)=>f==='dataset'?r.dataset:f==='date'?(r.year===null?'Unknown date':String(Math.floor(r.year))):r[f];
+const fieldValue=(r,f)=>f==='dataset'?r.dataset:f==='date'?(r.year===null?'Unknown date':String(Math.floor(r.year))):f==='group'?r.group_id:r[f];
 const dateColour=(year,lo,hi)=>{const t=hi===lo?0.5:Math.max(0,Math.min(1,(year-lo)/(hi-lo))),a=[68,1,84],b=[253,231,37];return '#'+a.map((x,i)=>Math.round(x+(b[i]-x)*t).toString(16).padStart(2,'0')).join('')};
 function colourLookup(field){
  if(field==='date'){const years=data.rows.filter(r=>r.year!==null).map(r=>r.year),lo=years.length?Math.min(...years):0,hi=years.length?Math.max(...years):1;return {colours:data.rows.map(r=>r.year===null?'#999999':dateColour(r.year,lo,hi)),lo,hi}}
+ if(field==='group')return {colours:data.rows.map(r=>data.group_colors[r.group_id]),byValue:new Map(Object.entries(data.group_colors))};
  const values=[...new Set(data.rows.map(r=>fieldValue(r,field)))].sort(),byValue=new Map();
  values.forEach((value,i)=>byValue.set(value,field==='dataset'?(value==='Input genomes'?'#2166ac':'#666666'):palette[i%palette.length]));
  return {colours:data.rows.map(r=>byValue.get(fieldValue(r,field))),byValue};
@@ -226,10 +250,17 @@ function colourLookup(field){
 const sendGroup=()=>{if(window.parent!==window)window.parent.postMessage({type:'chronoclade-group-highlight',group:highlight?.field==='group'?highlight.value:null},'*')};
 const resetDetails=()=>{details.textContent='Focus, hover over, or select a point to inspect its metadata.'};
 const showRows=(rows)=>{details.textContent=`Samples at/near this point (${rows.length})\n\n`+rows.map(r=>`Accession: ${r.label}\nDataset: ${r.dataset}\nCountry: ${r.country}\nHost: ${r.host}\nCollection date: ${r.date}\nGroup: ${r.group}\nColour category: ${fieldValue(r,colour.value)}`).join('\n\n')};
-function renderLegend(){legend.replaceChildren();const f=colour.value;
+function renderLegend(){if(groupSelector){groupSelector.destroy();groupSelector=null}legend.replaceChildren();const f=colour.value;
  if(f==='date'){const years=data.rows.filter(r=>r.year!==null).map(r=>r.year),gradient=document.createElement('span');gradient.className='swatch';gradient.style.cssText='width:110px;background:linear-gradient(90deg,#440154,#fde725)';legend.append(gradient,document.createTextNode(`${years.length?Math.min(...years).toFixed(2):'No dates'} – ${years.length?Math.max(...years).toFixed(2):''}`));const missing=data.rows.filter(r=>r.year===null).length;if(missing){const b=document.createElement('button');b.type='button';b.setAttribute('aria-pressed',String(highlight?.field==='date'&&highlight.value==='Unknown date'));const sw=document.createElement('span');sw.className='swatch';sw.style.backgroundColor='#999';b.append(sw,document.createTextNode(`Unknown date (${missing})`));b.addEventListener('click',()=>{highlight=highlight?.field==='date'&&highlight.value==='Unknown date'?null:{field:'date',value:'Unknown date'};resetDetails();renderLegend();draw();if(f==='group')sendGroup()});legend.append(b)}return}
  const counts=new Map();for(const r of data.rows){const v=fieldValue(r,f);counts.set(v,(counts.get(v)||0)+1)}const lookup=colourLookup(f);
- [...counts].sort((a,b)=>b[1]-a[1]||String(a[0]).localeCompare(String(b[0]))).forEach(([v,n])=>{const b=document.createElement('button');b.type='button';b.setAttribute('aria-pressed',String(highlight?.field===f&&highlight.value===v));const sw=document.createElement('span');sw.className='swatch';sw.style.backgroundColor=lookup.byValue.get(v);b.append(sw,document.createTextNode(`${v} (${n})`));b.addEventListener('click',()=>{highlight=highlight?.field===f&&highlight.value===v?null:{field:f,value:v};resetDetails();renderLegend();draw();if(f==='group')sendGroup()});legend.append(b)});
+ if(f==='group'){
+  groupSelector=createGroupSelector({container:legend,groups:Object.keys(data.group_names),colors:data.group_colors,config:data.group_selector,onSelect:value=>{highlight=value===null?null:{field:'group',value};resetDetails();draw();sendGroup()}});
+  groupSelector.setSelected(highlight?.field==='group'?highlight.value:null);return;
+ }
+ const tools=document.createElement('div');tools.className='category-tools';const search=document.createElement('input');search.type='search';search.setAttribute('aria-label',`Search all ${f} categories`);search.placeholder=`Search ${f}`;const label=document.createElement('label'),all=document.createElement('input');all.type='checkbox';label.append(all,document.createTextNode(' Show all categories'));tools.append(search,label);const status=document.createElement('span');status.className='group-summary';status.setAttribute('role','status');tools.append(status);const options=document.createElement('div');options.className='category-options';legend.append(tools,options);
+ const ordered=[...counts].sort((a,b)=>b[1]-a[1]||String(a[0]).localeCompare(String(b[0])));
+ const drawCategories=()=>{const query=search.value.trim().toLocaleLowerCase(),visible=ordered.filter(([v],i)=>query?String(v).toLocaleLowerCase().includes(query):all.checked||i<20||highlight?.field===f&&highlight.value===v);options.replaceChildren();for(const [v,n] of visible){const b=document.createElement('button');b.type='button';b.setAttribute('aria-pressed',String(highlight?.field===f&&highlight.value===v));const sw=document.createElement('span');sw.className='swatch';sw.style.backgroundColor=lookup.byValue.get(v);b.append(sw,document.createTextNode(`${v} (${n})`));b.addEventListener('click',()=>{highlight=highlight?.field===f&&highlight.value===v?null:{field:f,value:v};resetDetails();renderLegend();draw()});options.append(b)}status.textContent=`${visible.length} of ${ordered.length} categories${query?' match':all.checked?'':' · most frequent 20'}`;if(!visible.length)options.textContent='No matching categories.'};
+ search.addEventListener('input',drawCategories);all.addEventListener('change',drawCategories);drawCategories();
 }
 function draw(){const rect=svg.getBoundingClientRect(),w=Math.max(500,rect.width||900),h=Math.max(320,rect.height||400),pad={l:74,r:24,t:20,b:54},key=basis.value,axes=data.bases[key].axis_labels;
  svg.replaceChildren();svg.setAttribute('viewBox',`0 0 ${w} ${h}`);const coords=data.rows.map(r=>r.coordinates[key]),xs=coords.map(p=>p[0]),ys=coords.map(p=>p[1]);let xmin=xs.length?Math.min(...xs):0,xmax=xs.length?Math.max(...xs):1,ymin=ys.length?Math.min(...ys):0,ymax=ys.length?Math.max(...ys):1;if(xmin===xmax){xmin-=1;xmax+=1}if(ymin===ymax){ymin-=1;ymax+=1}const xpad=(xmax-xmin)*.06,ypad=(ymax-ymin)*.06;xmin-=xpad;xmax+=xpad;ymin-=ypad;ymax+=ypad;const X=x=>pad.l+(x-xmin)/(xmax-xmin)*(w-pad.l-pad.r),Y=y=>h-pad.b-(y-ymin)/(ymax-ymin)*(h-pad.t-pad.b);
@@ -242,7 +273,7 @@ function draw(){const rect=svg.getBoundingClientRect(),w=Math.max(500,rect.width
 }
 colour.addEventListener('change',()=>{highlight=null;resetDetails();renderLegend();draw();sendGroup()});basis.addEventListener('change',()=>{resetDetails();draw()});document.getElementById('clear').addEventListener('click',()=>{highlight=null;resetDetails();renderLegend();draw();sendGroup()});
 svg.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key==='ArrowDown'){e.preventDefault();cursor=(cursor+1)%points.length;points[cursor].focus()}else if(e.key==='ArrowLeft'||e.key==='ArrowUp'){e.preventDefault();cursor=(cursor+points.length-1)%points.length;points[cursor].focus()}});
-window.addEventListener('message',e=>{if(e.source!==window.parent||e.data?.type!=='chronoclade-group-highlight')return;const group=e.data.group;if(group!==null&&(typeof group!=='string'||!data.rows.some(r=>r.group===group)))return;if(group!==null){colour.value='group';highlight={field:'group',value:group}}else{highlight=null}resetDetails();renderLegend();draw()});
+window.addEventListener('message',e=>{if(e.source!==window.parent||e.data?.type!=='chronoclade-group-highlight')return;const group=e.data.group;if(group!==null&&(typeof group!=='string'||!data.group_names[group]))return;if(group!==null){colour.value='group';highlight={field:'group',value:group}}else{highlight=null}resetDetails();renderLegend();draw()});
 renderLegend();draw();window.addEventListener('resize',draw);
 })();
 """

@@ -112,9 +112,13 @@ def run_tree_ensemble(ensemble_manifest, *, output, ensemble_jobs=1, force=False
         raise WorkflowError("Ensemble jobs must be positive")
     source = Path(ensemble_manifest).expanduser().resolve()
     ensemble = load_selection_ensemble(source)
+    options.setdefault("coherence_policy", "strict")
     safe_parameters = {key: str(value) if isinstance(value, Path) else value
                        for key, value in options.items() if key != "api_key"}
     safe_parameters["ensemble_jobs"] = ensemble_jobs
+    safe_parameters["phylogeny_seed"] = options.get("seed", 42)
+    safe_parameters["phylogeny_seed_policy"] = "explicit_IQ_TREE"
+    safe_parameters["reference_selection_policy"] = "highest_N50_common_input"
     output, manifest, result = _initial(
         output, source, "tree", [s["selection_id"] for s in ensemble["selections"]], safe_parameters, force,
     )
@@ -172,7 +176,7 @@ def register_tree_ensemble(ensemble_manifest, tree_manifests, *, output):
 
 def run_time_ensemble(tree_ensemble, *, output, ensemble_jobs=1, force=False,
                       allow_unsupported=False, cluster_snp_cutoff=10, reuse_results=()):
-    from chronoclade.time_stage.workflow import run_time
+    from chronoclade.time_stage.workflow import run_time, native_time_parameters
     from chronoclade.time_stage.comparison import compare_time_runs
 
     if ensemble_jobs < 1 or cluster_snp_cutoff < 0:
@@ -182,6 +186,13 @@ def run_time_ensemble(tree_ensemble, *, output, ensemble_jobs=1, force=False,
     source = _freeze(source)
     reused = {}
     expected = {row["selection_id"]: row for row in trees["runs"]}
+    dating_parameters = {
+        ident: native_time_parameters(
+            load_tree_result(_resolve(source.parent, row["result"], "tree result", external=True)),
+            allow_unsupported,
+        )
+        for ident, row in expected.items() if row["status"] == "complete"
+    }
     if force and reuse_results:
         raise WorkflowError("Choose checked result reuse or forced execution, not both")
     for path in map(Path, reuse_results):
@@ -194,11 +205,14 @@ def run_time_ensemble(tree_ensemble, *, output, ensemble_jobs=1, force=False,
                 or checked["source"]["tree"]["sha256"] != tree["result"]["sha256"]
                 or checked["parameters"]["allow_unsupported"] != allow_unsupported):
             raise WorkflowError("Reused dating result differs from the checked tree or gate parameters")
+        if checked.get("parameters") != dating_parameters[ident]:
+            raise WorkflowError("Reused dating result differs from the native dating inference policy or seed")
         reused[ident] = (_freeze(path), checked)
     output, manifest, result = _initial(
         output, source, "time", [r["selection_id"] for r in trees["runs"]],
         {"ensemble_jobs": ensemble_jobs, "allow_unsupported": allow_unsupported,
          "cluster_snp_cutoff": cluster_snp_cutoff,
+         "dating_parameters_by_selection": dating_parameters,
          "reused_time_hashes": {ident: file_sha256(path) for ident, (path, _) in reused.items()}}, force,
     )
 

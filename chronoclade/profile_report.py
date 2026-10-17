@@ -169,10 +169,22 @@ def _root_to_tip(value: object) -> str:
             f"<td>{escape(_number(row.get('midpoint_date_pearson_r')))}</td>"
             f"<td>{escape(_text(row.get('interpretation')))}</td></tr>"
         )
+    date_audit = []
+    for row in rows:
+        filtered = [point for point in row.get('exclusions', [])
+                    if point.get('reason') == 'before_minimum_collection_year']
+        if filtered:
+            minimum = row.get('date_filter', {}).get('minimum_collection_year', 1900)
+            date_audit.append(
+                f'<p>Collection dates before {minimum} are excluded from the regression. '
+                'These genomes remain in the NJ tree and other genetic analyses.</p><ul>'
+                + ''.join(f'<li>{escape(_text(point.get("label") or point.get("sample_id")))}: '
+                          f'{escape(_text(point.get("collection_date")))}</li>' for point in filtered)
+                + '</ul>')
     return (
         '<div class="table-wrap" tabindex="0" role="region" aria-label="Exploratory root-to-tip results">'
         '<table><thead><tr><th>Cohort</th><th>Root</th><th>Slope</th><th>Pearson r</th><th>Interpretation</th></tr></thead>'
-        f"<tbody>{''.join(content)}</tbody></table></div>"
+        f"<tbody>{''.join(content)}</tbody></table></div>" + ''.join(date_audit)
     )
 
 
@@ -1070,9 +1082,7 @@ def write_profile_report(
         empty="Threshold sensitivity is unavailable.") if sensitivity_rows else ""
     concentration = data.get("time_place_concentration")
     root_tip = data.get("root_to_tip")
-    from chronoclade.report_components.root_comparison import root_comparison_html
-    root_comparison = root_comparison_html(data.get('root_comparisons'), directory, _asset)
-    root_tip_text = ("Gene-panel SNP-distance" if direct_dna else "Allele-distance") + " root-to-tip is exploratory and does not pass the final clock gate."
+    root_tip_text = ("Gene-panel SNP-distance" if direct_dna else "Allele-distance") + " root-to-tip is exploratory. Temporal-signal testing is performed separately in the SNP-tree stage."
     if isinstance(root_tip, dict):
         root_tip_text += " " + _text(root_tip.get("interpretation", root_tip.get("summary", "")), "")
     from chronoclade.report_components.ordination import ordination_viewer
@@ -1126,7 +1136,7 @@ def write_profile_report(
     sections = [
         ('<main class="shell"><header class="identity"><div class="identity-mark">ChronoClade · cgMLST ANALYSIS REPORT</div>'
         f'<div class="identity-copy"><h1>{identity_heading}</h1><p>{escape(hero_scope)}</p></div></header>'
-        f'<nav class="contents" aria-label="Report topics">{group_link}<a href="#summary">Dataset</a><a href="#figures">Genetic relationships</a><a href="#network">State network</a><a href="#subsamples">Subsamples</a><a href="#downloads">Methods &amp; files</a></nav>'),
+        f'<nav class="contents" aria-label="Report topics">{group_link}<a href="#summary">Dataset</a><a href="#figures">Genetic relationships</a><a href="#temporal">Temporal</a><a href="#network">State network</a><a href="#subsamples">Subsamples</a><a href="#downloads">Methods &amp; files</a></nav>'),
         (f'<section class="stage" id="summary"><div class="stage-body"><h2>The combined dataset</h2>{message}{warnings}{_metric_cards(summary_values)}'
         f'<p>{escape(input_description)}</p>'
         f'{selection_handoff(directory, analysis)}'
@@ -1148,15 +1158,18 @@ def write_profile_report(
         +
         '<details class="coverage-details" id="nearest"><summary>Closest relatives</summary>'
         f'<p>{escape(nearest_explanation)}</p>{_available_neighbours(nearest, directory, paths, public_context_count=public_context_count, direct_dna=direct_dna)}</details>'
-        '<details class="coverage-details" id="root-to-tip"><summary>Exploratory distance versus collection date</summary>'
-        f'<p>{escape(root_tip_text.strip())}</p>{_root_to_tip(root_tip)}{_cohort_figures(data.get("cohorts"), directory, "root_to_tip_figure", "Collection date versus root-to-tip distance")}{root_comparison}</details>'
         '<p class="muted">The neighbour-joining tree is a profile-distance view. Branches do not represent time or prove transmission.</p></div></section>',
+        ('<section class="stage" id="temporal"><div class="stage-body"><h2>Do allele differences accumulate with time?</h2>'
+        '<p>Explore how profile distance relates to collection date. This is a descriptive diagnostic; it does not change the genetic relationships or establish a transmission timeline.</p>'
+        '<details class="coverage-details" id="root-to-tip" open><summary>Exploratory distance versus collection date</summary>'
+        f'<p>{escape(root_tip_text.strip())}</p>{_root_to_tip(root_tip)}{_cohort_figures(data.get("cohorts"), directory, "root_to_tip_figure", "Collection date versus root-to-tip distance")}</details></div></section>'),
         ('<section class="stage" id="network"><div class="stage-body"><h2>State-change network</h2>'
         '<p>State changes are reconstructed on the rooted tree of profile distances using the available metadata. The network uses the complete usable profile pool, before assembly subsampling.</p>'
         f'{_state_network_views(data, directory)}</div></section>'),
         ('<section class="stage" id="subsamples"><div class="stage-body"><h2>Subsamples for SNP-tree analysis</h2>'
         f'{subsample_summary(directory, data)}</div></section>'),
         ('<section class="stage" id="downloads"><div class="stage-body"><h2>Methods and evidence files</h2>'
+        '<p><a href="files/index.html">Browse output files by type</a> · <a href="README.md">Output folder guide</a></p>'
         f'{diagnostics}<details class="coverage-details"><summary>Download analysis evidence</summary>{_download_links(directory, paths)}</details></div></section>'),
         '<footer class="report-close"><div>Generated by ChronoClade. Supporting files preserve profile distances, selections and analysis diagnostics.</div></footer></main>' + linked_group_highlights(),
     ]
@@ -1167,6 +1180,8 @@ def write_profile_report(
 </style></head><body>""" + "\n".join(sections) + "</body></html>"
     output = directory / "profile_report.html"
     write_report_html(output, document, encoding="utf-8")
+    from chronoclade.report_components.output_guide import write_output_guide
+    write_output_guide(directory)
     return output
 
 

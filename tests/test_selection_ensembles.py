@@ -591,27 +591,3 @@ def test_explicit_reserve_keeps_all_nearest_ties_and_optional_variation(tmp_path
 def test_invalid_representative_reserve_rejected(reserve):
     with pytest.raises(WorkflowError, match="Representative reserve"):
         select_context_ensemble([], [], {}, representative_reserve=reserve)
-
-
-def test_evidence_snapshot_is_independent_and_fallback_cleans_partial_file(tmp_path, monkeypatch):
-    import chronoclade.selection_manifest as manifests
-
-    source = tmp_path / "source.npy"
-    source.write_bytes(b"original matrix data")
-    destination = tmp_path / "snapshot.npy"
-    method = manifests.copy_evidence_snapshot(source, destination)
-    assert method in {"copy_on_write", "copy"}
-    assert source.stat().st_ino != destination.stat().st_ino
-    source.write_bytes(b"changed")
-    assert destination.read_bytes() == b"original matrix data"
-
-    def failed_clone(original, cloned):
-        cloned.write_bytes(b"partial")
-        return False
-
-    monkeypatch.setattr(manifests, "_clone_file", failed_clone)
-    fallback = tmp_path / "fallback.npy"
-    assert manifests.copy_evidence_snapshot(source, fallback) == "copy"
-    assert fallback.read_bytes() == b"changed"
-    with pytest.raises(WorkflowError, match="already exists"):
-        manifests.copy_evidence_snapshot(source, fallback)

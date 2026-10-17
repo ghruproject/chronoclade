@@ -23,16 +23,60 @@ from chronoclade.stage_artifacts import (
 from chronoclade.report_components.stage import write_report
 
 
+TOPOLOGY_VALIDATION_POLICY = "rooted_nontrivial_internal_leafsets_root_excluded"
+
+
+def native_time_parameters(tree, allow_unsupported=False):
+    """Bind dating to the saved tree seed while retaining its polytomies."""
+    seed = tree.get("parameters", {}).get("seed")
+    if type(seed) is not int:
+        raise WorkflowError("Native dating requires an integer seed from the saved tree parameters")
+    return {
+        "allow_unsupported": allow_unsupported,
+        "dating_seed": seed,
+        "keep_polytomies": True,
+        "dating_inference_policy": "seeded_saved_topology_keep_polytomies",
+        "topology_validation_policy": TOPOLOGY_VALIDATION_POLICY,
+    }
+
+
+def validate_rooted_topology(source, dated):
+    """Compare rooted internal leaf sets, ignoring labels, lengths and the root."""
+    def clades(tree):
+        tip_count = len(tree.get_terminals())
+        return {
+            leaves
+            for node in tree.get_nonterminals()
+            if 1 < len(leaves := frozenset(tip.name for tip in node.get_terminals())) < tip_count
+        }
+
+    source_clades, dated_clades = clades(source), clades(dated)
+    if source_clades != dated_clades:
+        raise WorkflowError(
+            "Dated tree changed the saved rooted topology: "
+            f"{len(source_clades - dated_clades)} saved internal clade(s) lost and "
+            f"{len(dated_clades - source_clades)} new internal clade(s) introduced"
+        )
+    return {
+        "method": TOPOLOGY_VALIDATION_POLICY,
+        "source_clade_count": len(source_clades),
+        "dated_clade_count": len(dated_clades),
+        "preserved": True,
+    }
+
+
 def run_time(tree_manifest, *, output, force=False, allow_unsupported=False):
     tree_path = Path(tree_manifest).expanduser().resolve()
     tree = load_tree_result(tree_path)
+    parameters = native_time_parameters(tree, allow_unsupported)
+    seed = parameters["dating_seed"]
     output = Path(output).expanduser().resolve()
     tool_evidence = tools(["treetime"])
     digest = fingerprint(
         {
             "tree": reference(output, tree_path)["sha256"],
             "tools": tool_evidence,
-            "allow_unsupported": allow_unsupported,
+            "parameters": parameters,
         }
     )
     if (output / "time.json").is_file() and not force:
@@ -68,10 +112,12 @@ def run_time(tree_manifest, *, output, force=False, allow_unsupported=False):
             "selection_id": tree["selection_id"],
             "selected_sample_ids": tree["selected_sample_ids"],
             "temporal_assessment": assessment,
-            "parameters": {"allow_unsupported": allow_unsupported},
+            "coherence_screening": tree.get("coherence_screening"),
+            "parameters": parameters,
             "tools": tool_evidence,
             "dating_status": "unsupported",
             "dated_tree": None,
+            "topology_preservation": None,
             "dating_override": bool(allow_unsupported and not assessment["supported"]),
             "branch_units": None,
             "clock_confidence": None,
@@ -107,7 +153,10 @@ def run_time(tree_manifest, *, output, force=False, allow_unsupported=False):
                     if row["sample_id"] in dated
                 ),
             )
-            _run_dated_tree(files, tree["complete_alignment_sites"], force)
+            _run_dated_tree(
+                files, tree["complete_alignment_sites"], force,
+                seed=seed, keep_polytomies=True,
+            )
             tips = [tip.name for tip in Phylo.read(files.time_tree, "nexus").get_terminals()]
             if len(tips) != len(tree["selected_sample_ids"]) or set(tips) != set(
                 tree["selected_sample_ids"]
@@ -117,6 +166,9 @@ def run_time(tree_manifest, *, output, force=False, allow_unsupported=False):
             from chronoclade.location_network.tree import draw_country_tree
 
             biological = read_dated_tree(files.time_tree)
+            result["topology_preservation"] = validate_rooted_topology(
+                Phylo.read(rooted, "newick"), biological,
+            )
             network = build_location_network(biological, rows, tree_basis="sequence")
             network.update(branch_units="years", root_policy="saved corrected tree root retained")
             write_json(job / "location_network.json", network)

@@ -29,3 +29,18 @@ def test_legacy_label_suffix_is_hidden_without_changing_identity():
     rendered = label_analysis(source, {"PW_old": "ERR11592219 (PW_old)"})
     assert rendered["nearest_neighbours"][0]["context_id"] == "ERR11592219"
     assert source["nearest_neighbours"][0]["context_id"] == "PW_old"
+
+
+def test_root_comparison_baseline_uses_accession_label():
+    source = {'root_comparisons': [{'baseline_root': 'PW_old'}]}
+    rendered = label_analysis(source, {'PW_old': 'ERR8772835'})
+    assert rendered['root_comparisons'][0]['baseline_root'] == 'ERR8772835'
+    assert source['root_comparisons'][0]['baseline_root'] == 'PW_old'
+
+
+def test_prepared_metadata_label_and_strain_fallback():
+    assert sample_label({'sample_id': 'PW_internal', 'label': 'ERR8772674'}) == 'ERR8772674'
+    assert sample_label({'sample_id': 'PW_internal', 'strain_name': 'Kp-39'}) == 'Kp-39'
+    assert sample_label({'sample_id': 'PW_internal', 'label': 'PW_internal'}) == 'PW_internal'
+    assert sample_label({'sample_id': 'PW_internal', 'label': 'Kp-39',
+        'run_accessions': ['ERR8772674']}) == 'ERR8772674'

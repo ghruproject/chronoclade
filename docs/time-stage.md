@@ -49,3 +49,11 @@ or convergence; scientific tolerances and coverage remain a separate judgement.
 SLURM uses the same commands through the supporting `chronoclade job` operation.
 Independent job namespaces keep separate selections and parameters reviewable.
 A written batch script is not evidence of a real cluster execution.
+
+Native dating retains the saved corrected-tree root and polytomies: TreeTime receives `--keep-polytomies` and `--rng-seed` using the saved tree manifest’s `parameters.seed`. The time manifest records `dating_seed`, `keep_polytomies: true`, and `dating_inference_policy: seeded_saved_topology_keep_polytomies`. These settings are bound into its fingerprint so earlier dating results cannot be reused under the new inference policy. Legacy lineage dating retains its existing defaults unless callers explicitly supply the optional settings.
+
+Time ensembles validate explicit `--reuse-run` products against the same native dating parameters derived from each saved tree. Results with an older policy, a different dating seed, or polytomy resolution enabled are rejected for reuse; their existing manifests remain readable. The per-selection dating parameters are also bound into the ensemble fingerprint.
+
+Before publishing a dated result, native dating compares the saved rooted Newick tree with the dated tree using the exact sets of tips beneath each nontrivial internal clade, excluding the root. Node labels and branch lengths are ignored. Any lost or introduced rooted clade fails the job even when all tip IDs match. Dated results record the method, both clade counts, and `preserved: true` in `topology_preservation`; unsupported results record null.
+
+`topology_validation_policy` is included in the shared native dating parameters and both single-run and ensemble fingerprints. Dating products created before this automatic check remain readable but cannot be reused as automatically validated products.

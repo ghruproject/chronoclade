@@ -1,61 +1,57 @@
 # ChronoClade
 
-ChronoClade compares a query collection with public genomic context, then
-builds deeper genomic and temporal evidence in stages. The default `fast` mode
-uses public typing profiles and metadata; it does not download context
-assemblies or run a molecular clock. Use `full` for corrected assembly-based
-genomic analysis and `finish` when dates should be assessed.
+ChronoClade compares bacterial input genomes with public context, builds
+recombination-adjusted SNP trees, and assesses whether collection dates support
+a time tree. The current workflow uses four independent commands with saved
+inputs and separate reports.
 
-## Questions the workflow can address
-
-Within a species and lineage, ChronoClade can help an investigation examine:
-
-- which public profiles are closest to the query samples, and how much profile
-  coverage supports that comparison;
-- which descriptive genomic groups occur in the available profiles;
-- whether a group recurs across years (persistence) and, separately, whether
-  observations cluster in a particular time-and-place cell (concentration);
-- whether corrected genomic evidence changes the interpretation; and
-- whether the sampling dates support an evolutionary rate and dated tree.
-
-These are population-level questions. Profile proximity, groups and location
-models do not establish direct transmission or count importation events.
-
-## Stages
-
-```text
-fast (default): public typing profiles + metadata
-  coverage, country/region summaries, PCoA, exploratory NJ, groups,
-  persistence across years, time/place concentration, profile neighbours
-          |
-          v
-full: selected context assemblies + all focal assemblies
-  recombination-corrected tree, SNP neighbours, country/network evidence
-          |
-          v
-finish: temporal tests and gated time tree
-  only when dates and temporal evidence support assessment
-```
-
-The `fast` and `full` stages run without a clock. Profile-stage root-to-tip
-plots, when available, are exploratory and do not gate or estimate dates. The
-location network shows modelled, potentially root-dependent state changes; it
-is not evidence of transmission.
+| Stage | What it does | Main handoff |
+| --- | --- | --- |
+| `prepare` | Resolve collections, accessions or assemblies; obtain typing and metadata | `dataset.json` |
+| `cgmlst` | Retrieve matching profiles, analyse the complete compatible block, select representatives | `selection_bundle/ensemble.json` |
+| `tree` | Acquire selected assemblies, infer corrected SNP trees, assess temporal signal | `tree.json` or `tree_ensemble.json` |
+| `time` | Date supported trees and compare alternative selections | `time.json` or `time_ensemble.json` |
 
 [Install ChronoClade](installation.md){ .md-button .md-button--primary }
-[Follow the ST239 example](worked-example.md){ .md-button }
-[Read the staged workflow guide](staged-workflow.md)
+[Run the four-module workflow](independent-suite.md){ .md-button }
 
-## Current scope
+## Start with profiles
 
-Profile availability and public metadata depend on the configured provider and
-account access. The fast report preserves the full catalogue and analysis
-subset denominators and reports missing profiles explicitly. `full` and
-`finish` require accessible assemblies for the focal samples and selected
-context. `finish` is the only public run mode that assesses temporal signal;
-it writes a dated tree only when the temporal gate passes. See the
-[staged-workflow guide](staged-workflow.md) for current inputs and limitations.
+The cgMLST module uses categorical allele mismatches by default. Missing calls
+are excluded from pairwise comparisons, with shared-locus coverage recorded.
+Direct nucleotide comparisons within the cgMLST genes are an optional mode when
+a compatible allele sequence catalogue is available.
 
-The software is an early working release. Context selection and
-public-health interpretation still require review by an analyst who knows the
-sampling frame and local epidemiology.
+Species and MLST ST define the public candidate pool. Compatible LIN or HierCC
+assignments determine the requested context block. Profile analysis includes all
+usable genomes in that block; subsampling prepares smaller assembly datasets for
+the tree and time stages.
+
+## Read the results
+
+The cgMLST report starts with the combined input and comparison dataset, then
+shows nearest relatives, a full NJ tree and NJ-distance MDS, exploratory date
+regression, state-change networks and the saved selections. Tables default to
+10 rows. Trees support zoom and accession lookup; group selectors are compact,
+searchable and linked between NJ and MDS.
+
+[Report guide](report.md) · [Output-folder guide](outputs.md) · [cgMLST details](cgmlst.md)
+
+Each report embeds its figures and interactive views. Keep the output directory
+for downloadable evidence and stage handoffs. cgMLST output includes READMEs and
+categorized file navigation.
+
+## Interpret within the evidence
+
+Profile similarity and reconstructed location or host changes do not establish
+direct transmission. Root-to-tip regression is exploratory. Tree-stage temporal
+testing and supported time-tree estimation remain separate steps. Variation
+between alternative representative sets measures selection sensitivity, not a
+population confidence interval.
+
+Typing availability, assembly access and metadata completeness depend on the
+provider and reference configuration. Missing evidence remains explicit.
+
+The older `run --mode fast|full|finish` interface remains documented in the
+[staged workflow](staged-workflow.md). Its limits and paths differ from the
+independent modules.

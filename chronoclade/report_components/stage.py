@@ -11,7 +11,9 @@ from chronoclade.location_network.widget import interactive_network_html, widget
 
 
 def write_report(
-    path, *, title, result, rows=(), network=None, figures=(), extra="", overview=None, report_label="TREE ANALYSIS REPORT"
+    path, *, title, result, rows=(), network=None, figures=(), extra="", overview=None, report_label="TREE ANALYSIS REPORT",
+    figure_heading="Biological tree and location history", assessment_first=False,
+    assessment_title=None
 ):
     path = Path(path)
     counts = "".join(
@@ -67,6 +69,12 @@ def write_report(
         if p.is_file() and p != path and p.name != "job.json"
     )
     assessment = result["temporal_assessment"]
+    coherence = result.get("coherence_screening") or {}
+    coherence_warning = (
+        '<p role="alert"><strong>Coherence warning:</strong> '
+        + escape(coherence["warning"]) + "</p>"
+        if coherence.get("warning") else ""
+    )
     network_html = ""
     assets = ""
     if network is not None:
@@ -81,19 +89,21 @@ def write_report(
             ("Selected samples", counts + '<div class="table-scroll">' + table + "</div>")
         )
     if plots or network_html:
-        sections.append(("Biological tree and location history", plots + network_html))
+        sections.append((figure_heading, plots + network_html))
     sections.extend(
         [
             (
-                "Ensemble assessment"
+                assessment_title or ("Ensemble assessment"
                 if assessment["code"] == "sensitivity"
-                else "Temporal assessment",
-                f"<p><strong>{escape(assessment['code'])}</strong>: {escape(assessment['reason'])}</p><details><summary>Saved assessment</summary><pre>{escape(json.dumps(assessment, indent=2))}</pre></details>"
+                else "Temporal assessment"),
+                coherence_warning + ("" if assessment_title else f"<p><strong>{escape(assessment['code'])}</strong>: {escape(assessment['reason'])}</p>") + f"<details><summary>Saved assessment</summary><pre>{escape(json.dumps(assessment, indent=2))}</pre></details>"
                 + extra,
             ),
             ("Downloads", "<ul>" + downloads + "</ul>"),
         ]
     )
+    if assessment_first:
+        sections.insert(0, sections.pop(-2))
     if overview is None:
         overview = f"{len(result['selected_sample_ids'])} exact selected genomes"
         if result.get("branch_units"):
@@ -112,6 +122,8 @@ def write_report(
     if assessment["code"] == "sensitivity":
         verdict_title = "Selection sensitivity assessment"
         verdict_class = ""
+    if assessment_title is not None:
+        verdict_title = assessment_title
     verdict = (
         f'<div class="verdict {verdict_class}">'
         f"<strong>{escape(verdict_title)}</strong><p>{escape(assessment['reason'])}</p></div>"

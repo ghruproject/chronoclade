@@ -33,6 +33,13 @@ def samples_from_records(records: Sequence[Mapping]) -> tuple[dict, ...]:
         row["date_raw"] = record.get("date_raw", dates["date_raw"])
         for key in (
             "source_genome_id",
+            "numeric_source_id",
+            "source_checksum",
+            "source_length",
+            "source_n50",
+            "source_contigs",
+            "qc_pass",
+            "source_qc",
             "aliases",
             "run_accessions",
             "biosample_accessions",
@@ -99,6 +106,13 @@ def _record_lineages(records):
 def _record_crosswalk(records):
     fields = (
         "source_genome_id",
+        "numeric_source_id",
+        "source_checksum",
+        "source_length",
+        "source_n50",
+        "source_contigs",
+        "qc_pass",
+        "source_qc",
         "aliases",
         "accession",
         "run_accession",

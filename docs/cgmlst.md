@@ -37,27 +37,49 @@ date and genetic-group colours on the same coordinates. Displayed genetic groups
 diagnostics remain exploratory and do not replace lineage assignments.
 
 Blocks above 1,500 records use [compiled distances and RapidNJ](cgmlst-scale.md),
-disk-backed checked distance evidence, leading-axis PCoA and a collapsible full
-NJ tree. Default bootstrap counts are 30 for dense blocks and zero for large blocks,
+disk-backed checked distance evidence, leading-axis ordination and the full
+interactive NJ tree. Default bootstrap counts are 30 for dense blocks and zero for large blocks,
 recorded separately for each block. Large-block bootstrapping is not implemented;
 requesting it fails explicitly. A 10,000 × 629 synthetic full analysis was tested.
 
-## Distance modes
+## Report navigation
 
-Each NJ cohort includes a comparison of the existing root with a date-optimised
-clock-compatible root. ChronoClade searches continuous positions on nonnegative
-edges of the fixed tree, minimising ordinary least-squares residual mean squared
-using collection-date interval midpoints. This is an independent implementation
-of the minimum-residual criterion described in the
-[TempEst tutorial](https://beast.community/tempest_tutorial), not a TempEst run.
-Negative branches are retained and audited; they are excluded as candidate root
-edges. Both regressions use the same dated records. Reports show slope, R²,
-residual mean squared, slope change and paired plots; JSON and an alternative
-rooted Newick preserve the evidence. The main tree and location network keep
-their existing root. Optimisation uses dates and can improve a fit without
-establishing temporal signal; the later tree/time assessment remains separate.
-Exact comparison currently runs for cohorts of at most 1,500 genomes; larger
-cohorts explicitly report it as unavailable rather than silently sampling tips.
+Open `index.html` for the block summary, then follow a block report. Each block
+has a **back to all groups** link. Results are ordered as:
+
+1. Combined input/public dataset: country totals, available region/NUTS2 detail,
+   host and date coverage.
+2. Genetic relationships: nearest relatives, the complete NJ tree, NJ-distance
+   MDS and reported cgLIN group summaries.
+3. Temporal: exploratory distance versus collection date.
+4. State network: interactive location or host reconstruction, with export controls.
+5. Subsamples: selected counts, mandatory neighbours, alternative-set overlap
+   and handoff manifests.
+6. Methods and evidence files: coverage, optional cutoff diagnostics and downloads.
+
+Searchable, sortable tables open with 10 rows. Region/NUTS2 detail includes only
+reported values and is omitted when neither field has data. Unknown countries
+remain in country totals.
+
+The NJ viewer opens with the full tree. Use **Zoom to inputs**, select a group
+and **Zoom to selected group**, or find an accession and **Locate** it. **Read
+labels**, vertical zoom, drag/pan and **Fit all** support closer inspection.
+These controls change the viewport, not the saved topology or tip membership.
+
+NJ and MDS selectors initially show the 20 largest groups plus every group
+containing input genomes. Search covers all groups; **Show all groups** retains
+a bounded scrollable list. Selecting a group highlights it in both figures.
+No rare groups or ordination points are removed by the compact legend. The
+MDS coordinate selector offers direct profile-distance PCoA for comparison;
+colouring by country, host or date keeps the chosen coordinates fixed.
+
+Root and block `README.md` files explain the handoffs. `files/index.html` groups
+links into tables, trees, figures, networks, subsamples and methods. Evidence
+stays at its recorded paths; the navigation folders do not duplicate matrices.
+Reports embed figures and interactive views for opening without a server. Keep
+the folder for evidence downloads. See [output files](outputs.md).
+
+## Distance modes
 
 Categorical allele-profile mismatch is the default. An allele number is a label,
 not a numeric measurement: two different called alleles count as one locus
@@ -159,4 +181,71 @@ Selection evidence uses independent filesystem copy-on-write snapshots where
 supported, with a regular-copy fallback. It never uses mutable hardlinks. Retaining
 many completed runs still consumes space; copy-on-write reduces duplicate matrix
 storage within a run. Exact outgroup discovery is not automated by these commands;
-the declared root and the available clock-compatible comparison remain explicit.
+the declared root remains recorded in the saved analysis evidence.
+
+## Root-to-tip diagnostics
+
+The Temporal section shows the exploratory NJ distance-versus-date regression.
+The root-comparison table, methodological discussion and paired sensitivity
+figure are not displayed in the report. Saved diagnostic evidence retains a
+date-optimised root, found by searching continuous positions along tree edges
+to minimise dated-tip regression residual mean squared error, using the same
+principle as Clockor2. This is an exploratory allele-divergence diagnostic, not a
+calibrated molecular clock.
+Collection-date interval midpoints are used; dates before 1900 are excluded from
+the regression and retained in the metadata and genetic analysis.
+
+Negative NJ branches are set to zero only in a separate diagnostic tree. Both
+root comparisons use that tree, with the number and magnitude of changed edges
+saved in the diagnostic evidence. A signed-original baseline is retained as a sensitivity check. The NJ
+tree displayed elsewhere and the location network keep their original branches
+and root. Normalised cgMLST distances are scaled by the recorded locus count;
+with variable missing-locus coverage these are allele-distance units rather than
+literal accumulated allele changes. A date-optimised fit alone does not establish
+temporal signal.
+
+Refresh a completed report from its checked saved NJ and coordinate evidence,
+without rebuilding the tree, ordination or selections. This updates report
+controls and output-folder navigation as well as saved clock diagnostics. It
+does not restore the removed root-comparison section. Alternatively, compare the
+exact selections used by a native SNP-tree ensemble:
+
+```bash
+chronoclade refresh-cgmlst-report cgmlst/cgmlst.json
+chronoclade compare-clocks tree/tree_ensemble.json --out matched-clock-comparison
+```
+
+The matched comparison constructs a fresh NJ tree from each exact selected
+cgMLST distance submatrix. Both panels use the same date-eligible genomes and the
+same continuous-edge residual-MSE rooting criterion. The report separates
+allele-distance units/year from SNP-tree substitutions/site/year; their slopes
+are not directly interchangeable. It compares descriptive fits and does not
+perform another date-randomisation test or recalibrate the saved time trees.
+
+## Experimental finer-group calibration
+
+```bash
+chronoclade calibrate-lin cgmlst/<block>/selection_bundle/ensemble.json \
+  --folds 3 --output lin-calibration
+```
+
+This trial analyses the complete frozen profile pool, not the selected assembly
+subsample. It builds fresh NJ trees for input-containing LIN6 and LIN7 groups;
+singleton or insufficiently dated groups remain in the table without a fitted
+rate. These nested groups are not independent replications.
+
+For each of the latest calendar-year blocks, rooting and regression use only
+earlier eligible dates. The held-out dates then predict root-to-tip allele
+distance using that frozen root and fitted line. Mean absolute distance error is
+compared with two predictions at the same root: the training-set mean and the
+latest training-year mean. Held-out genomes still contribute genetic information
+to the NJ tree, so this is a transductive date check, not validation on unseen
+genomes. Fold counts and rate/root sensitivity are saved; tip independence and
+formal confidence intervals are not assumed.
+
+The trial does not publish biological cutoffs. `2*r*H` is saved only as a
+conditional expected pair-distance scenario when both descendants are H years
+from a shared ancestor under a constant rate. It does not follow from the
+difference between their sampling dates, and it is neither an empirical cutoff
+nor an uncertainty bound. Stronger predictive evidence and independently
+labelled epidemiological comparisons would be needed to justify a cutoff.

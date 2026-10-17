@@ -482,4 +482,6 @@ def run_cgmlst(
     }
     manifest_path = output / "cgmlst.json"
     write_json(manifest_path, manifest)
+    from chronoclade.report_components.output_guide import write_output_guide
+    write_output_guide(output, blocks=products)
     return CGMLSTResult(manifest_path, report_path)

@@ -3,6 +3,7 @@
 from html import escape
 
 from chronoclade.report_components.stage import write_report
+from chronoclade.sample_labels import display_label
 
 
 def _display(value):
@@ -50,6 +51,7 @@ def _artifact(spec, label):
 
 def write_comparison_report(output, result):
     runs, coverage = result["runs"], result["selection_coverage"]
+    labels = result.get("sample_labels", {})
     extra = "<h3>Independent runs</h3>" + _table(
         [
             ("selection_id", "Selection"),
@@ -233,11 +235,20 @@ def write_comparison_report(output, result):
         )
     extra += "<h3>Shared-target clustering</h3>" + _table(
         [
-            ("target_pair", "Exact target pair"),
+            ("target_pair", "Input genome pair"),
             ("assessable_runs", "Assessable runs"),
             ("co_clustered_runs", "Co-clustered runs"),
         ],
-        result["target_pair_agreement"],
+        [
+            {
+                **row,
+                "target_pair": " · ".join(
+                    display_label(labels.get(ident, ident))
+                    for ident in row["target_pair"].split("|")
+                ),
+            }
+            for row in result["target_pair_agreement"]
+        ],
     )
     splits = result["shared_anchor_splits"]
     extra += (

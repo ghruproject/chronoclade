@@ -47,6 +47,8 @@ def write_partition_index(
         f"<p>LIN depth: {lin_level}; HierCC: {html.escape(hiercc_level or 'Not selected')}.</p>"
         "<table><thead><tr><th>Block</th><th>Input</th><th>Context</th><th>Outputs</th></tr></thead>"
         f"<tbody>{items}</tbody></table>{count_table}<h2>Unresolved inputs</h2><ul>{unresolved or '<li>None</li>'}</ul>"
-        '<a href="partitions.json">Partition counts and exclusions</a></div></section></main></body></html>'
+        '<p><a href="files/index.html">Browse output files by block</a> · '
+        '<a href="README.md">Output folder guide</a> · '
+        '<a href="partitions.json">Partition counts and exclusions</a></p></div></section></main></body></html>'
     )
     return report_path

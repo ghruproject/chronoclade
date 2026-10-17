@@ -14,6 +14,30 @@ from chronoclade.pathogenwatch import PathogenwatchClient
 import chronoclade.pathogenwatch_context as provider
 
 
+def test_context_candidate_adapter_retains_download_verification_metadata(tmp_path):
+    checksum = "a" * 40
+    candidate = provider._candidate(
+        {
+            "source_genome_id": "public-id",
+            "numeric_source_id": 17,
+            "source_checksum": checksum,
+            "source_length": 9876,
+            "qc_pass": True,
+        },
+        species="Klebsiella pneumoniae",
+        lineage="ST147",
+        scheme="mlst",
+        st="147",
+        snapshot="b" * 64,
+        catalogue_path=tmp_path / "catalogue.json",
+    )
+    assert candidate.source_genome_id == "public-id"
+    assert candidate.source_numeric_id == "17"
+    assert candidate.source_checksum == checksum
+    assert candidate.source_length == "9876"
+    assert candidate.pathogenwatch_qc == "True"
+
+
 def make_fixture(tmp_path):
     records = {
         "a": ("SAMN10001", "India", "2019", True),

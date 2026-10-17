@@ -31,6 +31,7 @@ def date_regression(
     distance_field: str,
     distance_units: str,
     label: str,
+    minimum_collection_year: int | None = 1900,
 ) -> dict:
     """Fit a centred ordinary least-squares line with an explicit date audit.
 
@@ -42,6 +43,8 @@ def date_regression(
     for point in points:
         interval = sample_date_interval(point)
         reason = interval["reason"]
+        if reason is None and minimum_collection_year is not None and interval["year_min"] < minimum_collection_year:
+            reason = "before_minimum_collection_year"
         if reason is None:
             try:
                 value = float(point[distance_field])
@@ -53,6 +56,7 @@ def date_regression(
             exclusions.append(
                 {
                     "sample_id": point.get("sample_id"),
+                    "label": point.get("label") or point.get("sample_id"),
                     "collection_date": point.get("collection_date"),
                     "date_start": point.get("date_start"),
                     "date_end": point.get("date_end"),
@@ -82,6 +86,10 @@ def date_regression(
         "r_squared": None,
         "points": accepted,
         "exclusions": exclusions,
+        "date_filter": {
+            "minimum_collection_year": minimum_collection_year,
+            "policy": "Dates before the minimum year are excluded from this exploratory regression only; original dates and genetic analyses are retained.",
+        },
         "interpretation": _NOTE,
     }
     if len(accepted) < 3 or distinct < 3:

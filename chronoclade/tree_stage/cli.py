@@ -5,6 +5,12 @@ from typing import Annotated
 import os
 import typer
 from rich.console import Console
+from enum import Enum
+
+
+class CoherencePolicy(str, Enum):
+    strict = "strict"
+    diagnostic = "diagnostic"
 
 
 def register(app):
@@ -19,6 +25,7 @@ def tree_command(
     randomisation_jobs: Annotated[int, typer.Option(min=1)] = 1,
     ensemble_jobs: Annotated[int, typer.Option(min=1)] = 1,
     temporal_p_value: Annotated[float, typer.Option(min=0.000001, max=1)] = 0.05,
+    coherence_policy: Annotated[CoherencePolicy, typer.Option(help="Strict aborts on relative-distance flags; diagnostic retains selected genomes with audits")] = CoherencePolicy.strict,
     seed: int = 42,
     assess_temporal: bool = True,
     force: bool = False,
@@ -50,6 +57,7 @@ def tree_command(
             seed=seed,
             assess_temporal=assess_temporal,
             force=force,
+            coherence_policy=coherence_policy.value,
             api_key=_api_key(api_key_env),
             base_url=base_url,
             **options,
@@ -63,6 +71,8 @@ def tree_command(
     else:
         Console().print(f"Tree manifest: {output.resolve() / 'tree.json'}")
         Console().print(f"Temporal assessment: {result['temporal_assessment']['code']}")
+        if (result.get("coherence_screening") or {}).get("warning"):
+            Console().print(result["coherence_screening"]["warning"], style="bold yellow", markup=False)
 
 
 def _api_key(environment):
