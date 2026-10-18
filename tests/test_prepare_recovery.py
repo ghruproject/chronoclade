@@ -108,6 +108,7 @@ def test_resume_rejects_symlinked_attempt_root_before_adopting_manifest(tmp_path
 
 
 def test_prepare_and_type_queries_help_expose_explicit_resume():
+    from click import unstyle
     from chronoclade.cli import app
 
     runner = CliRunner()
@@ -115,8 +116,8 @@ def test_prepare_and_type_queries_help_expose_explicit_resume():
     typing = runner.invoke(app, ["type-queries", "--help"])
     assert prepare.exit_code == 0, prepare.output
     assert typing.exit_code == 0, typing.output
-    assert "--resume" in prepare.output
-    assert "--resume" in typing.output
+    assert "--resume" in unstyle(prepare.output)
+    assert "--resume" in unstyle(typing.output)
 
 
 def test_resume_rejects_frozen_input_and_requires_native_config(tmp_path):
