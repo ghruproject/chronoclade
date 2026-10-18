@@ -21,3 +21,6 @@ validation/**/source/
 validation/beta/
 runtime-provenance.json
 .impeccable/critique/
+
+# Local scientific input assemblies and benchmark execution evidence
+validation/science/

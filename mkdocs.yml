@@ -64,6 +64,7 @@ nav:
       - Command line: cli.md
       - Output files: outputs.md
   - Local beta acceptance:
+      - Current local closeout: beta/LOCAL_BETA_CLOSEOUT.md
       - Specification: beta/BETA_SPECIFICATION.md
       - Acceptance matrix: beta/ACCEPTANCE_PLAN.md
       - Progress and evidence: beta/PROGRESS.md

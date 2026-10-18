@@ -44,9 +44,11 @@ pixi run -e cgmlst chronoclade cgmlst prepared/dataset.json --out cgmlst-dna \
   --distance-threshold 0.00001
 ```
 
-This mode compares equal-length, homologous allele sequences sitewise within each locus, counts
-sitewise A/C/G/T differences and divides by the jointly compared nucleotide
-sites. Missing calls, missing sequences and unequal-length loci are excluded for that pair. Catalogue sequences with non-ACGT bases are rejected;
+This mode aligns observed alleles separately for each locus with MAFFT, reconstructs
+each genome's aligned loci and concatenates them. It counts differences only at
+jointly A/C/G/T columns and divides by their count. Missing calls/sequences become
+`N`; aligned indels remain gaps and are reported separately from SNPs. Length-changing
+alleles are retained in the alignment. Catalogue sequences with non-ACGT bases are rejected;
 the minimum overlap and coverage audit remain explicit. Nearest relatives rank
 by raw SNP count, with ties retained. These are SNP comparisons within the
 cgMLST genes, not genome-wide or recombination-corrected SNP distances.

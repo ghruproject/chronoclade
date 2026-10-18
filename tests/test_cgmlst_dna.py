@@ -240,3 +240,24 @@ def test_small_snp_fractions_still_flag_non_euclidean_ordination(tmp_path):
     cohort = analysis["cohorts"][0]
     assert any("negative PCoA eigenvalues" in item for item in cohort["warnings"])
     assert min(cohort["pcoa_eigenvalues"]) > -1e-10
+
+
+def test_aligned_runtime_keeps_length_variable_locus_and_separates_indels(tmp_path):
+    from chronoclade.cgmlst.dna import AlignedDNAComparator
+    dataset, _, catalogue = fixture(tmp_path, sequences=[
+        ("a", "100", "ACCTG"), ("a", "101", "ACTG"), ("a", "9000", "ACCTG"),
+        ("b", "1", "GGGG"), ("b", "2", "GGGT"),
+    ])
+    records = {row["sample_id"]: row for row in profile_records(dataset)}
+    model = AlignedDNAComparator(catalogue, list(records.values()))
+    evidence, reason = model.pair(records["q"], records["c1"], 1.0)
+    assert reason is None
+    assert evidence["shared_called_loci"] == 2
+    assert evidence["shared_called_sites"] == 8
+    assert evidence["snp_differences"] == 0
+    assert evidence["gap_vs_base_columns"] == 1
+    assert evidence["indel_tracts"] == 1
+    assert evidence["unequal_length_loci"] == []
+    audit = json.loads(model.save_audit(tmp_path / "audit").read_text())
+    assert (tmp_path / "audit" / audit["alignment"]["concatenation"]).is_file()
+    assert audit["provenance"]["mafft_version"]

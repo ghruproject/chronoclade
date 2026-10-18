@@ -1005,12 +1005,12 @@ def write_profile_report(
     direct_dna = data.get("distance_method") == "direct-dna"
     distance_label = "Direct SNP differences within cgMLST genes" if direct_dna else "cgMLST allele-profile differences"
     distance_explanation = (
-        "Each compared nucleotide site contributes one difference when its bases differ. Only jointly called, equal-length gene sequences are compared; missing and unequal-length loci are excluded. This is a gene-panel analysis, not a recombination-adjusted whole-genome SNP tree."
+        "Allele sequences are aligned separately for each locus, reconstructed for each genome and concatenated. SNPs count differences at jointly called A/C/G/T columns; alignment gaps and missing calls do not count as SNPs. Indel evidence is recorded separately. This is a gene-panel analysis, not a recombination-adjusted whole-genome SNP tree."
         if direct_dna else
         "Each jointly called core gene contributes one difference when its allele identifiers differ, regardless of the number of DNA changes within that gene. Missing calls are excluded."
     )
     nearest_explanation = (
-        "Nearest relatives are ranked by raw nucleotide differences within sufficiently covered, equal-length cgMLST gene sequences; all ties are retained. Compared nucleotide sites and normalized distances are shown alongside that ranking."
+        "Nearest relatives are ranked by raw SNP differences within sufficiently covered, aligned cgMLST loci; all ties are retained. Compared nucleotide sites and normalized distances are shown alongside that ranking. Zero SNPs can still include indel differences; inspect the separate gap evidence."
         if direct_dna else
         "Nearest relatives are ranked by actual allele differences among profiles with sufficient shared-locus coverage; all ties are retained. The normalized distance and compared-locus counts are shown alongside that ranking."
     )
@@ -1227,7 +1227,9 @@ def write_profile_report(
         '<details class="coverage-details" id="nearest"><summary>Closest relatives</summary>'
         f'<p>{escape(nearest_explanation)}</p>{_available_neighbours(nearest, directory, paths, public_context_count=public_context_count, direct_dna=direct_dna)}</details>'
         '<p class="muted">The neighbour-joining tree is a profile-distance view. Branches do not represent time or prove transmission.</p></div></section>',
-        ('<section class="stage" id="temporal"><div class="stage-body"><h2>Do allele differences accumulate with time?</h2>'
+        ('<section class="stage" id="temporal"><div class="stage-body"><h2>'
+        + ('Do nucleotide differences accumulate with time?' if direct_dna else 'Do allele differences accumulate with time?')
+        + '</h2>'
         '<p>Explore how profile distance relates to collection date. This is a descriptive diagnostic; it does not change the genetic relationships or establish a transmission timeline.</p>'
         '<details class="coverage-details" id="root-to-tip" open><summary>Exploratory distance versus collection date</summary>'
         f'<p>{escape(root_tip_text.strip())}</p>{_root_to_tip(root_tip)}{_cohort_figures(data.get("cohorts"), directory, "root_to_tip_figure", "Collection date versus root-to-tip distance")}</details></div></section>'),

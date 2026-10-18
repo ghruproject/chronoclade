@@ -1,0 +1,96 @@
+{
+  "date": "2026-10-18",
+  "status": "passed",
+  "scope": "Exploratory Klebsiella pneumoniae on Apple Silicon macOS; local acceptance recorded before authorised GitHub publication; no tag/release",
+  "package": {
+    "wheel": "chronoclade-0.1.0-py3-none-any.whl",
+    "wheel_sha256": "08bf90fc103538205680ab73a2ccf3afc549905230158cf0cb30e06036a5c90e",
+    "package_files": 144,
+    "python_modules": 138,
+    "all_wheel_and_installed_files_match_source": true,
+    "fresh_venv": true,
+    "system_site_packages": false,
+    "source_package_sha256": "3c59a57d64d388dfcc88eb5542128f96df928b015046a2464ba1eaf6c6578607"
+  },
+  "focused_tests": {
+    "passed": 45,
+    "activation": "pixi run --frozen --environment default",
+    "initial_unactivated_python": "5 missing-MAFFT failures; rerun in documented environment passed"
+  },
+  "four_stage": {
+    "genomes": 8,
+    "inputs": 3,
+    "contexts": 5,
+    "stages": [
+      {
+        "stage": "preflight",
+        "elapsed_seconds": 0.6199791673570871,
+        "exit_code": 0
+      },
+      {
+        "stage": "prepare",
+        "elapsed_seconds": 1.174417333677411,
+        "exit_code": 0
+      },
+      {
+        "stage": "cgmlst",
+        "elapsed_seconds": 10.191144166514277,
+        "exit_code": 0
+      },
+      {
+        "stage": "tree",
+        "elapsed_seconds": 187.60489141754806,
+        "exit_code": 0
+      },
+      {
+        "stage": "time",
+        "elapsed_seconds": 15.638170917518437,
+        "exit_code": 0
+      },
+      {
+        "stage": "export",
+        "elapsed_seconds": 0.5584293324500322,
+        "exit_code": 0
+      }
+    ],
+    "independent_audit": "PASS",
+    "successful_date_permutations": 100,
+    "temporal_p_value": 0.37623762376237624,
+    "dating_status": "unsupported",
+    "override": false
+  },
+  "snp_example": {
+    "synthetic": true,
+    "records": 4,
+    "pairs_verified": 6,
+    "alignment_columns": 90,
+    "missing_N_columns": 30,
+    "equal_and_unequal_length_loci_aligned": true,
+    "MAFFT_version": "7.526"
+  },
+  "reused": "Locked default Pixi native binaries; eight frozen profiles and exact local assemblies. No fresh native typing or live provider download in this run.",
+  "usability": "Prior independent simulated walkthroughs; real-human usability remains follow-up",
+  "deferred": [
+    "Automatic epidemiological cluster thresholds",
+    "E. coli/HierCC",
+    "Linux x86_64 and physical SLURM verification"
+  ],
+  "entry_page": "tmp/beta-local-closeout/index.html",
+  "local_evidence": "validation/beta/local-beta-closeout/",
+  "github_pushed_at_local_check": false,
+  "final_checks": {
+    "ruff": "passed",
+    "strict_mkdocs": "passed",
+    "git_diff_check": "passed",
+    "browser": {
+      "entry_page": true,
+      "tree_figures_loaded": 4,
+      "tree_state_network_drawn": true,
+      "tree_display_accessions": true,
+      "SNP_report_and_lazy_temporal_figure_loaded": true,
+      "style": "existing shared ChronoClade report styles"
+    },
+    "independent_readme_export_identity_audit": "PASS",
+    "entry_local_links_verified": 9
+  }
+}

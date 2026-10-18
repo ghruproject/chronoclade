@@ -1,5 +1,9 @@
 # Klebsiella: from assemblies to a dating decision
 
+For the latest installed-package verification and repeatable allele/SNP examples,
+see the [local beta closeout](LOCAL_BETA_CLOSEOUT.md). Its local entry page is
+`tmp/beta-local-closeout/index.html`. The runs below remain separate earlier evidence.
+
 Start with the [Mac commands](../mac-klebsiella-walkthrough.md) for your own data.
 The recorded example below shows what each stage produces. Its reports and large
 input/cache files remain local; they are not bundled with the GitHub checkout.
