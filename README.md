@@ -13,9 +13,7 @@ support a time tree. Four commands save separate datasets, reports and manifests
 
 Categorical allele-profile distance is the recommended cgMLST default. An optional
 direct-DNA mode compares nucleotide sequences after aligning each locus separately
-within the same cgMLST genes. Sequence embeddings are parked
-as [research notes](docs/research/parked-sequence-embeddings.md), with no active
-embedding workflow.
+within the same cgMLST genes.
 
 ## Install
 
@@ -32,18 +30,8 @@ pixi run chronoclade preflight
 Large cgMLST blocks require RapidNJ. On supported macOS hosts, run
 `pixi run chronoclade setup-scale`; Apple Silicon currently requires Rosetta.
 See [installation](docs/installation.md) and [large-block analysis](docs/cgmlst-scale.md).
-The current beta scope is exploratory Klebsiella pneumoniae analysis on Apple
-Silicon macOS. The recorded four-command run and separate supported and
-unsupported dating examples reused configured typing references and
-provider/assembly caches. Linux x86_64, physical HPC/SLURM, and E. coli/HierCC
-remain parked. Start with the
-[Mac walkthrough](docs/mac-klebsiella-walkthrough.md), the
-[worked Klebsiella example](docs/beta/WORKED_EXAMPLE.md), and the concise
-[acceptance checklist](docs/beta/ACCEPTANCE_PLAN.md).
-
-See the [local beta closeout record](docs/beta/LOCAL_BETA_CLOSEOUT.md) for the
-installed-wheel check and final local handoff. The worked example distinguishes
-recorded native runs from the lightweight synthetic example.
+Start with the [Klebsiella walkthrough](docs/mac-klebsiella-walkthrough.md)
+or the [small offline example](examples/beta/README.md).
 
 Separate Pixi environments are available for each stage.
 
@@ -156,11 +144,8 @@ references, context data and assemblies the accepted run reused.
 
 ## Klebsiella beta scope
 
-The supported beta workflow is scoped to Klebsiella pneumoniae on Apple Silicon
-macOS. E. coli/HierCC, Linux x86_64 and physical HPC/SLURM remain parked pending
-their own compatible references and environment-specific validation. The
-acceptance plan records evidence and limitations; see also the
-[local beta closeout record](docs/beta/LOCAL_BETA_CLOSEOUT.md).
+The current beta is validated for Klebsiella pneumoniae on Apple Silicon macOS.
+Other species and platforms require separate validation.
 
 ## Reports and output folders
 
@@ -186,7 +171,7 @@ saved tree and metadata. The command does not upload data. See
 ## Documentation and development
 
 The [documentation site](https://ghruproject.github.io/chronoclade/) includes
-installation, methods, command reference and the [worked example](docs/worked-example.md).
+installation, methods, command reference and the [Klebsiella example](docs/mac-klebsiella-walkthrough.md).
 Documentation changes on a pull request reach the published site after merging
 into `main` and successful deployment.
 
