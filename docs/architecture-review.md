@@ -1,7 +1,7 @@
 # ChronoClade suite architecture review
 
 Reviewed 10 October 2026 in the `codex/shared-suite-foundations` checkout.
-Updated 11 October 2026 to reflect the parked embedding work and four active stages.
+Updated 11 October 2026 to reflect the four active stages.
 This is a historical strict source-level architecture audit. Current usage is
 documented in [the independent workflow](independent-suite.md); this review
 records design rationale and does not serve as a command guide or certify that

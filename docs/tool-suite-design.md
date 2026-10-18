@@ -15,9 +15,7 @@ Design specification and implementation status, 10 October 2026.
 | Execution | Isolated command environments, checked local jobs and generated SLURM scripts; tree/time resume and invalidation | No live SLURM cluster was available to test submission. cgMLST owns a fresh output directory per revised run. |
 
 See the [independent suite](independent-suite.md), [large-block backend](cgmlst-scale.md),
-[tree stage](tree-stage.md), [time stage](time-stage.md), and the
-[parked sequence-embedding research notes](research/parked-sequence-embeddings.md)
-for executable contracts and the archived research record.
+[tree stage](tree-stage.md), and [time stage](time-stage.md) for executable contracts.
 
 ## Public interface
 
@@ -452,10 +450,6 @@ distances. Plot, tree, grouping, selection and downloadable evidence must all
 use the declared input distance consistently. Do not describe these counts as
 genome-wide SNP distances or recombination-corrected phylogeny; those analyses
 belong to the assembly-based tree stage.
-
-The prior sequence-embedding experiments are recorded in the
-[parked research notes](research/parked-sequence-embeddings.md). They are not an
-active stage, command, report mode or dependency.
 
 ## tree: assembly-based, recombination-adjusted analysis
 
