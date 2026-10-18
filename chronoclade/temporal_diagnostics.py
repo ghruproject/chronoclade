@@ -25,6 +25,23 @@ _NOTE = (
 )
 
 
+def date_distance_point(sample: Mapping, distance, *, distance_field="root_to_tip", label=None):
+    """Retain date/plot metadata without embedding genotypes in regression evidence.
+
+    Profiles and provider responses belong in the prepared bundle. Copying them
+    into every baseline, fitted and scaled point can multiply large outputs.
+    Canonical date bounds and precision remain intact for the same date policy.
+    """
+    from chronoclade.sample_labels import sample_label
+
+    fields = ("sample_id", "collection_date", "collection_year", "date_start", "date_end",
+              "date_precision", "country", "region", "nuts2", "host", "origin", "role")
+    point = {key: sample[key] for key in fields if key in sample}
+    point.update(label=label if label is not None else sample_label(sample))
+    point[distance_field] = distance
+    return point
+
+
 def date_regression(
     points: Sequence[Mapping],
     *,
@@ -294,6 +311,22 @@ def cgmlst_root_to_tip(dataset: PreparedDataset, *, reference_sample_id=None) ->
     }
 
 
+def diagnostic_display_units(diagnostic, *, slope=False):
+    """Shorten recognized saved allele units for display; leave evidence intact."""
+    import re
+    field = "slope_units" if slope else "distance_units"
+    display = diagnostic.get("display_" + field)
+    if display:
+        return display
+    units = diagnostic.get(field)
+    if isinstance(units, str) and re.fullmatch(
+        r"(?:scheme-equivalent )?allele-distance units on [1-9][0-9]* "
+        r"(?:fixed callable loci|declared loci|observed export loci)(?: per year)?", units
+    ):
+        return "Estimated allele differences/year" if slope else "Estimated allele differences"
+    return units
+
+
 def allele_unit_diagnostic(diagnostic, locus_count, *, fixed_callable=False, catalogue_complete=True):
     """Express a mismatch-fraction NJ regression in a declared allele-unit scale.
 
@@ -309,7 +342,9 @@ def allele_unit_diagnostic(diagnostic, locus_count, *, fixed_callable=False, cat
              f"scheme-equivalent allele-distance units on {locus_count} "
              + ("declared loci" if catalogue_complete else "observed export loci"))
     result.update(fraction_slope=diagnostic.get("slope"), normalization_loci=locus_count,
-                  distance_units=units, slope_units=units + " per year")
+                  distance_units=units, slope_units=units + " per year",
+                  display_distance_units="Estimated allele differences",
+                  display_slope_units="Estimated allele differences/year")
     for key in ("slope", "intercept", "centered_intercept"):
         if result.get(key) is not None:
             result[key] *= locus_count

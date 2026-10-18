@@ -52,7 +52,16 @@ def _artifact(spec, label):
 def write_comparison_report(output, result):
     runs, coverage = result["runs"], result["selection_coverage"]
     labels = result.get("sample_labels", {})
-    extra = "<h3>Independent runs</h3>" + _table(
+    anchor_count = len(result.get("common_anchor_ids", []))
+    input_ids = result.get("input_target_ids", result.get("target_ids", []))
+    same_targets = set(input_ids) == set(result.get("common_anchor_ids", []))
+    extra = (
+        f"<p>The shared-anchor ancestor uses {anchor_count} genomes present in every "
+        "selection, including inputs and any shared required public comparisons. "
+        f"The declared input target contains {len(input_ids)} genomes."
+        + (" These are the same target.</p>" if same_targets else "</p>")
+        + "<h3>Independent runs</h3>"
+    ) + _table(
         [
             ("selection_id", "Selection"),
             ("status", "Dating status"),
@@ -88,6 +97,28 @@ def write_comparison_report(output, result):
         ],
         intervals,
     )
+    input_intervals = []
+    if not same_targets:
+        for run in runs:
+            row = run.get("input_target_mrca") or {}
+            if run.get("status") == "dated" and row.get("estimate") is not None:
+                input_intervals.append({
+                    **row, "selection_id": run["selection_id"],
+                    "extra_descendants": len(row.get("extra_descendant_sample_ids", [])),
+                })
+    if input_intervals:
+        extra += (
+            f"<h3>Input-genome ancestor ({len(input_ids)} genomes)</h3>"
+            "<p>Each estimate is the ancestor of the same declared input genomes. "
+            "Additional descendants can change between selections. Bounds are the saved "
+            "within-run TreeTime 90% max-posterior region; missing bounds remain unavailable.</p>"
+            + _table([
+                ("selection_id", "Selection"), ("estimate", "Ancestor year"),
+                ("lower_bound", "90% region lower"), ("upper_bound", "90% region upper"),
+                ("descendant_count", "Full descendants"),
+                ("extra_descendants", "Additional descendants"),
+            ], input_intervals)
+        )
     extra += (
         "<h3>Between-selection sensitivity</h3><p>The minimum, median, maximum and range of point estimates describe selection sensitivity; they are not confidence intervals.</p>"
         + _table(
@@ -99,7 +130,12 @@ def write_comparison_report(output, result):
                 ("maximum", "Maximum"),
                 ("range", "Range"),
             ],
-            [{"metric": field, **spread} for field, spread in result["sensitivity"].items()],
+            [
+                {"metric": "Input-genome ancestor year" if field == "input_target_mrca_date" else field,
+                 **spread}
+                for field, spread in result["sensitivity"].items()
+                if field != "input_target_mrca_date" or input_intervals
+            ],
         )
     )
     extra += "<h3>Dating and alignment audit</h3>" + _table(
@@ -233,7 +269,20 @@ def write_comparison_report(output, result):
             )
             + "</details>"
         )
-    extra += "<h3>Shared-target clustering</h3>" + _table(
+    extra += "<h3>Shared-target clustering</h3>"
+    cluster_policy = result.get("cluster_policy", {})
+    cutoff = cluster_policy.get("snp_cutoff")
+    method = cluster_policy.get("method")
+    if method == "single-linkage corrected SNP distances" and cutoff is not None:
+        extra += (
+            "<p>Co-clustering uses connected components from single-linkage on corrected "
+            f"clonal-SNP distances, with a configured cutoff of {escape(_display(cutoff))} SNPs "
+            "for pairs with callable sites. A pair can connect through intermediate genomes, "
+            "so not every reported pair is directly within the cutoff. This descriptive threshold "
+            "is not a validated biological or outbreak cutoff; the pairwise results are distinct "
+            "from published cgLIN groups.</p>"
+        )
+    extra += _table(
         [
             ("target_pair", "Input genome pair"),
             ("assessable_runs", "Assessable runs"),

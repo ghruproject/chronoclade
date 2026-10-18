@@ -1,5 +1,7 @@
 # Roadmap to an actionable public-health report
 
+> Historical roadmap. The current beta work is governed by [the approved beta specification](beta/BETA_SPECIFICATION.md) and [acceptance plan](beta/ACCEPTANCE_PLAN.md). Statements below describe earlier implementations and are not evidence of beta readiness.
+
 ## Working foundation
 
 The current MVP now provides the reproducible analytical foundation:

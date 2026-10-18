@@ -30,6 +30,7 @@ def test_full_tree_preserves_topology_and_negative_lengths_and_uses_accessions(t
         tree, records, {"PW_123": "SRR1 (PW_123)", "b": "SAMN2", "c": "GCA_3.1"},
         {"PW_123": "cohort_1_group_2", "b": "cohort_1_group_1", "c": "cohort_1_group_2"},
         tmp_path / "groups.html", distance_units="mismatch fraction",
+        group_basis="distance_threshold", group_threshold=0.02,
     )
     html = Path(path).read_text(encoding="utf-8")
     assert topology(tree) == before
@@ -39,7 +40,7 @@ def test_full_tree_preserves_topology_and_negative_lengths_and_uses_accessions(t
     assert "PW_123" in html  # The private/raw ID remains data, but never appears in tip metadata text.
     assert "| ID: ${t.id}" not in html
     assert "Unknown host" in html
-    assert "Groups defined from direct profile distances, not tree clades." in html
+    assert "Groups use the declared direct-profile distance threshold (mismatch fraction 0.02), not tree clades." in html
     assert "mismatch fraction" in html
     assert "https://" not in html
 
@@ -159,3 +160,20 @@ def test_group_counts_rank_before_names_and_aliases_keep_identity(tmp_path):
     assert data["groups"] == raw
     assert data["selector"]["labels"] == names
     assert data["colors"] == group_colors(raw, labels=names)
+
+
+def test_tree_optional_metadata_hides_absent_host_and_preserves_explicit_city(tmp_path):
+    import json
+    tree = Phylo.read(io.StringIO('(a:1,b:2);'), 'newick')
+    before = topology(tree)
+    records = [{'sample_id':'a','city':'Athens','host':'unknown','nuts2':'EL30'},
+               {'sample_id':'b','city':None,'host':'not provided'}]
+    path = write_group_tree(tree, records, {}, {}, tmp_path/'optional.html')
+    html = Path(path).read_text()
+    payload = json.loads(re.search(r'id="tree-data">(.*?)</script>', html).group(1))
+    assert payload['metadata_fields'] == ['city']
+    assert all('host' not in row and 'region' not in row for row in payload['tips'])
+    assert payload['tips'][0]['city'] == 'Athens'
+    assert payload['tips'][1]['city'] == 'Unknown city'
+    assert 'EL30' not in html
+    assert topology(tree) == before

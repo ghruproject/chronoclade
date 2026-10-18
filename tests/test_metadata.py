@@ -23,8 +23,8 @@ def test_reads_relative_assemblies_and_partial_dates(tmp_path: Path) -> None:
     write_fasta(assembly, [10])
     metadata = tmp_path / "metadata.csv"
     metadata.write_text(
-        "sample_id,assembly,collection_date,location,species,lineage,origin\n"
-        "S1,sample.fasta,2024-03,KIMS,E_coli,ST131,local\n",
+        "sample_id,assembly,collection_date,location,species,lineage,origin,city,region\n"
+        "S1,sample.fasta,2024-03,KIMS,E_coli,ST131,local,Oxford,Oxfordshire\n",
         encoding="utf-8",
     )
 
@@ -32,6 +32,8 @@ def test_reads_relative_assemblies_and_partial_dates(tmp_path: Path) -> None:
 
     assert samples[0].assembly == assembly
     assert samples[0].collection_date == "2024-03"
+    assert samples[0].city == "Oxford"
+    assert samples[0].region == "Oxfordshire"
 
 
 def test_rejects_duplicate_identifiers(tmp_path: Path) -> None:

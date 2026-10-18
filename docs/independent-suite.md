@@ -60,7 +60,10 @@ raw SNP counts, jointly compared nucleotide sites and normalized DNA distances.
 
 Use `--fetch-context` to discover and retrieve compatible public profiles and
 metadata first. The initial pool uses species/ST, followed by the explicitly
-requested LIN depth (5, 6 or 7) or HierCC level. Context assemblies are not
+requested LIN depth (explicitly 5–10) or HierCC level.
+An optional `--context-lin-level` restricts the union of input-associated public
+prefixes independently of analysis block depth; `--display-lin-level` controls
+report group colours. Neither defines a universal close-relative cutoff. Context assemblies are not
 requested at this stage. The retrieval audit distinguishes discovered,
 retrieved and usable records; an observed export is not a complete reference
 locus catalogue.

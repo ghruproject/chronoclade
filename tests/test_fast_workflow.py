@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 from chronoclade.adaptive_context import adaptive_cglin_context
-from chronoclade.fast_workflow import route_datasets, run_fast_datasets
+from chronoclade.fast_workflow import geography, route_datasets, run_fast_datasets
 
 
 def record(name, cg, origin="context", calls=None):
@@ -15,6 +15,21 @@ def record(name, cg, origin="context", calls=None):
                 cglin_scheme="scgMLST629_S", cglin_scheme_version="1",
                 cglin_raw=f"0,0,107,{cg},0,0,0,0,0,0", cglin_status="complete",
                 cglin_export_row={"Clonal Group": "39" if cg == 0 else "10192"})
+
+
+def test_profile_geography_carries_explicit_city_and_legacy_nuts2_separately():
+    summary = geography([
+        dict(sample_id="a", origin="local", country="Greece", nuts2="EL30"),
+        dict(sample_id="b", origin="local", country="Greece", nuts2="EL31"),
+        dict(sample_id="c", origin="context", country="Greece", region="Attica",
+             city="Athens", nuts2="EL30"),
+    ])
+    assert len(summary) == 3
+    assert {row["nuts2"] for row in summary} == {"EL30", "EL31"}
+    city_row = next(row for row in summary if row["city"] == "Athens")
+    assert city_row["region"] == "Attica" and city_row["nuts2"] == "EL30"
+    missing_city = next(row for row in summary if row["nuts2"] == "EL31")
+    assert missing_city["city"] == "Unknown"
 
 
 def test_fast_partitions_cg_before_neighbour_search_and_keeps_public_pool(tmp_path):

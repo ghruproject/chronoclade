@@ -32,10 +32,32 @@ The offline report retains the full-report style, corrected biological tree,
 country/host metadata including missing categories, exact location-history network
 and temporal results. SNP neighbours have SNP/site evidence and do not inherit
 cgMLST allele-distance labels. The corrected tree uses substitutions/site.
+When usable host metadata is supplied, the state-network selector also offers
+host changes reconstructed on that same corrected tree. Location remains the
+default. Without host metadata the option is omitted; a single known host state
+gets an explanatory note rather than invented links. Both views use the shared
+interactive network and its export controls.
+
+## Optional rapid branch support
+
+Use `--support-replicates 1000` (or more) to run a separate IQ-TREE UFBoot2
+inference with bootstrap NNI on the ClonalFrameML-filtered alignment. The default
+is `0`, disabled. The model is GTR+G; the requested seed and replicate count are
+recorded and included in resume fingerprints for single and ensemble runs.
+
+The supported Newick tree and IQ-TREE report are retained alongside a comparison
+of unrooted splits against the corrected tree. Only identical splits have matching
+support percentages; absent splits remain unassigned. This separate ML inference
+does not replace the ClonalFrameML tree or the topology passed to dating.
+Bootstrap support, temporal signal and node-date uncertainty are different results.
+
+The [IQ-TREE reference](https://github.com/iqtree/iqtree.github.io/blob/master/doc/Command-Reference.md)
+specifies at least 1,000 UFBoot replicates and describes the additional bootstrap
+NNI refinement. Inspect the saved `.iqtree` report for inference warnings.
 
 ## Temporal gate
 
-The default runs 20 date permutations with the least-squares root refitted for the
+The default runs 100 date permutations with the least-squares root refitted for the
 observed clock and every permutation. Maximal monophyletic clades sharing the
 same exact collection date string are the exchangeability units, following
 [Murray et al. 2016](https://doi.org/10.1111/2041-210X.12466). Tree topology is inferred
@@ -54,6 +76,11 @@ fewer than three distinct cluster dates or disabled assessment remain unsupporte
 A passing clustered screen does not establish model adequacy or remove every
 sampling bias. This is not the full-model CR2 uncertainty-overlap test.
 
+With 100 successful permutations the minimum attainable empirical p-value is
+1/101. `--randomisations 20` remains available for an explicitly smaller quick
+screen, with a minimum of 1/21 and much coarser resolution. Both requested and
+successful counts remain in the saved result; failed fits cannot improve support.
+
 `--no-assess-temporal` skips clock/permutation tools. Fewer than three usable
 distinct dates writes a complete tree product with an unsupported assessment.
 Tree never creates a time-scaled phylogeny; it saves `assessment.json` for time.
@@ -67,3 +94,16 @@ Both screens retain TSV and JSON audits, including thresholds, cohort median, me
 Native tree `--seed` controls both IQ-TREE inference and temporal permutations. The manifest records `phylogeny_seed` and `phylogeny_seed_policy: explicit_IQ_TREE`; these are bound into the resume fingerprint so older unseeded inference is not reused as seeded output. Legacy core callers without a supplied seed retain IQ-TREE default seed behavior.
 
 Native assembly trees select the highest-N50 reference from the input genomes, with deterministic sample-ID tie breaking. The shared inputs remain present in every alternative selection, so varying public context cannot change the mapping reference or its sequence hash. This fixes the reference basis across ensemble alternatives, although callable columns can still differ with cohort composition. The recorded `reference_selection_policy: highest_N50_common_input` is bound into both tree and ensemble fingerprints. A selection without input genomes fails. Legacy lineage reference selection remains unchanged.
+
+## Progress and failure status
+
+Normal CLI execution prints selected genome counts, the native tool currently
+running, its log path and elapsed completion time. Long native commands report
+that they are still running every 30 seconds. `chronoclade --quiet tree ...` hides
+these progress messages while retaining the final result and errors. No command
+arguments or credentials are copied into progress messages.
+
+A tree or time ensemble with any computationally failed runs exits 2, retaining
+its complete per-run manifest. A completed scientific result that does not support
+dating exits 0 and remains explicitly unsupported. Automation should check both
+the shell exit status and the saved per-run outcomes.

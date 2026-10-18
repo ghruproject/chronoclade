@@ -1,6 +1,7 @@
 """Country annotations from the same coherent history used by the location network."""
 
 from pathlib import Path
+from textwrap import fill
 
 from chronoclade.sample_labels import sample_labels
 from chronoclade.metadata_dates import date_interval
@@ -180,15 +181,20 @@ def draw_country_tree(
     ax.set_yticks([])
     ax.set_ylim(len(terminal_order), -1)
     ax.set_xlim(min(xs.values()) - span * 0.03, max(xs.values()) + span * 1.15)
-    ax.text(
-        0,
-        -0.04,
+    caption = (
         f"Showing {len(shown)} of {len(tips)} {sample_kind}. Ancestral colours show one optimal "
-        f"history; hollow nodes retain ambiguity. {dating_note}",
-        transform=ax.transAxes,
-        fontsize=9,
+        f"history; hollow nodes retain ambiguity. {dating_note}"
     )
-    fig.tight_layout()
+    height = fig.get_figheight()
+    fig.text(
+        0.02,
+        0.12 / height,
+        fill(caption, width=145),
+        fontsize=9,
+        va="bottom",
+    )
+    # Reserve physical space for the caption separately from ticks and axis title.
+    fig.tight_layout(rect=(0, 0.65 / height, 1, 1))
     fig.savefig(path, bbox_inches="tight")
     plt.close(fig)
     return str(path)

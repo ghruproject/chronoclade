@@ -601,7 +601,6 @@ def analyse_profiles(
             path = output / f"{cohort_id}_nj.nwk"
             Phylo.write(tree, str(path), "newick", format_branch_length="%.12g")
             cohort["tree_path"] = str(path)
-            import matplotlib.pyplot as plt
 
             if len(rows) >= 2:
                 tree_figure = output / f"{cohort_id}_nj.svg"
@@ -670,7 +669,6 @@ def analyse_profiles(
                 diagnostic = allele_unit_diagnostic(
                     diagnostic, len(loci), catalogue_complete=not any(
                         row.get("cgmlst_locus_universe_complete") is False for row in rows))
-            points = diagnostic["points"]
             summary["root_to_tip"].append(
                 {
                     "cohort_id": cohort_id,
@@ -682,38 +680,12 @@ def analyse_profiles(
                     + diagnostic["interpretation"],
                 }
             )
-            fig, ax = plt.subplots(figsize=(7, 5))
-            for point in points:
-                midpoint = (point["year_min"] + point["year_max"]) / 2
-                ax.errorbar(
-                    midpoint,
-                    point["root_to_tip"],
-                    xerr=[[midpoint - point["year_min"]], [point["year_max"] - midpoint]],
-                    fmt="o",
-                    alpha=0.65,
-                )
-            if diagnostic.get("slope") is not None and points:
-                years = np.array([min(point["year_min"] for point in points),
-                                  max(point["year_max"] for point in points)])
-                ax.plot(years, diagnostic["centered_intercept"] + diagnostic["slope"] *
-                        (years - diagnostic["reference_year"]), color="#333")
-            if not points:
-                ax.text(
-                    0.5,
-                    0.5,
-                    "No valid collection dates available",
-                    transform=ax.transAxes,
-                    ha="center",
-                )
-            ax.set(
-                xlabel="Collection year (date interval shown)",
-                ylabel=diagnostic["distance_units"],
+            from chronoclade.report_components.date_diagnostic import write_saved_date_figure
+            diagnostic_path = output / f"{cohort_id}_root_to_tip.svg"
+            write_saved_date_figure(
+                diagnostic, diagnostic_path,
                 title="Exploratory date diagnostic; arbitrary tip root",
             )
-            fig.tight_layout()
-            diagnostic_path = output / f"{cohort_id}_root_to_tip.svg"
-            fig.savefig(diagnostic_path)
-            plt.close(fig)
             cohort["root_to_tip_figure"] = str(diagnostic_path)
             network = _location_network(tree, rows, nearest)
         else:
@@ -735,7 +707,8 @@ def analyse_profiles(
             cohort['tree_groups_html'] = write_group_tree(
                 tree, rows, summary['sample_labels'], groups_by_id,
                 output / f'{cohort_id}_tree_groups.html',
-                distance_units=distance_units if distance_model else None)
+                distance_units=distance_units if distance_model else None,
+                group_basis='distance_threshold', group_threshold=distance_threshold)
             direct_coords = coords.copy()
             cohort['direct_pcoa_eigenvalues'] = cohort['pcoa_eigenvalues']
             cohort['direct_pcoa_positive_axis_fraction'] = cohort['pcoa_positive_axis_fraction']

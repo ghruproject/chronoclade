@@ -11,11 +11,13 @@ from pathlib import Path
 from chronoclade import __version__
 from chronoclade.artifacts import file_sha256, write_json
 from chronoclade.datasets import load_dataset
+from chronoclade.metadata_geography import aggregate_metadata_geography
 from chronoclade.profile_analysis import analyse_profiles
 from chronoclade.profile_report import write_profile_report
 from .report import write_partition_index
 from chronoclade.selection_manifest import load_selection_ensemble, write_selection_ensemble
-from chronoclade.context_partitions import partition_records, profile_records
+from chronoclade.context_partitions import partition_records, profile_records, validate_lin_level
+from chronoclade.progress import progress, progress_task
 
 
 @dataclass(frozen=True)
@@ -124,35 +126,77 @@ def add_metadata_summary(analysis, rows):
 
 
 def _add_state_networks(analysis, rows, directory):
-    """Reconstruct host observations on each exact saved country-view topology."""
+    """Reconstruct optional metadata states on each saved country-view topology."""
     from io import StringIO
     from Bio import Phylo
-    from chronoclade.location_network.reconstruction import build_state_network
+    from chronoclade.location_network.reconstruction import (
+        build_optional_state_networks,
+        is_input_sample,
+    )
 
-    hosts = []
+    networks_by_field = {"host": [], "region": [], "city": []}
     for location in analysis.get("location_network", []):
-        def reconstruct(model):
+        def reconstruct(model, *, parent_ids=None):
             newick = model.get("reconstruction", {}).get("newick")
             if not newick:
-                return None
+                return {}
             tree = Phylo.read(StringIO(newick), "newick")
-            network = build_state_network(tree, rows, analysis.get("nearest_neighbours", []),
-                                          state_field="host", tree_basis="cgmlst")
-            for field in ("cohort_id", "id", "label", "scope", "distance_method", "distance_units"):
-                if field in model:
-                    network[field] = model[field]
-            return network
-        host = reconstruct(location)
-        if host is None:
-            continue
-        host["views"] = [view for model in location.get("views", [])
-                         if (view := reconstruct(model)) is not None]
-        path = directory / f"{host['cohort_id']}_host_network.json"
-        write_json(path, host)
-        host["audit_path"] = str(path)
-        analysis["paths"][f"{host['cohort_id']}_host_network_audit"] = str(path)
-        hosts.append(host)
-    analysis["state_networks"] = {"country": analysis.get("location_network", []), "host": hosts}
+            tip_ids = {tip.name for tip in tree.get_terminals()}
+            scoped_rows = [row for row in rows if row.get("sample_id") in tip_ids]
+            input_ids = {
+                row["sample_id"] for row in scoped_rows
+                if is_input_sample(row)
+            }
+            if parent_ids is not None:
+                input_ids &= parent_ids
+            nearest = [
+                item for item in analysis.get("nearest_neighbours", [])
+                if item.get("query_id") in input_ids
+            ]
+            provenance = {
+                key: model[key] for key in (
+                    "cohort_id", "id", "label", "scope", "distance_method", "distance_units"
+                ) if key in model
+            }
+            networks = build_optional_state_networks(
+                tree, scoped_rows, tree_basis="cgmlst", nearest_neighbours=nearest,
+                provenance=provenance,
+            )
+            return networks
+
+        for field, network in reconstruct(location).items():
+            network["views"] = []
+            networks_by_field[field].append(network)
+        for view in location.get("views", []):
+            parent_ids = set(view.get("input_ids", []))
+            for field, network in reconstruct(view, parent_ids=parent_ids).items():
+                cohort = next(
+                    (item for item in networks_by_field[field]
+                     if item.get("cohort_id") == network.get("cohort_id")),
+                    None,
+                )
+                if cohort is not None:
+                    cohort["views"].append(network)
+
+    analysis["state_networks"] = {
+        "country": analysis.get("location_network", []),
+        **networks_by_field,
+    }
+    paths = analysis.setdefault("paths", {})
+    for field, networks in networks_by_field.items():
+        for network in networks:
+            cohort_id = network.get("cohort_id", "cohort")
+            path = directory / f"{cohort_id}_{field}_network.json"
+            network["audit_path"] = str(path)
+            write_json(path, network)
+            paths[f"{cohort_id}_{field}_network_audit"] = str(path)
+
+
+def _block_label(block):
+    label = "ST" + block["mlst_st"]
+    if block["kind"] == "st":
+        return label + " · supplied profiles (no lineage partition)"
+    return label + " · " + block["kind"] + " " + str(block["level"]) + " · " + ".".join(map(str, block["prefix"]))
 
 
 def run_cgmlst(
@@ -160,6 +204,10 @@ def run_cgmlst(
     output,
     *,
     lin_level=5,
+    partition_by="lineage",
+    display_lin_level=7,
+    context_lin_level=None,
+    backend="auto",
     hiercc_level=None,
     replicates=1,
     context_size=50,
@@ -174,6 +222,11 @@ def run_cgmlst(
     representative_reserve=0,
     resume=False,
 ):
+    if backend not in {"auto", "dense", "scale"}:
+        raise ValueError("backend must be auto, dense or scale")
+    if backend == "scale" and distance_method != "alleles":
+        raise ValueError("Scale backend supports allele profiles; direct DNA requires auto or dense")
+    validate_lin_level(display_lin_level, label="Display LIN level")
     dataset_manifest, output = Path(dataset_manifest).resolve(), Path(output).resolve()
     if distance_method not in {"alleles", "direct-dna"}:
         raise ValueError("distance_method must be alleles or direct-dna")
@@ -186,8 +239,16 @@ def run_cgmlst(
     if not 0 <= distance_threshold <= 1:
         raise ValueError("distance_threshold must be a mismatch fraction in [0,1]")
     dataset = load_dataset(dataset_manifest)
-    records = profile_records(dataset)
-    blocks, audit = partition_records(records, lin_level=lin_level, hiercc_level=hiercc_level)
+    records = profile_records(dataset, source_root=dataset_manifest)
+    if partition_by not in {"lineage", "st"}:
+        raise ValueError("partition_by must be lineage or st")
+    if partition_by == "st":
+        if context_lin_level is not None or hiercc_level is not None:
+            raise ValueError("ST profile-only partition cannot be combined with lineage-scope options")
+        from chronoclade.profile_partitions import partition_input_profiles
+        blocks, audit = partition_input_profiles(records)
+    else:
+        blocks, audit = partition_records(records, lin_level=lin_level, context_lin_level=context_lin_level, hiercc_level=hiercc_level)
     if not any(row["role"] == "input" for row in records):
         raise ValueError("cgmlst requires at least one input sample")
     # Immutable namespaces avoid overwriting another stage or earlier completed result.
@@ -224,17 +285,25 @@ def run_cgmlst(
                     "no samples have been discarded. Use allele profiles for larger blocks."
                 )
             models[block["block_id"]] = DNAComparator(allele_catalogue, block["records"])
+    from chronoclade.provider_hiercc import source_snapshot
     parameters = {
-        "distance_method": distance_method,
+        "provider_reported_hiercc": source_snapshot(records),
+        "distance_method": distance_method, "partition_by": partition_by,
         "allele_catalogue": str(Path(allele_catalogue).resolve()) if allele_catalogue else None,
-        "lin_level": lin_level, "hiercc_level": hiercc_level,
+        "lin_level": lin_level, "display_lin_level": display_lin_level,
+        "context_lin_level": context_lin_level, "backend": backend,
+        "selection_group_lin_level": 7 if hiercc_level is None and partition_by == "lineage" else None,
+        "hiercc_level": hiercc_level,
         "replicates": replicates, "context_size": context_size,
         "representative_reserve": representative_reserve,
         "nearest_per_query": nearest_per_query, "include": include or [],
         "seed": seed, "bootstrap_replicates": bootstrap_replicates,
         "min_overlap": min_overlap, "distance_threshold": distance_threshold,
     }
+    from chronoclade.execution_provenance import execution_provenance
+    computed_with = execution_provenance("cgmlst", "categorical-profile-analysis-v1", software_version=__version__)
     identity = {
+        "computed_with": computed_with,
         "schema": "chronoclade.cgmlst.resume", "schema_version": 1,
         "software_version": __version__, "parameters": parameters,
         "dataset_sha256": file_sha256(dataset_manifest),
@@ -272,13 +341,23 @@ def run_cgmlst(
     }
     write_json(partition_path, partition_evidence)
     products = []
-    for block in blocks:
+    for block_index, block in enumerate(blocks, start=1):
         directory = output / block["block_id"]
         rows = block["records"]
         queries = [row for row in rows if row["role"] == "input"]
         contexts = [row for row in rows if row["role"] == "context"]
+        profiles_available = sum(
+            bool(row.get("cgmlst_profile") or row.get("cgmlst_novel_alleles")) for row in rows
+        )
+        progress(
+            "cgmlst",
+            f"Block {block_index}/{len(blocks)}: {len(queries)} inputs, "
+            f"{len(contexts)} contexts, {profiles_available}/{len(rows)} profiles available",
+        )
         from chronoclade.profile_analysis import MAX_RECORDS
-        large = len(rows) > MAX_RECORDS
+        if backend == "dense" and len(rows) > MAX_RECORDS:
+            raise ValueError(f"Dense backend supports at most {MAX_RECORDS} records per block")
+        large = backend == "scale" or (backend == "auto" and len(rows) > MAX_RECORDS)
         actual_bootstraps = (0 if large else 30) if bootstrap_replicates is None else bootstrap_replicates
         if large:
             from chronoclade.cgmlst.scale import analyse_profiles_scale
@@ -295,18 +374,27 @@ def run_cgmlst(
                     raise ValueError(f"cgmlst resume numerical artifact changed: {relative}")
             analysis = _restore_artifact_paths(saved["analysis"], directory)
         else:
-            analysis = engine(
-                rows,
-                output=directory,
-                seed=seed,
-                min_overlap=min_overlap,
-                bootstrap_replicates=actual_bootstraps,
-                distance_threshold=distance_threshold,
-                tree_limit=max(2, len(rows)),
-                **({"distance_model": distance_model} if distance_model else {}),
-            )
+            with progress_task(
+                "cgmlst",
+                f"block {block_index}/{len(blocks)} numerical analysis",
+                details=(
+                    f"{len(rows)} records; {len(queries)} inputs; {len(contexts)} contexts; "
+                    f"{profiles_available} profiles"
+                ),
+            ):
+                analysis = engine(
+                    rows,
+                    output=directory,
+                    seed=seed,
+                    min_overlap=min_overlap,
+                    bootstrap_replicates=actual_bootstraps,
+                    distance_threshold=distance_threshold,
+                    tree_limit=max(2, len(rows)),
+                    **({"distance_model": distance_model} if distance_model else {}),
+                )
             if distance_model:
                 analysis["paths"]["sequence_comparison_audit"] = str(distance_model.save_audit(directory))
+            analysis["computed_with"] = computed_with
             # Publish before report enrichment or selection packaging can fail.
             # Report widgets are regenerated; protect the underlying numerical evidence.
             artifacts = {
@@ -324,16 +412,10 @@ def run_cgmlst(
         analysis.setdefault("distance_definition", "fraction of mismatching jointly called cgMLST loci")
         analysis.setdefault("distance_units", "cgMLST mismatch fraction")
         analysis.setdefault("raw_difference_field", "allele_differences")
+        analysis["rendered_with"] = computed_with
         analysis.update(
             species=block["species"],
-            lineage="ST"
-            + block["mlst_st"]
-            + " · "
-            + block["kind"]
-            + " "
-            + str(block["level"])
-            + " · "
-            + ".".join(map(str, block["prefix"])),
+            lineage=_block_label(block),
             partition={key: value for key, value in block.items() if key != "records"},
         )
         excluded_ids = {row["sample_id"] for row in analysis["exclusions"]}
@@ -341,24 +423,20 @@ def run_cgmlst(
         analysis["status"] = "complete" if analysed_inputs == len(queries) else "partial"
         analysis["coverage"]["analysed_inputs"] = analysed_inputs
         analysis["coverage"]["total_inputs"] = len(queries)
-        composition = Counter(
-            (
-                row["origin"],
-                row.get("country") or "Unknown",
-                row.get("region") or "Unknown",
-                row.get("nuts2") or "Unknown",
-            )
-            for row in rows
-        )
-        analysis["metadata_geography"] = [
-            dict(origin=key[0], country=key[1], region=key[2], nuts2=key[3], count=count)
-            for key, count in sorted(composition.items())
-        ]
+        analysis["metadata_geography"] = aggregate_metadata_geography(rows)
         add_metadata_summary(analysis, rows)
         from chronoclade.report_components.root_comparison import add_root_comparisons
-        add_root_comparisons(analysis, rows, directory)
-        from chronoclade.report_components.lineage_groups import render_lineage_groups
-        render_lineage_groups(analysis, rows, directory)
+        with progress_task(
+            "cgmlst",
+            f"block {block_index}/{len(blocks)} root/date diagnostics",
+            details=f"{len(rows)} records",
+        ):
+            add_root_comparisons(analysis, rows, directory)
+        from chronoclade.report_components.lineage_groups import assign_lineage_groups, render_lineage_groups
+        # Presentation depth must not silently change representative selection strata.
+        selection_groups = dict(analysis)
+        assign_lineage_groups(selection_groups, rows, level=7)
+        render_lineage_groups(analysis, rows, directory, level=display_lin_level)
         _add_state_networks(analysis, rows, directory)
         block_include = [alias for alias, ident in requested.items()
                          if ident in {row["sample_id"] for row in contexts}]
@@ -368,26 +446,34 @@ def run_cgmlst(
             "include": block_include, "seed": seed, "replicates": replicates,
         }
         ensemble_path = directory / "selection_bundle" / "ensemble.json"
-        if resume and ensemble_path.is_file():
-            _validate_resumed_ensemble(
-                ensemble_path, analysis, dataset_manifest, partition_path,
-                block["block_id"], selection_parameters,
-            )
-        else:
-            ensemble_path = write_selection_ensemble(
-                queries,
-                contexts,
-                {**analysis, 'genetic_groups': analysis.get('lineage_groups', analysis['genetic_groups'])},
-                dataset_manifest=dataset_manifest,
-                output=directory / "selection_bundle",
-                replicates=replicates,
-                size=context_size,
-                representative_reserve=representative_reserve,
-                nearest_per_query=nearest_per_query,
-                include=block_include,
-                seed=seed,
-                partition_manifest=partition_path,
-            )
+        with progress_task(
+            "cgmlst",
+            f"block {block_index}/{len(blocks)} selection bundle",
+            details=(
+                f"{replicates} replicate(s); requested context budget {context_size}; "
+                "mandatory neighbours may expand it"
+            ),
+        ):
+            if resume and ensemble_path.is_file():
+                _validate_resumed_ensemble(
+                    ensemble_path, analysis, dataset_manifest, partition_path,
+                    block["block_id"], selection_parameters,
+                )
+            else:
+                ensemble_path = write_selection_ensemble(
+                    queries,
+                    contexts,
+                    {**analysis, 'genetic_groups': selection_groups.get('lineage_groups', analysis['genetic_groups'])},
+                    dataset_manifest=dataset_manifest,
+                    output=directory / "selection_bundle",
+                    replicates=replicates,
+                    size=context_size,
+                    representative_reserve=representative_reserve,
+                    nearest_per_query=nearest_per_query,
+                    include=block_include,
+                    seed=seed,
+                    partition_manifest=partition_path,
+                )
         provenance = {
             "input_partition": {
                 "total_inputs": sum(row['role'] == 'input' for row in records),
@@ -395,6 +481,8 @@ def run_cgmlst(
                 "blocks": len(blocks),
                 "assigned_inputs": sum(row['role'] == 'input' for item in blocks for row in item['records']),
             },
+            "relatedness_parameters": parameters,
+            "relatedness_audit": audit,
             "source_dataset": dataset.dataset_id,
             "distance_method": distance_method,
             "sequence_catalogue": distance_model.provenance if distance_model else None,
@@ -419,19 +507,19 @@ def run_cgmlst(
             provenance=provenance,
             report_label="cgMLST profile report",
             group_index_href="../index.html",
+            relatedness_records=rows,
+        )
+        progress(
+            "cgmlst",
+            f"Block {block_index}/{len(blocks)} report complete: "
+            f"{analysed_inputs}/{len(queries)} inputs analysed, {len(contexts)} contexts; "
+            f"backend={'scale' if large else 'dense'}, distance={distance_method}",
         )
         write_json(directory / "profile_analysis.json", _relative_artifacts(analysis, directory))
         products.append(
             {
                 "block_id": block["block_id"],
-                "label": "ST"
-                + block["mlst_st"]
-                + " · "
-                + block["kind"]
-                + " "
-                + str(block["level"])
-                + " · "
-                + ".".join(map(str, block["prefix"])),
+                "label": _block_label(block),
                 "input_count": len(queries),
                 "analysed_input_count": analysed_inputs,
                 "analysis_status": analysis["status"],
@@ -449,7 +537,8 @@ def run_cgmlst(
         )
     status = (
         "complete"
-        if blocks and not audit["unresolved_inputs"] and all(
+        if blocks and not audit["unresolved_inputs"]
+        and not audit.get("unresolved_context_scope_inputs") and all(
             product["analysis_status"] == "complete" for product in products)
         else "partial"
         if blocks
@@ -459,6 +548,8 @@ def run_cgmlst(
         products,
         audit,
         records_count=len(records),
+        display_lin_level=display_lin_level,
+        profile_context={**(dataset.parameters.get("profile_context") or {}), "provider_reported_hiercc": parameters.get("provider_reported_hiercc")},
         lin_level=lin_level,
         hiercc_level=hiercc_level,
         status=status,
@@ -466,6 +557,7 @@ def run_cgmlst(
     )
     manifest = {
         "schema": "chronoclade.cgmlst.analysis",
+        "computed_with": computed_with, "rendered_with": computed_with,
         "schema_version": 1,
         "software_version": __version__,
         "status": status,
@@ -484,4 +576,12 @@ def run_cgmlst(
     write_json(manifest_path, manifest)
     from chronoclade.report_components.output_guide import write_output_guide
     write_output_guide(output, blocks=products)
+    progress(
+        "cgmlst",
+        f"Stage summary: {len(blocks)} block(s), "
+        f"{sum(row['role'] == 'input' for row in records)} input(s), "
+        f"{sum(row['role'] == 'context' for row in records)} context(s), "
+        f"{sum(bool(row.get('cgmlst_profile') or row.get('cgmlst_novel_alleles')) for row in records)} profiles; "
+        f"status={status}; report and output guide written",
+    )
     return CGMLSTResult(manifest_path, report_path)

@@ -15,9 +15,13 @@ import subprocess
 import tarfile
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Sequence
+
+from chronoclade.artifacts import file_sha256, write_json
+from chronoclade.progress import progress, progress_task
+from chronoclade.plincer_scheme import prepare_scheme, validate_scheme, SchemeValidationError
 
 
 UPSTREAM = {
@@ -55,6 +59,7 @@ SPECIES = {
     "klebsiella": {
         "name": "Klebsiella pneumoniae",
         "mlst_scheme": "klebsiella_1",
+        "mlst_scheme_id": "18",
         "lineage_tool": "plincer",
         "lineage_scheme": "scgMLST629_S",
         "lineage_database": "Pasteur BIGSdb",
@@ -63,6 +68,7 @@ SPECIES = {
     "ecoli": {
         "name": "Escherichia coli",
         "mlst_scheme": "ecoli_1",
+        "mlst_scheme_id": "Escherichia.cgMLSTv1",
         "lineage_tool": "hclink",
         "lineage_scheme": "Escherichia.cgMLSTv1",
         "lineage_database": "EnteroBase HierCC",
@@ -81,6 +87,7 @@ def _run(
     cwd: Path | None = None,
     timeout: int = 1800,
     env: Mapping[str, str] | None = None,
+    log_path: Path | None = None,
 ) -> str:
     try:
         result = subprocess.run(
@@ -94,6 +101,10 @@ def _run(
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise TypingSetupError(f"Setup command failed: {Path(args[0]).name}") from exc
+    if log_path is not None:
+        # Opt-in only for credential-free native indexing, never auth/download tools.
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.write_text(result.stdout + "\n" + result.stderr)
     if result.returncode:
         # Tool output can contain remote-service details; do not echo it into reports.
         raise TypingSetupError(
@@ -267,7 +278,7 @@ def _database_state(root: Path, species: str) -> dict[str, Any]:
     lineage = root / "databases" / spec["lineage_tool"]
     if species == "klebsiella":
         required = [
-            lineage / "scheme.toml",
+            lineage / "scheme.published.toml",
             lineage / "profiles.json.xz",
             lineage / "alleles.sqlite",
             lineage / "metadata.json",
@@ -280,11 +291,51 @@ def _database_state(root: Path, species: str) -> dict[str, Any]:
             lineage / "alleles.db",
             lineage / "ST.txt.xz",
         ]
-    cgmlst_ready = index.is_dir() and any(index.iterdir())
-    lineage_ready = all(path.is_file() for path in required)
-    missing = ([] if cgmlst_ready else [str(index)]) + [
-        str(path) for path in required if not path.is_file()
+    try:
+        from chronoclade.query_typing import validate_cgmlst_index
+
+        caller_version = _database_version(root, species, "cgmlst")
+        if caller_version is None:
+            raise TypingSetupError("cgMLST scheme version is missing")
+        validate_cgmlst_index(index, spec["mlst_scheme"], caller_version)
+        cgmlst_ready = True
+    except (OSError, ValueError):
+        # Incomplete or malformed caller indexes are unready, not fatal to the
+        # setup report.
+        cgmlst_ready = False
+    lineage_missing = [
+        path
+        for path in required
+        if not path.is_file() or path.stat().st_size == 0
     ]
+    metadata_path = lineage / "metadata.json"
+    loci_path = metadata_path if species == "klebsiella" else lineage / "loci.json"
+    try:
+        metadata = json.loads(metadata_path.read_text())
+        loci_metadata = json.loads(loci_path.read_text())
+        genes = loci_metadata.get("genes") if isinstance(loci_metadata, dict) else None
+        if (
+            not isinstance(genes, list)
+            or not genes
+            or any(not isinstance(gene, str) or not gene for gene in genes)
+            or len(set(genes)) != len(genes)
+        ):
+            raise ValueError
+        if species == "klebsiella":
+            if not isinstance(metadata.get("last_updated"), str) or not metadata["last_updated"].strip():
+                raise ValueError
+        else:
+            date.fromisoformat(str(metadata["datestamp"]).split("T", 1)[0].split(" ", 1)[0])
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        if metadata_path not in lineage_missing:
+            lineage_missing.append(metadata_path)
+    if species == "klebsiella" and (lineage / "scheme.published.toml").is_file():
+        try:
+            validate_scheme(lineage / "scheme.published.toml")
+        except (OSError, SchemeValidationError):
+            lineage_missing.append(lineage / "scheme.published.toml")
+    lineage_ready = not lineage_missing
+    missing = ([] if cgmlst_ready else [str(index)]) + [str(path) for path in lineage_missing]
     return {
         "ready": cgmlst_ready and lineage_ready,
         "cgmlst_ready": cgmlst_ready,
@@ -294,7 +345,7 @@ def _database_state(root: Path, species: str) -> dict[str, Any]:
         "lineage_database": str(lineage),
         "missing_resources": missing,
         "lineage_database_authentication": spec["credential"],
-        "public_cgmlst_data": "The official downloader permits unauthenticated public records through 2024-12-31.",
+        "cgmlst_access_scope": _cgmlst_access_scope(root, species),
     }
 
 
@@ -348,7 +399,7 @@ def _query_config(root: Path, species: list[str], tools: Mapping[str, Any]) -> d
                 "scheme": spec["lineage_scheme"],
                 "scheme_version": lineage_version,
                 "tool_version": f"plincer {lineage_tool['version']}@{lineage_tool['commit']}",
-                "scheme_file": str(root / "databases" / "plincer" / "scheme.toml"),
+                "scheme_file": str(root / "databases" / "plincer" / "scheme.published.toml"),
                 "profiles_file": str(root / "databases" / "plincer" / "profiles.json.xz"),
                 "alleles_db": str(root / "databases" / "plincer" / "alleles.sqlite"),
                 "loci_file": str(root / "databases" / "plincer" / "metadata.json"),
@@ -376,11 +427,129 @@ def _query_config(root: Path, species: list[str], tools: Mapping[str, Any]) -> d
     }
 
 
+def _cgmlst_access_scope(root: Path, species: str) -> str:
+    """Return a verified download route only while it matches the saved selection."""
+    spec = SPECIES[species]
+    data_dir = root / "databases" / "mlst-schemes"
+    selection = data_dir / f"{spec['mlst_scheme']}-selection.json"
+    evidence_path = data_dir / f"{spec['mlst_scheme']}-download.json"
+    try:
+        evidence = json.loads(evidence_path.read_text())
+        selected = json.loads(selection.read_text())
+        records = selected.get("schemes", [])
+        if (
+            evidence.get("schema") != "chronoclade.typing-database-download"
+            or evidence.get("schema_version") != 1
+            or evidence.get("scheme") != spec["mlst_scheme"]
+            or str(evidence.get("scheme_id", "")) != str(spec.get("mlst_scheme_id", ""))
+            or len(records) != 1
+            or records[0].get("shortname") != spec["mlst_scheme"]
+            or str(records[0].get("scheme_id", ""))
+            != str(spec.get("mlst_scheme_id", ""))
+            or evidence.get("scheme_version") != records[0].get("last_updated")
+            or evidence.get("selection_sha256") != file_sha256(selection)
+            or evidence.get("access_mode") not in {"authenticated", "public_unauthenticated"}
+        ):
+            return "unverified"
+        if evidence.get("access_method") == "frozen_enterobase_index":
+            record = records[0]
+            reference_path = root / "databases" / "enterobase" / spec["mlst_scheme_id"] / "reference.json"
+            if (species != "ecoli" or evidence.get("access_mode") != "public_unauthenticated"
+                    or evidence.get("reference_manifest_sha256") != file_sha256(reference_path)
+                    or evidence.get("reference_sha256") != record.get("reference_sha256")
+                    or json.loads(reference_path.read_text()).get("reference_sha256") != record.get("reference_sha256")
+                    or evidence.get("scheme_version") != "snapshot:" + record["reference_sha256"]):
+                return "unverified"
+        elif evidence.get("source_commit") != UPSTREAM["typing_databases"]["commit"]:
+            return "unverified"
+        return evidence["access_mode"]
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return "unverified"
+
+
+_CACHED_PASTEUR_DOWNLOADER_ADAPTER = """\
+from download_schemes.download_schemes import app
+from download_schemes.keycache import KeyCache
+
+_upstream_can_authenticate = KeyCache.can_authenticate
+
+def _can_authenticate_with_cached_access(self, host):
+    if host == "pasteur":
+        return self.has_key("consumer", host) and (
+            self.has_key("access", host, "klebsiella")
+            or self.has_key("session", host, "klebsiella")
+        )
+    return _upstream_can_authenticate(self, host)
+
+KeyCache.can_authenticate = _can_authenticate_with_cached_access
+app()
+"""
+
+
+def _prepare_cached_pasteur_download(root: Path, secrets_file: Path) -> dict[str, Path]:
+    """Prepare an isolated downloader cache using a pre-authorized Pasteur token."""
+    credential_root = root / "credential-cache"
+    credential_root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    credential_root.chmod(0o700)
+    source_cache = credential_root / "plincer.json"
+    try:
+        cache = json.loads(source_cache.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise TypingSetupError(
+            "Authenticated Pasteur cgMLST download requires the existing Plincer token cache"
+        ) from exc
+    if not isinstance(cache, dict):
+        raise TypingSetupError("Existing Plincer token cache must contain a JSON object")
+    pasteur = cache.get("pasteur")
+    if not isinstance(pasteur, dict):
+        pasteur = {}
+    def valid_cached_key(name: str) -> bool:
+        key = pasteur.get(f"klebsiella:{name}")
+        return (
+            isinstance(key, dict)
+            and isinstance(key.get("TOKEN"), str)
+            and bool(key["TOKEN"].strip())
+            and isinstance(key.get("TOKEN SECRET"), str)
+            and bool(key["TOKEN SECRET"].strip())
+        )
+
+    if not (valid_cached_key("access") or valid_cached_key("session")):
+        raise TypingSetupError(
+            "Authenticated Pasteur cgMLST download requires a cached klebsiella access or "
+            "session token; run authorize-pasteur with the same --destination first"
+        )
+    cached_tokens = {
+        f"klebsiella:{name}": pasteur[f"klebsiella:{name}"]
+        for name in ("access", "session")
+        if valid_cached_key(name)
+    }
+
+    downloader_root = credential_root / "typing-databases"
+    downloader_root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    downloader_root.chmod(0o700)
+    secrets_path = downloader_root / "pasteur-secrets.json"
+    cache_path = downloader_root / "pasteur-cache.json"
+    _normalise_pasteur_secrets(secrets_file, secrets_path, consumer_only=True)
+    _write_private_json(cache_path, {"pasteur": cached_tokens})
+    return {"secrets_file": secrets_path, "cache_file": cache_path}
+
+
 def _prepare_public_cgmlst(
-    uv: str, root: Path, species: str, tools: dict[str, Any]
+    uv: str,
+    root: Path,
+    species: str,
+    tools: dict[str, Any],
+    *,
+    pasteur_secrets: Path | None = None,
 ) -> dict[str, Any]:
-    """Fetch the unauthenticated public scheme snapshot and build its cgps-mlst index."""
+    """Fetch the public snapshot or, for Klebsiella, a cached-auth Pasteur snapshot."""
+    if species == "ecoli":
+        return _prepare_enterobase_cgmlst(root, species, tools)
     source = UPSTREAM["typing_databases"]
+    authenticated = species == "klebsiella" and pasteur_secrets is not None
+    auth_files = (
+        _prepare_cached_pasteur_download(root, pasteur_secrets) if authenticated else None
+    )
     checkout = _clone_at("typing_databases", root / "sources" / "typing_databases")
     env_dir = root / "venvs" / "typing_databases"
     interpreter = _python_env(uv, env_dir, "3.11")
@@ -398,10 +567,7 @@ def _prepare_public_cgmlst(
     data_dir = root / "databases" / "mlst-schemes"
     data_dir.mkdir(parents=True, exist_ok=True)
     selected_file = data_dir / f"{spec['mlst_scheme']}-selection.json"
-    # Intentionally omit --secrets-file. The upstream downloader then requests
-    # only public, redistributable records and does not inspect user credentials.
-    _run(
-        [
+    download_command = [
             str(downloader),
             "--scheme",
             spec["mlst_scheme"],
@@ -410,7 +576,23 @@ def _prepare_public_cgmlst(
             "--output-schemes-file",
             str(selected_file),
             "--fail-on-error",
-        ],
+        ]
+    if authenticated:
+        # The pinned upstream predicate ignores cached access/session tokens.
+        # Invoke its unchanged entry point through a narrow adapter that reports
+        # Pasteur as authenticated only when the exact cached Klebsiella token exists.
+        download_command = [
+            str(interpreter),
+            "-c",
+            _CACHED_PASTEUR_DOWNLOADER_ADAPTER,
+            *download_command[1:],
+            "--secrets-file",
+            str(auth_files["secrets_file"]),
+            "--secrets-cache-file",
+            str(auth_files["cache_file"]),
+        ]
+    _run(
+        download_command,
         cwd=checkout,
         timeout=7200,
     )
@@ -419,6 +601,9 @@ def _prepare_public_cgmlst(
         records = selected.get("schemes", [])
         if len(records) != 1 or records[0].get("shortname") != spec["mlst_scheme"]:
             raise ValueError
+        expected_scheme_id = spec.get("mlst_scheme_id")
+        if expected_scheme_id is not None and str(records[0].get("scheme_id")) != expected_scheme_id:
+            raise ValueError
         scheme_path = Path(records[0]["db_path"])
         if not scheme_path.is_absolute():
             scheme_path = (data_dir / scheme_path).resolve()
@@ -426,40 +611,25 @@ def _prepare_public_cgmlst(
         if not scheme_version or not scheme_path.is_dir():
             raise ValueError
     except (OSError, ValueError, KeyError, TypeError) as exc:
-        raise TypingSetupError("Public cgMLST download did not produce a validated scheme") from exc
+        raise TypingSetupError("cgMLST download did not produce the expected validated scheme") from exc
 
-    # The indexer reads schemes.json beneath --database and then resolves each
-    # db_path against that same directory. The downloader's selected file uses
-    # the original absolute download path, so give this individual scheme its
-    # own manifest and a local path rather than altering other scheme records.
-    index_manifest = dict(records[0], db_path=".")
-    (scheme_path / "schemes.json").write_text(
-        json.dumps({"schemes": [index_manifest]}, indent=2) + "\n"
-    )
-    index_dir = root / "databases" / "mlst-index" / spec["mlst_scheme"]
-    index_dir.parent.mkdir(parents=True, exist_ok=True)
-    npm = tools["mlst"]["npm"]
-    _run(
-        [
-            npm,
-            "run",
-            "index",
-            "--",
-            f"--scheme={spec['mlst_scheme']}",
-            f"--index={index_dir}",
-            f"--database={scheme_path}",
-        ],
-        cwd=Path(tools["mlst"]["source"]),
-        timeout=7200,
-        env={
-            **os.environ,
-            "PATH": str(Path(tools["mlst"]["command"][0]).parent)
-            + os.pathsep
-            + os.environ.get("PATH", ""),
+    access_mode = "authenticated" if authenticated else "public_unauthenticated"
+    write_json(
+        data_dir / f"{spec['mlst_scheme']}-download.json",
+        {
+            "schema": "chronoclade.typing-database-download",
+            "schema_version": 1,
+            "scheme": spec["mlst_scheme"],
+            "scheme_id": str(records[0].get("scheme_id", "")),
+            "scheme_version": scheme_version,
+            "access_mode": access_mode,
+            "access_method": "cached_access_or_session_token" if authenticated else "public_route",
+            "source_commit": source["commit"],
+            "selection_sha256": file_sha256(selected_file),
         },
     )
-    if not index_dir.is_dir() or not any(index_dir.iterdir()):
-        raise TypingSetupError("cgps-mlst indexing completed without an index")
+
+    index_dir = _index_cgmlst(root, spec, records[0], scheme_path, tools)
     return {
         "status": "built",
         "scheme": spec["mlst_scheme"],
@@ -467,9 +637,87 @@ def _prepare_public_cgmlst(
         "index_path": str(index_dir),
         "source": source["url"],
         "source_commit": source["commit"],
-        "scope": "Unauthenticated public records; upstream cutoff 2024-12-31.",
+        "access_mode": access_mode,
+        "scope": (
+            "Authenticated Pasteur access via a pre-existing cached token; exact downloaded "
+            "scheme identity and version are recorded."
+            if authenticated
+            else "Unauthenticated public/redistributable records; exact downloaded scheme "
+            "identity and version are recorded."
+        ),
         "scheme_version": scheme_version,
     }
+
+
+def _index_cgmlst(root, spec, record, scheme_path, tools):
+    # The indexer reads schemes.json beneath --database and then resolves each
+    # db_path against that same directory. The downloader's selected file uses
+    # the original absolute download path, so give this individual scheme its
+    # own manifest and a local path rather than altering other scheme records.
+    index_manifest = dict(record, db_path=".")
+    (scheme_path / "schemes.json").write_text(
+        json.dumps({"schemes": [index_manifest]}, indent=2) + "\n"
+    )
+    index_dir = root / "databases" / "mlst-index" / spec["mlst_scheme"]
+    index_dir.parent.mkdir(parents=True, exist_ok=True)
+    npm = tools["mlst"]["npm"]
+    index_log = root / "logs" / f"{spec['mlst_scheme']}-index.log"
+    progress("setup", f"{spec['mlst_scheme']}: building pinned native caller index; "
+             "this can take several minutes for large allele catalogues")
+    with progress_task("setup", f"{spec['mlst_scheme']} native caller indexing",
+                       details=f"index directory {index_dir}; native log {index_log}"):
+        _run(
+            [
+                npm,
+                "run",
+                "index",
+                "--",
+                f"--scheme={spec['mlst_scheme']}",
+                f"--index={index_dir}",
+                f"--database={scheme_path}",
+            ],
+            cwd=Path(tools["mlst"]["source"]),
+            timeout=7200,
+            log_path=index_log,
+            env={
+                **os.environ,
+                "PATH": str(Path(tools["mlst"]["command"][0]).parent)
+                + os.pathsep
+                + os.environ.get("PATH", ""),
+            },
+        )
+    if not index_dir.is_dir() or not any(index_dir.iterdir()):
+        raise TypingSetupError("cgps-mlst indexing completed without an index")
+    progress("setup", f"{spec['mlst_scheme']}: native caller index written to {index_dir}")
+    return index_dir
+
+
+def _prepare_enterobase_cgmlst(root, species, tools):
+    from chronoclade.enterobase_caller import prepare_caller_scheme
+
+    spec = SPECIES[species]
+    try:
+        record = prepare_caller_scheme(root, spec["mlst_scheme_id"], spec["mlst_scheme"])
+    except (OSError, ValueError) as error:
+        raise TypingSetupError("Public EnteroBase allele reference could not be prepared") from error
+    data_dir = root / "databases" / "mlst-schemes"
+    selection = data_dir / f"{spec['mlst_scheme']}-selection.json"
+    write_json(selection, {"schemes": [record]})
+    write_json(data_dir / f"{spec['mlst_scheme']}-download.json", {
+        "schema": "chronoclade.typing-database-download", "schema_version": 1,
+        "scheme": spec["mlst_scheme"], "scheme_id": spec["mlst_scheme_id"],
+        "scheme_version": record["last_updated"], "access_mode": "public_unauthenticated",
+        "access_method": "frozen_enterobase_index", "selection_sha256": file_sha256(selection),
+        "reference_sha256": record["reference_sha256"],
+        "reference_manifest_sha256": file_sha256(record["reference_manifest"]),
+    })
+    index_dir = _index_cgmlst(root, spec, record, Path(record["db_path"]), tools)
+    return {"status": "built", "scheme": spec["mlst_scheme"],
+            "data_path": record["db_path"], "index_path": str(index_dir),
+            "source": "https://enterobase.warwick.ac.uk/schemes/" + spec["mlst_scheme_id"] + "/",
+            "reference_sha256": record["reference_sha256"],
+            "scheme_version": record["last_updated"], "access_mode": "public_unauthenticated",
+            "scope": "Frozen public allele definitions; HierCC reference readiness is checked separately."}
 
 
 def _build_plincer_db(root: Path, tool: Mapping[str, Any], secrets_file: Path) -> dict[str, Any]:
@@ -478,8 +726,11 @@ def _build_plincer_db(root: Path, tool: Mapping[str, Any], secrets_file: Path) -
     checkout = Path(tool["source"])
     output = root / "databases" / "plincer"
     output.mkdir(parents=True, exist_ok=True)
-    scheme_file = output / "scheme.toml"
-    shutil.copy2(checkout / "scheme.toml", scheme_file)
+    scheme_file = output / "scheme.published.toml"
+    try:
+        scheme_correction = prepare_scheme(checkout / "scheme.toml", scheme_file)
+    except (OSError, SchemeValidationError) as exc:
+        raise TypingSetupError("plincer assignment scheme validation failed") from exc
     profiles = output / "profiles.json.xz"
     metadata = output / "metadata.json"
     alleles = output / "alleles.sqlite"
@@ -487,6 +738,11 @@ def _build_plincer_db(root: Path, tool: Mapping[str, Any], secrets_file: Path) -
     credential_cache = root / "credential-cache"
     credential_cache.mkdir(parents=True, exist_ok=True, mode=0o700)
     credential_cache.chmod(0o700)
+    normalized_secrets = credential_cache / "pasteur-secrets.json"
+    _normalise_pasteur_secrets(secrets_file, normalized_secrets)
+    token_cache = credential_cache / "plincer.json"
+    _ensure_plincer_token_cache(token_cache)
+    _check_plincer_authorization_inputs(normalized_secrets, token_cache)
     command = [
         *tool["command"],
         "build",
@@ -499,9 +755,9 @@ def _build_plincer_db(root: Path, tool: Mapping[str, Any], secrets_file: Path) -
         "--alleles-db",
         str(alleles),
         "--secrets-file",
-        str(secrets_file.expanduser().resolve()),
+        str(normalized_secrets),
         "--secrets-cache-file",
-        str(credential_cache / "plincer.json"),
+        str(token_cache),
         "--host-config-file",
         str(checkout / "host_config.json"),
         "--scratch-dir",
@@ -524,7 +780,111 @@ def _build_plincer_db(root: Path, tool: Mapping[str, Any], secrets_file: Path) -
         "scheme": SPECIES["klebsiella"]["lineage_scheme"],
         "scheme_version": scheme_version,
         "database_path": str(output),
+        "scheme_correction": scheme_correction,
     }
+
+
+def _normalise_pasteur_secrets(
+    source: Path, destination: Path, *, consumer_only: bool = False
+) -> None:
+    """Convert a Pasteur-issued client-key letter or upstream JSON to plincer JSON."""
+    try:
+        raw = source.read_bytes()
+        try:
+            text = raw.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            text = raw.decode("cp1252")
+    except (OSError, UnicodeError) as exc:
+        raise TypingSetupError("Cannot read Pasteur credentials file") from exc
+
+    try:
+        value = json.loads(text)
+    except json.JSONDecodeError:
+        import re
+
+        fields = {}
+        for line in text.splitlines():
+            match = re.match(r"\s*(Client\s+(?:id|secret))\s*:?\s+(.+?)\s*$", line, re.I)
+            if match:
+                fields[match.group(1).casefold()] = match.group(2)
+        client_id = fields.get("client id")
+        client_secret = fields.get("client secret")
+        if not client_id or not client_secret:
+            raise TypingSetupError(
+                "Pasteur credentials must be upstream JSON or a letter with Client id and Client secret"
+            )
+        value = {"pasteur": {"consumer": {"TOKEN": client_id, "TOKEN SECRET": client_secret}}}
+
+    try:
+        consumer = value["pasteur"]["consumer"]
+        if not isinstance(consumer.get("TOKEN"), str) or not consumer["TOKEN"].strip():
+            raise ValueError
+        if not isinstance(consumer.get("TOKEN SECRET"), str) or not consumer["TOKEN SECRET"].strip():
+            raise ValueError
+    except (TypeError, KeyError, ValueError, AttributeError) as exc:
+        raise TypingSetupError(
+            "Pasteur JSON credentials require pasteur.consumer TOKEN and TOKEN SECRET"
+        ) from exc
+    if consumer_only:
+        # The authenticated downloader uses its separate token cache. Never copy
+        # account passwords or unrelated OAuth cache entries into that route.
+        value = {"pasteur": {"consumer": consumer}}
+
+    destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    destination.parent.chmod(0o700)
+    _write_private_json(destination, value)
+
+
+def _write_private_json(path: Path, value: Mapping[str, Any]) -> None:
+    """Write credential JSON without a permissive creation window or symlink follow."""
+    flags = os.O_CREAT | os.O_WRONLY | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(path, flags, 0o600)
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            json.dump(value, stream, indent=2)
+            stream.write("\n")
+    except OSError as exc:
+        raise TypingSetupError("Cannot safely write protected Pasteur credential cache") from exc
+
+
+def _ensure_plincer_token_cache(path: Path) -> None:
+    if path.exists():
+        if path.is_symlink() or not path.is_file():
+            raise TypingSetupError("Pasteur token cache must be a regular file")
+        path.chmod(0o600)
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise TypingSetupError("Pasteur token cache is unreadable or invalid") from exc
+        if not isinstance(value, dict):
+            raise TypingSetupError("Pasteur token cache is invalid")
+    else:
+        _write_private_json(path, {})
+
+
+def _check_plincer_authorization_inputs(secrets_file: Path, token_cache: Path) -> None:
+    """Avoid starting a database build without a web-login credential or prior access token."""
+    try:
+        secrets = json.loads(secrets_file.read_text(encoding="utf-8"))
+        cache = json.loads(token_cache.read_text(encoding="utf-8"))
+        user = secrets.get("pasteur", {}).get("user", {})
+        cached = cache.get("pasteur", {})
+        access = cached.get("klebsiella:access", {})
+        session = cached.get("klebsiella:session", {})
+        has_user = bool(user.get("TOKEN") and user.get("TOKEN SECRET"))
+        has_access = any(
+            isinstance(token, dict) and token.get("TOKEN") and token.get("TOKEN SECRET")
+            for token in (access, session)
+        )
+    except (OSError, ValueError, TypeError, AttributeError) as exc:
+        raise TypingSetupError("Pasteur authorization files are invalid") from exc
+    if not has_user and not has_access:
+        raise TypingSetupError(
+            "Pasteur client credentials alone are insufficient: plincer also needs "
+            "a prior Pasteur access/session token or account credentials to build the database. "
+            "Run authorize-pasteur with the same --destination first."
+        )
 
 
 def _build_hclink_db(root: Path, tool: Mapping[str, Any], key_file: Path) -> dict[str, Any]:
@@ -598,9 +958,10 @@ def setup_typing(
 ) -> tuple[Path, dict[str, Any]]:
     """Install pinned callers/assigners and write a setup manifest.
 
-    Database downloads/builds are intentionally opt-in. `prepare_db` reserves an
-    explicit switch for the public-only cgMLST downloader; full lineage databases
-    require credentials and are never represented as installed when absent.
+    Database downloads/builds are intentionally opt-in. `prepare_db` downloads
+    cgMLST data publicly by default; Klebsiella can use an existing Pasteur
+    access/session token when protected client credentials are supplied. Full
+    lineage databases require credentials and are never reported ready when absent.
     """
     selected = _normalise_species(species)
     uv = shutil.which(uv_executable)
@@ -624,7 +985,17 @@ def setup_typing(
                     "reason": tools["mlst"].get("blocker", "Pathogenwatch mlst is not installed."),
                 }
                 continue
-            db_builds[name] = _prepare_public_cgmlst(uv, root, name, tools)
+            db_builds[name] = _prepare_public_cgmlst(
+                uv,
+                root,
+                name,
+                tools,
+                pasteur_secrets=(
+                    Path(pasteur_secrets).expanduser()
+                    if name == "klebsiella" and pasteur_secrets is not None
+                    else None
+                ),
+            )
         if "klebsiella" in selected and pasteur_secrets is not None:
             db_builds["klebsiella_lineage"] = _build_plincer_db(
                 root, tools["plincer"], Path(pasteur_secrets).expanduser()
@@ -633,9 +1004,17 @@ def setup_typing(
             db_builds["ecoli_lineage"] = _build_hclink_db(
                 root, tools["hclink"], Path(enterobase_key_file).expanduser()
             )
+        access_modes = {
+            name: db_builds[name].get("access_mode")
+            for name in selected
+            if isinstance(db_builds.get(name), dict)
+        }
+        mode_summary = ", ".join(
+            f"{name}={mode}" for name, mode in access_modes.items() if mode
+        ) or "no cgMLST download completed"
         db_note = (
-            "Public cgMLST databases were downloaded and indexed. LIN/HierCC reference "
-            "databases were built only when their credential files were supplied."
+            f"cgMLST download access: {mode_summary}. LIN/HierCC reference databases "
+            "were built only when their credential files were supplied."
         )
     else:
         db_note = "No typing databases were downloaded or built."

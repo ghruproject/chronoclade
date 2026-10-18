@@ -39,7 +39,7 @@ def _number(value, default=0):
 
 
 def _payload(row, *, focus_inputs=False, include_possible=False):
-    state_key = "state" if row.get("state_field") == "host" else "country"
+    state_key = "state" if row.get("state_field", "country") != "country" else "country"
     metrics = {str(item[state_key]): item for item in row.get("network_metrics", [])}
     directed = row.get("directed_edges", row.get("edges", []))
     originals = row.get("nodes", [])
@@ -124,7 +124,7 @@ def interactive_network_html(row, identifier, *, focus_inputs=False, include_pos
     payload = payload.replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
     state_label = html.escape(row.get("state_label", "country"))
     state_plural = html.escape(row.get("state_plural", "countries"))
-    widget_kind = "host-network" if row.get("state_field") == "host" else "country-network"
+    widget_kind = html.escape(str(row.get("state_field", "country")), quote=True) + "-network"
     options = "".join(
         f'<option value="{key}">{html.escape(label)}</option>' for key, label in _METRICS
     )
@@ -144,7 +144,7 @@ def interactive_network_html(row, identifier, *, focus_inputs=False, include_pos
   </div>
   <p class="cc-network-metric-note" data-network-metric-note>Node size: indegree centrality.</p>
   <div class="cc-network-canvas" data-network-canvas role="img" aria-label="Interactive directed {state_label} network. Use the {state_label} selector and navigation buttons to explore connections."></div>
-  <p class="cc-network-status" data-network-status role="status" aria-live="polite"></p>
+  <p class="cc-network-status" data-network-status role="status" aria-live="polite">Interactive network: open this report in a web browser with JavaScript enabled.</p>
   <div class="cc-network-legend"><span>Arrow width: representative change count</span><span>Dashed: count varies across optimal histories</span><span>Dark outline: input {state_label}</span></div>
   <details class="cc-network-country-key"><summary>{state_label.capitalize()} colour key</summary><div class="cc-network-countries" data-network-legend aria-label="{state_label.capitalize()} colours"></div></details>
   <p class="cc-network-caveat">Arrows show {state_label}-state changes in one optimal history, not demonstrated transmission. Alternative links need not occur together. Metrics remain those of the representative history.</p>

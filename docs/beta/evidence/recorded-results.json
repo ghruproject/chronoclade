@@ -1,0 +1,69 @@
+{
+  "recorded_date": "2026-10-18",
+  "scope": "Named Apple Silicon Klebsiella executions, not universal validation",
+  "negative_native_run": {
+    "inputs": [
+      "ERR8771929",
+      "ERR8772239"
+    ],
+    "species": "Klebsiella pneumoniae",
+    "mlst_st": 258,
+    "country": "Greece",
+    "collection_date": "2019-05-14",
+    "called_loci_per_input": 628,
+    "scheme_loci": 629,
+    "context_records": 232,
+    "profile_pool": 234,
+    "selected_inputs": 2,
+    "selected_contexts": 26,
+    "selected_genomes": 28,
+    "successful_date_permutations": 100,
+    "p_value": 0.0891089108910891,
+    "dating_status": "unsupported",
+    "stage_seconds": {
+      "prepare": 34.9566,
+      "cgmlst": 880.9041,
+      "tree": 539.7193,
+      "time": 57.9595
+    },
+    "reused": [
+      "configured native typing references",
+      "frozen provider snapshot",
+      "selected context assembly cache"
+    ]
+  },
+  "separate_positive_time_rerun": {
+    "selected_genomes": 63,
+    "rooted_internal_clades_retained": 61,
+    "mrca_year": 1995.6604,
+    "conditional_90_percent_max_posterior_region": [
+      1994.268418,
+      1998.078415
+    ],
+    "saved_corrected_snp_tree_reused": true
+  },
+  "five_selection_comparison": {
+    "runs": 5,
+    "tips_per_run": 63,
+    "shared_topology_tips": 13,
+    "shared_unrooted_rf_distance": 0,
+    "fixed_target_mrca_point_span_years": 1.233204,
+    "point_span_is_confidence_interval": false
+  },
+  "typing_comparison": {
+    "assemblies": 8,
+    "shared_locus_observations": 5024,
+    "direct_identifier_matches": 4998,
+    "sequence_resolved_identifier_differences": 14,
+    "jointly_unusable": 12,
+    "matching_cglin_codes": 8,
+    "historical_reference_equivalence": "incomplete"
+  },
+  "deferred": [
+    "E. coli/HierCC",
+    "Linux x86_64",
+    "physical HPC/SLURM",
+    "independent time-aware epidemiological cutoff validation",
+    "human usability feedback"
+  ]
+}

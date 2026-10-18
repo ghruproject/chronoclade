@@ -11,6 +11,7 @@ from chronoclade.report_components.group_controls import (
 )
 from chronoclade.report_components.styles import report_styles
 from chronoclade.sample_labels import display_label
+from chronoclade.report_components.profile_summary import _reported
 
 
 def _safe_json(value):
@@ -19,7 +20,22 @@ def _safe_json(value):
             .replace("&", "\\u0026"))
 
 
-def write_group_tree(tree, records, labels, groups, output_path, *, distance_units=None) -> str:
+def grouping_caption(group_ids, basis=None, threshold=None):
+    """Describe the supplied grouping provenance, never infer clustering from labels."""
+    if basis == "unassigned_lineage" or set(group_ids) <= {"Lineage unassigned", "Ungrouped"}:
+        return "NJ tree", "Lineage groups are unavailable or not used here. This display category does not infer genetic clusters."
+    if basis == "reported_cglin" or all(group.startswith("cgLIN ") for group in group_ids):
+        return "cgLIN groups on NJ tree", "Colours show reported cgLIN prefixes; unassigned tips have no prefix grouping. No additional distance cutoff defines these colours."
+    if basis == "reported_hiercc" or all(group.startswith("HierCC ") for group in group_ids):
+        return "HierCC groups on NJ tree", "Colours show reported HierCC assignments; unassigned tips have no assignment. No additional distance cutoff defines these colours."
+    if basis == "distance_threshold":
+        detail = f" (mismatch fraction {escape(str(threshold))})" if threshold is not None else ""
+        return "Genetic groups on NJ tree", "Groups use the declared direct-profile distance threshold" + detail + ", not tree clades."
+    return "Groups on NJ tree", "Colours identify supplied group labels; no grouping method is declared in this view."
+
+
+def write_group_tree(tree, records, labels, groups, output_path, *, distance_units=None,
+                     group_basis=None, group_threshold=None) -> str:
     """Write every branch and tip with an independently navigable viewport.
 
     The supplied topology and signed branch lengths are never modified. Only the
@@ -63,6 +79,8 @@ def write_group_tree(tree, records, labels, groups, output_path, *, distance_uni
     def x_for(node):
         return 48 + ((depths[node] - minimum) / span * 900 if span else 45)
 
+    optional_fields = [field for field in ("region", "city", "host")
+                       if any(_reported(row.get(field)) for row in records)]
     metadata = []
     for node in tip_order:
         name, row = node.name, by_id[node.name]
@@ -71,10 +89,11 @@ def write_group_tree(tree, records, labels, groups, output_path, *, distance_uni
             "id": name, "label": display_label(str(labels.get(name) or name)),
             "group": group_name(raw_group), "group_id": raw_group,
             "country": str(row.get("country") or "Unknown country"),
-            "host": str(row.get("host") or "Unknown host"),
             "date": str(row.get("collection_date") or row.get("date") or row.get("collection_year") or "Unknown date"),
             "origin": str(row.get("origin") or row.get("role") or "context"),
             "x": x_for(node), "y": top + positions[node] * row_space,
+            **{field: str(row[field]).strip() if _reported(row.get(field))
+               else f"Unknown {field}" for field in optional_fields},
         })
     group_ids = sorted({item["group_id"] for item in metadata})
     group_labels = group_label_map(group_ids)
@@ -83,7 +102,7 @@ def write_group_tree(tree, records, labels, groups, output_path, *, distance_uni
     colors = group_colors(group_ids, labels=group_labels)
     config = group_selector_config(metadata, group_key="group_id", labels=group_labels)
     config["labels"] = group_labels
-    data = {"tips": metadata, "groups": group_ids, "colors": colors,
+    data = {"metadata_fields": optional_fields, "tips": metadata, "groups": group_ids, "colors": colors,
             "displayColors": {group_labels[key]: value for key, value in colors.items()},
             "selector": config, "width": width, "height": height, "rowSpace": row_space,
             "units": str(distance_units or "")}
@@ -106,11 +125,8 @@ def write_group_tree(tree, records, labels, groups, output_path, *, distance_uni
                   if shape == "input" else f'<circle class="tip-marker context" r="3" fill="{color}"/>')
         svg.append(f'<g class="tip" tabindex="-1" role="button" data-tip="{index}" aria-label="{escape(item["label"], quote=True)}"><rect class="tip-band" x="0" y="-9" width="240" height="18" fill="{color}"/>{marker}<text x="9" y="4">{escape(item["label"])}</text></g>')
     svg.append('</g></svg>')
-    lineage = all(group.startswith('cgLIN ') for group in group_ids)
-    note = ("Groups share reported cgLIN prefixes; no additional distance cutoff defines these colours."
-            if lineage else "Groups defined from direct profile distances, not tree clades.")
+    title, note = grouping_caption(group_ids, group_basis, group_threshold)
     unit = f' Branch lengths are in {escape(str(distance_units))}.' if distance_units else ''
-    title = 'cgLIN groups on NJ tree' if lineage else 'Genetic groups on NJ tree'
     document = ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
                 '<meta name="viewport" content="width=device-width,initial-scale=1">'
                 f'<title>{title}</title><style>' + report_styles() + group_selector_styles() + TREE_CSS +
@@ -152,7 +168,7 @@ let selected=null,located=null,mode='overview',view={x:0,y:0,w:data.width,h:data
 const selector=createGroupSelector({container:document.getElementById('legend'),groups:data.groups,colors:data.colors,config:data.selector,onSelect:group=>highlight(group,true)});
 const inputIndexes=data.tips.map((t,i)=>['input','local','query','focal'].includes(t.origin)?i:-1).filter(i=>i>=0);
 document.getElementById('zoom-inputs').disabled=!inputIndexes.length;
-function showTip(index){const t=data.tips[index];details.textContent=`${t.label} | Group: ${t.group} | Country: ${t.country} | Host: ${t.host} | Date: ${t.date}`}
+function showTip(index){const t=data.tips[index];details.textContent=[t.label,`Group: ${t.group}`,`Country: ${t.country}`,...data.metadata_fields.map(f=>`${f[0].toUpperCase()+f.slice(1)}: ${t[f]}`),`Date: ${t.date}`].join(' | ')}
 function send(group){if(window.parent!==window)window.parent.postMessage({type:'chronoclade-group-highlight',group},'*')}
 function highlight(group,notify){selected=group;selector.setSelected(group);groupZoom.disabled=!group;tips.forEach((el,i)=>{const active=!!group&&data.tips[i].group_id===group;el.classList.toggle('dimmed',!!group&&!active);el.classList.toggle('selected',active)});if(notify)send(group)}
 function bounds(){view.w=Math.min(data.width,Math.max(80,view.w));view.h=Math.min(data.height,Math.max(100,view.h));view.x=Math.max(0,Math.min(data.width-view.w,view.x));view.y=Math.max(0,Math.min(data.height-view.h,view.y))}

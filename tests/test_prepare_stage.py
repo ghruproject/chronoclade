@@ -16,6 +16,22 @@ from chronoclade.prepare_cli import prepare_command
 from chronoclade.prepare_stage import run_prepare
 
 
+def test_bundle_validation_accepts_parent_alias_but_rejects_escaping_artifact(frozen, tmp_path):
+    from chronoclade.prepare_stage import _validate_previous_stage
+
+    source, catalogues, _ = frozen
+    result = run_prepare(source, tmp_path / "real" / "prepared", catalogues=catalogues)
+    alias = tmp_path / "alias"
+    alias.symlink_to(tmp_path / "real", target_is_directory=True)
+    _validate_previous_stage(alias / "prepared")
+    outside = tmp_path / "outside.html"
+    outside.write_bytes(result.report_path.read_bytes())
+    result.report_path.unlink()
+    result.report_path.symlink_to(outside)
+    with pytest.raises(DatasetError, match="outside the bundle"):
+        _validate_previous_stage(alias / "prepared")
+
+
 @pytest.fixture
 def frozen(tmp_path):
     records = [
@@ -57,7 +73,9 @@ def frozen(tmp_path):
 
 
 def test_profiles_publish_full_catalogue_missing_samples_and_lineage(frozen, tmp_path):
-    source, catalogues, _ = frozen
+    source, catalogues, records = frozen
+    records[0]["mlst_st"] = "39"
+    source.write_text(json.dumps(records))
     result = run_prepare(source, tmp_path / "prepared", catalogues=catalogues)
     dataset = load_dataset(result.dataset_manifest)
     assert dataset.sample_ids == ("query", "missing")
@@ -86,6 +104,10 @@ def test_profiles_publish_full_catalogue_missing_samples_and_lineage(frozen, tmp
     assert "no profile calling was performed" in result.report_path.read_text()
     stage = json.loads(result.stage_manifest.read_text())
     assert stage["status"] == "complete"
+    guide = (tmp_path / "prepared/README.md").read_text()
+    assert str(tmp_path / "prepared/dataset.json") in guide
+    assert "incomplete" in guide and "report.html" in guide
+    assert any(entry["path"] == "README.md" for entry in stage["artifacts"])
     assert stage["sample_ids"] == ["query", "missing"]
     assert "sources/input.json" in {item["path"] for item in stage["artifacts"]}
 
@@ -172,6 +194,43 @@ def test_complete_lineage_is_a_separate_check(frozen, tmp_path):
     assert audit["samples"][0]["profile_ready"] is True
     assert audit["samples"][0]["lineage_ready"] is False
     assert audit["samples"][0]["readiness"] == "incomplete"
+
+
+@pytest.mark.parametrize(
+    "mlst_st, expected_ready",
+    [
+        (None, False),
+        ("", False),
+        ("0", False),
+        ("٣", False),
+        ("039", False),
+        ("39", True),
+        ("ST39", False),
+    ],
+)
+def test_exact_mlst_st_is_required_for_context_readiness(frozen, tmp_path, mlst_st, expected_ready):
+    source, catalogues, records = frozen
+    query = dict(records[0])
+    query.pop("mlst_st", None)
+    if mlst_st is not None:
+        query["mlst_st"] = mlst_st
+    source.write_text(json.dumps([query]))
+
+    result = run_prepare(source, tmp_path / "prepared", catalogues=catalogues)
+    audit = json.loads(result.audit_path.read_text())
+    sample = audit["samples"][0]
+
+    assert sample["profile_ready"] is True
+    assert sample["lineage_ready"] is True
+    assert sample["mlst_st_ready"] is expected_ready
+    assert sample["readiness"] == ("ready" if expected_ready else "incomplete")
+    reason = " ".join(sample["reasons"])
+    if expected_ready:
+        assert "seven-gene MLST ST" not in reason
+    else:
+        assert "verified seven-gene MLST ST" in reason
+        assert "`mlst_st`" in reason and "`cgmlst --fetch-context`" in reason
+        assert "Do not infer it from cgLIN/HierCC or nearest-neighbour labels" in reason
 
 
 @pytest.mark.parametrize(
@@ -410,17 +469,19 @@ def test_frozen_metadata_overlay_preserves_typing_and_records_field_provenance(f
     source, catalogues, _ = frozen
     baseline = run_prepare(source, tmp_path / 'baseline', catalogues=catalogues)
     overrides = tmp_path / 'study.csv'
-    overrides.write_text('sample_id,nuts2,hospital_code,publication_isolate_id,collection_date\nquery,EL30,H14,K001,2019-05-01\n')
+    overrides.write_text('sample_id,nuts2,city,hospital_code,publication_isolate_id,collection_date\nquery,EL30,Athens,H14,K001,2019-05-01\n')
     result = run_prepare(baseline.dataset_manifest, tmp_path / 'enriched', metadata=overrides)
     before, after = load_dataset(baseline.dataset_manifest), load_dataset(result.dataset_manifest)
     query = next(r for r in after.samples if r['sample_id'] == 'query')
-    assert query['nuts2'] == 'EL30' and query['hospital_code'] == 'H14'
+    assert query['nuts2'] == 'EL30' and query['city'] == 'Athens'
+    assert query['hospital_code'] == 'H14'
     assert query['publication_isolate_id'] == 'K001'
     assert query['date_start'] == query['date_end'] == '2019-05-01'
     assert after.lineages == before.lineages
     assert after.profiles[0].sample_ids == before.profiles[0].sample_ids
     assert (after.profiles[0].codes == before.profiles[0].codes).all()
     assert any(r['field'] == 'hospital_code' and r['source'] == 'user' for r in after.provenance)
+    assert any(r['field'] == 'city' and r['source'] == 'user' for r in after.provenance)
     assert any(r['field'] == 'collection_date' for r in after.conflicts)
     assert (result.dataset_manifest.parent / 'sources/metadata.csv').read_text() == overrides.read_text()
     overrides.write_text('sample_id,mlst_st\nquery,258\n')

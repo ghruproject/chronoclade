@@ -82,7 +82,20 @@ def test_prepared_role_controls_lin_subgroups_and_overrides_source_origin():
     assert data["nodes"][1]["input_count"] == 0
 
 
-def test_shared_tree_renderer_accepts_method_specific_scale_and_dating_text(tmp_path):
+def test_shared_tree_renderer_accepts_method_specific_scale_and_dating_text(tmp_path, monkeypatch):
+    from matplotlib.figure import Figure
+
+    savefig = Figure.savefig
+
+    def check_caption_space(figure, *args, **kwargs):
+        figure.canvas.draw()
+        renderer = figure.canvas.get_renderer()
+        caption = figure.texts[0].get_window_extent(renderer)
+        axis_label = figure.axes[0].xaxis.label.get_window_extent(renderer)
+        assert caption.y1 + 8 < axis_label.y0
+        return savefig(figure, *args, **kwargs)
+
+    monkeypatch.setattr(Figure, "savefig", check_caption_space)
     network = build_location_network(biological_tree(), records(), tree_basis="sequence")
     path = tmp_path / "sequence-tree.svg"
     draw_country_tree(

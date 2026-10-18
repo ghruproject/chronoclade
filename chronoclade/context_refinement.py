@@ -26,7 +26,9 @@ def _text(value: Any) -> str:
 
 
 def _lineage(row: Mapping, kind: str, level: int | str) -> tuple | None:
-    scope = _scope(row, kind)
+    from chronoclade.provider_hiercc import grouping_scope
+    scope = grouping_scope(row) if kind == "hiercc" else None
+    scope = scope or _scope(row, kind)
     if scope is None or _text(row.get(f"{kind}_status")).casefold() in {
         "conflict",
         "malformed",

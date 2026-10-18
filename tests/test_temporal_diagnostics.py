@@ -10,9 +10,31 @@ from chronoclade.datasets import AlleleMatrix, LocusCatalogue, PreparedDataset, 
 from chronoclade.temporal_diagnostics import (
     cgmlst_root_to_tip,
     date_regression,
+    date_distance_point,
     fixed_callable_distances,
     sample_date_interval,
 )
+
+
+def test_date_point_preserves_bounds_and_fit_without_repeating_genotypes():
+    rows = points([1, 2, 3])
+    for row in rows:
+        row.update(cgmlst_profile={f'locus_{i}': str(i) for i in range(629)},
+                   cgmlst_loci=[f'locus_{i}' for i in range(629)],
+                   provider_response={'unused': 'x' * 100_000})
+    rows[0].update(date_start='2000-01-01', date_end='2000-01-31', date_precision='month')
+    compact = [date_distance_point(row, row['distance'], distance_field='distance') for row in rows]
+    assert compact[0]['date_start'] == rows[0]['date_start']
+    assert compact[0]['date_end'] == rows[0]['date_end']
+    assert compact[0]['date_precision'] == 'month'
+    assert compact[0]['role'] == 'input' and compact[0]['country'] == 'UK'
+    original, fitted = regress(rows), regress(compact)
+    for field in ('slope', 'r_squared', 'reference_year', 'intercept', 'n_points'):
+        assert fitted[field] == original[field]
+    assert len(json.dumps(fitted)) < 10_000
+    assert 'cgmlst_profile' not in json.dumps(fitted)
+    assert 'provider_response' not in json.dumps(fitted)
+    assert len(rows[0]['cgmlst_profile']) == 629
 
 
 def regress(points):

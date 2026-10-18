@@ -52,7 +52,7 @@ def write_output_guide(directory, *, blocks=None):
     if blocks is not None:
         links = []
         lines = ['# ChronoClade cgMLST analysis', '',
-                 'Start with [the group summary](index.html). Each LIN block has its own report.', '']
+                 'Start with [the group summary](index.html). Each analysis block has its own report.', '']
         for block in blocks:
             label = str(block.get('label', block['block_id']))
             report = block['report']
@@ -81,7 +81,7 @@ def write_output_guide(directory, *, blocks=None):
         lines = ['# ChronoClade cgMLST block', '',
                  'Open [profile_report.html](profile_report.html) for the results.',
                  'Browse [output files by type](files/index.html).', '',
-                 'The report combines your input genomes and public comparisons in this LIN block.',
+                 'The report summarises the supplied inputs and any public comparisons admitted to this analysis block.',
                  'It shows dataset composition, NJ relationships and ordination, exploratory date',
                  'diagnostics, state-change networks, and subsamples for SNP-tree analysis.', '',
                  '## Output folders', '']

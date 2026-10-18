@@ -52,7 +52,7 @@ def test_partitions_explicit_depth_full_membership_and_unresolved_audit(tmp_path
     assert [row["sample_id"] for row in blocks[0]["records"]] == ["c1", "c2", "q"]
     assert audit["unmatched_context_ids"] == ["outside"]
     assert audit["unresolved_inputs"][0]["sample_id"] == "unresolved"
-    assert {row["level"] for row in audit["available_level_counts"]} == {5, 6, 7}
+    assert {row["level"] for row in audit["available_level_counts"]} == {5, 6, 7, 8, 9, 10}
     narrowed, _ = partition_records(records, lin_level=6)
     assert [row["sample_id"] for row in narrowed[0]["records"]] == ["c1", "q"]
     records[1]["cglin_database_sha256"] = "a" * 64
@@ -327,3 +327,117 @@ def test_resume_rejects_injected_valid_selection_bundle_from_other_parameters(tm
     with pytest.raises(ValueError, match="selection bundle differs"):
         workflow.run_cgmlst(source, output, bootstrap_replicates=0, context_size=1, resume=True)
     assert not (output / "cgmlst.json").exists()
+
+
+@pytest.mark.parametrize("level", [5, 6, 7, 8, 9, 10])
+def test_partition_supports_finer_reported_prefixes_without_distance_inference(tmp_path, level):
+    dataset, _ = fixture_dataset(tmp_path)
+    records = profile_records(dataset)
+    records = [r for r in records if r["sample_id"] != "unresolved"]
+    query = next(r for r in records if r["sample_id"] == "q")
+    prefix = query["cglin_raw"].split(",")
+    same = dict(query, sample_id="same", role="context", origin="context")
+    different = dict(same, sample_id="different")
+    differing_code = list(prefix)
+    differing_code[level - 1] = "99"
+    different["cglin_raw"] = ",".join(differing_code)
+    short = dict(same, sample_id="short", cglin_raw=",".join(prefix[:level - 1]))
+    blocks, audit = partition_records([query, same, different, short], lin_level=level)
+    assert len(blocks) == 1
+    assert blocks[0]["level"] == level
+    assert {r["sample_id"] for r in blocks[0]["records"]} == {"q", "same"}
+    assert audit["unmatched_context_ids"] == ["different", "short"]
+
+
+@pytest.mark.parametrize("level", [True, 4, 11, 8.0, "8"])
+def test_partition_rejects_invalid_depths(tmp_path, level):
+    dataset, _ = fixture_dataset(tmp_path)
+    with pytest.raises(ValueError, match="integer between 5 and 10"):
+        partition_records(profile_records(dataset), lin_level=level)
+
+
+def test_cli_finer_scope_and_display_are_explicit_and_selection_independent(tmp_path, monkeypatch):
+    import chronoclade.cgmlst.workflow as workflow
+
+    original_selection = workflow.write_selection_ensemble
+    selection_groupings = []
+
+    def record_selection(queries, contexts, analysis, **kwargs):
+        selection_groupings.append(analysis["genetic_groups"])
+        return original_selection(queries, contexts, analysis, **kwargs)
+
+    monkeypatch.setattr(workflow, "write_selection_ensemble", record_selection)
+    _, source = fixture_dataset(tmp_path)
+    runner = CliRunner()
+    selections = []
+    for display in (7, 10):
+        output = tmp_path / f"display-{display}"
+        result = runner.invoke(app, ["cgmlst", str(source), "--out", str(output),
+            "--lin-level", "8", "--display-lin-level", str(display),
+            "--bootstrap-replicates", "0", "--nearest-per-query", "1"])
+        assert result.exit_code == 0, result.output
+        manifest = json.loads((output / "cgmlst.json").read_text())
+        assert manifest["parameters"]["lin_level"] == 8
+        assert manifest["parameters"]["display_lin_level"] == display
+        assert manifest["parameters"]["selection_group_lin_level"] == 7
+        assert manifest["blocks"][0]["context_count"] == 1
+        block = output / manifest["blocks"][0]["block_id"]
+        analysis = json.loads((block / "profile_analysis.json").read_text())
+        assert analysis["display_group_level"] == display
+        assert analysis["partition"]["level"] == 8
+        selection_path = next((block / "selection_bundle/selections").glob("selection-*.json"))
+        selections.append(load_selection_manifest(selection_path)["selected_sample_ids"])
+    assert selections[0] == selections[1]
+    assert selection_groupings[0] == selection_groupings[1]
+    assert all(group["level"] == 7 for group in selection_groupings[0])
+
+
+def test_context_prefix_union_preserves_cross_prefix_neighbours_in_wider_analysis_block(tmp_path):
+    dataset, _ = fixture_dataset(tmp_path)
+    rows = [r for r in profile_records(dataset) if r["sample_id"] in {"q", "c1"}]
+    q = rows[0]
+    q.update(cglin_raw="0,0,1,0,1,0,0,0,0,0", cgmlst_profile={"a": "1", "b": "1"})
+    c = rows[1]
+    c.update(cglin_raw="0,0,1,0,1,0,0,1,0,0", cgmlst_profile={"a": "1", "b": "1"})
+    rows.append(dict(q, sample_id="q2", cglin_raw=c["cglin_raw"], role="input",
+                     origin="local", cgmlst_profile={"a": "3", "b": "1"}))
+    rows.append(dict(c, sample_id="outside", cglin_raw="0,0,1,0,1,0,0,2,0,0"))
+    source = write_dataset(from_profile_records(rows,
+        [LocusCatalogue("test", "1", ("a", "b"), "fixture")]), tmp_path / "union-prepared")
+    output = tmp_path / "union"
+    result = CliRunner().invoke(app, ["cgmlst", str(source), "--out", str(output),
+        "--lin-level", "5", "--context-lin-level", "8", "--display-lin-level", "8",
+        "--bootstrap-replicates", "0", "--nearest-per-query", "1"])
+    assert result.exit_code == 0, result.output
+    manifest = json.loads((output / "cgmlst.json").read_text())
+    assert len(manifest["blocks"]) == 1
+    block = manifest["blocks"][0]
+    assert block["input_count"] == 2 and block["context_count"] == 1
+    analysis = json.loads((output / block["block_id"] / "profile_analysis.json").read_text())
+    matches = {(r["query_id"], r["context_id"]) for r in analysis["nearest_neighbours"]
+               if r["status"] == "matched"}
+    assert (q["sample_id"], c["sample_id"]) in matches  # Different own LIN8 prefixes.
+    audit = json.loads((output / "partitions.json").read_text())
+    assert audit["outside_context_scope_ids"] == ["outside"]
+    assert audit["context_scope_counts"] == {
+        "prepared_context": 2, "scope_context": 1, "outside_scope_context": 1}
+
+
+@pytest.mark.parametrize("parameters, message", [
+    ({"backend": "invalid"}, "backend must be"),
+    ({"backend": "scale", "distance_method": "direct-dna"}, "Scale backend supports allele"),
+])
+def test_backend_rejects_invalid_combinations_before_reading_input(tmp_path, parameters, message):
+    with pytest.raises(ValueError, match=message):
+        run_cgmlst(tmp_path / "missing.json", tmp_path / "out", **parameters)
+    assert not (tmp_path / "out").exists()
+
+
+def test_missing_finer_context_assignment_is_reported_without_dropping_input(tmp_path):
+    dataset, _ = fixture_dataset(tmp_path)
+    q = next(r for r in profile_records(dataset) if r["sample_id"] == "q")
+    q["cglin_raw"] = "0,0,1,0,1"
+    blocks, audit = partition_records([q], lin_level=5, context_lin_level=8)
+    assert blocks[0]["records"][0]["sample_id"] == "q"
+    assert audit["unresolved_context_scope_inputs"] == [
+        {"sample_id": "q", "reason": "missing_or_unresolved_context_scope_typing"}]

@@ -135,6 +135,13 @@ states and palette as the network. No enormous static all-tip SVG is generated.
 
 ## Measured synthetic resource evidence
 
+The table below is **historical synthetic evidence**, measured before the current
+saved NJ-distance ordination matrix was added. Its output-disk figures are logical
+file-size sums. The fresh [full-profile performance acceptance](beta/PERFORMANCE_ACCEPTANCE.md)
+records the current engine scope, distinguishes allocated disk from logical bytes,
+includes temporary PHYLIP in peak measurements, and labels concurrent machine
+load explicitly. Neither engine benchmark is a complete native-command timing.
+
 Runs on 10 October 2026 used macOS 14.6.1/Apple Silicon, the verified x86_64 RapidNJ
 source build under Rosetta, SciPy 1.17.1, 128-profile batches and a 2,048 MB RapidNJ
 memory allowance. Each labelled synthetic workload used 629 loci, 20 categorical
@@ -169,9 +176,18 @@ pixi run python scripts/benchmark_cgmlst_scale.py --samples 1500 --countries 21 
 
 Exact pair computation and storage remain quadratic. Global evidence needs
 approximately `20 × n²` bytes; one full cohort adds `12 × n²` bytes for square and
-condensed distance storage. A portable selection copy adds another `20 × n²`
-bytes. The main 10,000-profile analysis therefore requires about 3.2 GB of matrix
-storage before selection copies, temporary PHYLIP, reports and filesystem overhead.
+condensed distance storage, and the current saved NJ patristic matrix adds
+`8 × n²`. The current engine therefore retains approximately `40 × n²` bytes in
+matrices: about 4.0 GB decimal for 10,000 profiles, before reports and filesystem
+overhead. A portable selection copy adds another `20 × n²` bytes. These copies
+are part of native selection packaging and are excluded from engine-only timings.
+
+RapidNJ also needs transient streamed PHYLIP, before the NJ patristic matrix is
+created. The fresh acceptance harness conservatively allows `24 × n²` text bytes,
+so estimated peak new disk is `56 × n²` plus report overhead. Actual allocated
+and logical bytes depend on contents/filesystem; retained size is not peak scratch
+usage. See the current acceptance evidence for measured values and its resource
+cap. The older 3.25 GB synthetic table reflects its older output scope.
 PCoA batches are bounded, while compiled complete linkage and RapidNJ also require
 quadratic working memory. The observed process peaks do not constitute a hard
 whole-pipeline memory cap. Tens of thousands may require substantial cluster RAM

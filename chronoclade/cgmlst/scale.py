@@ -140,36 +140,11 @@ def _date_diagnostic(
 
 
 def _diagnostic_figure(diagnostic, path):
-    import matplotlib.pyplot as plt
-
-    fig, ax = plt.subplots(figsize=(7, 5))
-    points = diagnostic["points"]
-    for point in points:
-        midpoint = (point["year_min"] + point["year_max"]) / 2
-        ax.errorbar(
-            midpoint,
-            point["root_to_tip"],
-            xerr=[[midpoint - point["year_min"]], [point["year_max"] - midpoint]],
-            fmt="o",
-            alpha=0.4,
-            markersize=3,
-        )
-    if diagnostic.get("slope") is not None and points:
-        years = np.array([min(p["year_min"] for p in points), max(p["year_max"] for p in points)])
-        ax.plot(years, diagnostic["slope"] * years + diagnostic["intercept"], color="#444")
-    if not points:
-        ax.text(
-            0.5, 0.5, "No valid collection dates available", transform=ax.transAxes, ha="center"
-        )
-    ax.set(
-        xlabel="Collection year (date interval shown)",
-        ylabel=diagnostic.get("distance_units", "cgMLST allele differences"),
+    from chronoclade.report_components.date_diagnostic import write_saved_date_figure
+    return write_saved_date_figure(
+        diagnostic, path,
         title="Exploratory full NJ date diagnostic · declared input tip root",
     )
-    fig.tight_layout()
-    fig.savefig(path)
-    plt.close(fig)
-    return str(path)
 
 
 def analyse_profiles_scale(

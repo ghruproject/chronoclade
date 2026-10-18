@@ -7,6 +7,8 @@ from html import escape, unescape
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
+from .figure_viewer import add_figure_viewer
+
 _MEDIA = {'.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg',
           '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif'}
 _ATTRIBUTE = re.compile(r'\b(src|href)="([^"]*)"')
@@ -71,4 +73,4 @@ def embed_report_assets(document: str, directory: Path) -> str:
 
     # JSON contains HTML for dynamically selected network views.
     document = _PAYLOAD.sub(payload, document)
-    return _ATTRIBUTE.sub(attribute, _FRAME.sub(frame, document))
+    return add_figure_viewer(_ATTRIBUTE.sub(attribute, _FRAME.sub(frame, document)))

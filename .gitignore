@@ -16,3 +16,8 @@ validation/**/atb_assemblies/
 validation/**/results/
 validation/**/fast_results/
 validation/**/source/
+
+# Generated local beta evidence and runtime-specific audit artifacts
+validation/beta/
+runtime-provenance.json
+.impeccable/critique/

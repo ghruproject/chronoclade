@@ -4,18 +4,26 @@ from collections import Counter
 from html import escape
 from pathlib import Path
 import json
+from os.path import relpath
+from urllib.parse import quote
 
 from chronoclade.report_components.tables import write_report_html
 from chronoclade.report_components.styles import report_styles
 from chronoclade.location_network.widget import interactive_network_html, widget_assets
+from chronoclade.location_network.state_selector import state_network_selector, state_network_panel
+from chronoclade.report_components.profile_summary import _reported
+from chronoclade.sample_labels import sample_label
 
 
 def write_report(
-    path, *, title, result, rows=(), network=None, figures=(), extra="", overview=None, report_label="TREE ANALYSIS REPORT",
-    figure_heading="Biological tree and location history", assessment_first=False,
-    assessment_title=None
+    path, *, title, result, rows=(), network=None, host_network=None, figures=(), extra="", overview=None, report_label="TREE ANALYSIS REPORT",
+    figure_heading="Tree figures", assessment_first=False,
+    assessment_title=None, navigation=(), state_networks=None
 ):
     path = Path(path)
+    optional = [field for field in ("region", "city", "host")
+                if any(_reported(row.get(field)) for row in rows)]
+    metadata_fields = ["role", "collection_date", "country", *optional]
     counts = "".join(
         f"<h3>{escape(field.title())}</h3><p>"
         + "; ".join(
@@ -23,16 +31,18 @@ def write_report(
             for key, count in sorted(Counter(row.get(field) or "Unknown" for row in rows).items())
         )
         + "</p>"
-        for field in ("country", "host")
+        for field in ("country", *optional)
     )
     table = (
-        "<table><thead><tr><th>Genome</th><th>Role</th><th>Collection date</th><th>Country</th><th>Host</th></tr></thead><tbody>"
+        "<table><thead><tr><th>Genome</th>"
+        + "".join(f"<th>{escape(field.replace('_', ' ').title())}</th>" for field in metadata_fields)
+        + "</tr></thead><tbody>"
         + "".join(
             "<tr>"
-            + f'<td title="{escape(row["sample_id"], quote=True)}">{escape(str(row.get("label") or row.get("accession") or row["sample_id"]))}</td>'
+            + f'<td title="{escape(row["sample_id"], quote=True)}">{escape(sample_label(row))}</td>'
             + "".join(
                 f"<td>{escape(str(row.get(field) or 'Unknown'))}</td>"
-                for field in ("role", "collection_date", "country", "host")
+                for field in metadata_fields
             )
             + "</tr>"
             for row in rows
@@ -44,10 +54,10 @@ def write_report(
         for name, label in figures
         if (path.parent / name).is_file()
     )
-    labels = {row["sample_id"]: row.get("label") or row["sample_id"] for row in rows}
+    labels = {row["sample_id"]: sample_label(row) for row in rows}
     nearest = result.get("nearest_contexts_by_corrected_snps", [])
     if nearest:
-        plots += "<h3>Nearest selected context by corrected SNP distance</h3><p>The search denominator is this exact selected assembly set. Distances are SNP counts and pair-specific callable sites.</p><table><thead><tr><th>Input</th><th>Nearest context</th><th>Corrected SNPs</th><th>Callable sites</th></tr></thead><tbody>"
+        plots += "<h3>Nearest selected context by corrected SNP distance</h3><p>The search denominator is this exact selected assembly set. Distances are SNP counts and pair-specific callable sites.</p><div class=\"table-scroll\"><table><thead><tr><th>Input</th><th>Nearest context</th><th>Corrected SNPs</th><th>Callable sites</th></tr></thead><tbody>"
         for pair in nearest:
             plots += (
                 "<tr>"
@@ -62,7 +72,7 @@ def write_report(
                 )
                 + "</tr>"
             )
-        plots += "</tbody></table>"
+        plots += "</tbody></table></div>"
     downloads = "".join(
         f'<li><a href="{escape(p.relative_to(path.parent).as_posix(), quote=True)}">{escape(p.name)}</a></li>'
         for p in sorted(path.parent.rglob("*"))
@@ -75,21 +85,48 @@ def write_report(
         + escape(coherence["warning"]) + "</p>"
         if coherence.get("warning") else ""
     )
+    confidence = result.get("clock_confidence") or {}
+    if confidence:
+        def number(key, digits=".4f"):
+            value = confidence.get(key)
+            return format(value, digits) if isinstance(value, (int, float)) else "Unavailable"
+        extra = (
+            '<h3>Fitted time tree</h3><p>TreeTime rate: <strong>'
+            + number("rate", ".4g") + '</strong> substitutions/site/year. '
+            'This is the final time-tree fit; the screening regression is a separate diagnostic.</p>'
+            '<p>Whole-tree root year: <strong>' + number("root_numeric_date")
+            + '</strong>; conditional 90% max-posterior region: '
+            + number("root_lower_bound") + '–' + number("root_upper_bound") + '.</p>'
+            '<p>These within-run intervals do not include uncertainty from selection '
+            'of genomes, missing sampling or residual recombination.</p>' + extra
+        )
     network_html = ""
     assets = ""
     if network is not None:
         basis = "Dated-tree" if result.get("dating_status") == "dated" else "Corrected-tree"
-        network_html = f"<h3>{basis} location history</h3>" + interactive_network_html(
+        country_panel = f"<h3>{basis} location history</h3>" + interactive_network_html(
             network, "selected-tree-network"
         )
+        optional_networks = dict(state_networks or {})
+        if host_network:
+            optional_networks.setdefault("host", host_network)
+        panels = {
+            field: state_network_panel(data, basis=basis, widget_id=f"selected-tree-{field}-network")
+            for field, data in optional_networks.items() if field != "country"
+        }
+        if not network.get("nodes") and not network.get("directed_edges"):
+            country_panel = None
+        network_html = state_network_selector(country_panel, panels=panels)
         assets = widget_assets()
     sections = []
     if rows:
         sections.append(
             ("Selected samples", counts + '<div class="table-scroll">' + table + "</div>")
         )
-    if plots or network_html:
-        sections.append((figure_heading, plots + network_html))
+    if plots:
+        sections.append((figure_heading, plots))
+    if network_html:
+        sections.append(("State-change network", network_html))
     sections.extend(
         [
             (
@@ -128,12 +165,25 @@ def write_report(
         f'<div class="verdict {verdict_class}">'
         f"<strong>{escape(verdict_title)}</strong><p>{escape(assessment['reason'])}</p></div>"
     )
-    body = "".join(
-        f'<section class="stage"><div class="stage-index"><span>{index}</span></div><div class="stage-body"><h2>{escape(label)}</h2>{content}</div></section>'
-        for index, (label, content) in enumerate(sections, 1)
+    report_links = "".join(
+        f'<a href="{escape(quote(relpath(target, path.parent), safe="/"), quote=True)}">{escape(label)}</a>'
+        for label, target in navigation if Path(target).is_file()
     )
+    navigation_html = (
+        '<nav class="contents" aria-label="Report navigation">' + report_links
+        + ('<a href="#state-network">State network</a>' if network_html else '')
+        + '<a href="#evidence">Evidence files</a></nav>'
+    )
+    body = []
+    for index, (label, content) in enumerate(sections, 1):
+        anchor = (' id="evidence"' if label == "Downloads" else
+                  ' id="state-network"' if label == "State-change network" else "")
+        body.append(
+            f'<section class="stage"{anchor}><div class="stage-index"><span>{index}</span></div><div class="stage-body"><h2>{escape(label)}</h2>{content}</div></section>'
+        )
+    body = "".join(body)
     write_report_html(path,
-        f'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{escape(title)}</title><style>{report_styles()}pre{{white-space:pre-wrap;overflow-wrap:anywhere;max-height:500px;overflow:auto}}</style></head><body><main class="shell"><header class="identity"><div class="identity-mark">ChronoClade · {escape(report_label)}</div><div class="identity-copy"><h1>{escape(title)}</h1><p>{escape(overview)}</p>{verdict}</div></header>{body}</main>{assets}</body></html>',
+        f'<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{escape(title)}</title><style>{report_styles()}pre{{white-space:pre-wrap;overflow-wrap:anywhere;max-height:500px;overflow:auto}}</style></head><body><main class="shell"><header class="identity"><div class="identity-mark">ChronoClade · {escape(report_label)}</div><div class="identity-copy"><h1>{escape(title)}</h1><p>{escape(overview)}</p>{verdict}</div></header>{navigation_html}{body}</main>{assets}</body></html>',
         encoding="utf-8",
     )
     return path

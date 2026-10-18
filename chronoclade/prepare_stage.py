@@ -6,6 +6,8 @@ import json
 import re
 import shutil
 import tempfile
+import shlex
+import uuid
 from dataclasses import dataclass, replace
 from html import escape
 from pathlib import Path
@@ -48,7 +50,7 @@ def _merge_frozen_metadata(dataset, path):
     from chronoclade.profile_inputs import _csv
 
     allowed = {
-        "country", "region", "nuts2", "host", "isolation_source", "collection_date",
+        "country", "region", "city", "nuts2", "host", "isolation_source", "collection_date",
         "hospital", "hospital_code", "publication_isolate_id", "specimen_type",
         "clinical_specimen", "study_accession", "patient_id", "location",
     }
@@ -201,6 +203,7 @@ def _portable_assemblies(dataset, source_root, staging):
 
 def _validate_previous_stage(root):
     """Validate extra assembly/source/report artifacts when importing our output."""
+    root = root.resolve()
     path = root / "prepare.json"
     if not path.exists():
         return
@@ -303,6 +306,8 @@ def _readiness(dataset, manifest):
         lineage_available = (
             any(_lineage_ready(evidence, kind) for evidence in lineage_rows) if kind else False
         )
+        mlst_st = str(row.get("mlst_st") or "").strip()
+        mlst_st_ready = bool(re.fullmatch(r"[1-9][0-9]*", mlst_st)) if kind else None
         reasons = []
         if not any(evidence["called_loci"] for evidence in profile_rows):
             reasons.append(
@@ -316,6 +321,12 @@ def _readiness(dataset, manifest):
             reasons.append("Locus catalogue is explicitly incomplete")
         if kind and not lineage_available:
             reasons.append(f"Resolved {kind} assignment with a known scope is unavailable")
+        if kind and not mlst_st_ready:
+            reasons.append(
+                "A verified seven-gene MLST ST is required for public context discovery; "
+                "add the numeric `mlst_st` from verified metadata before `cgmlst --fetch-context`. "
+                "Do not infer it from cgLIN/HierCC or nearest-neighbour labels."
+            )
         if not kind:
             reasons.append("Lineage readiness is not assessed for this species")
         reference = row.get("assembly_reference")
@@ -327,6 +338,7 @@ def _readiness(dataset, manifest):
                 "profiles": profile_rows,
                 "required_lineage_kind": kind,
                 "lineage_ready": bool(lineage_available),
+                "mlst_st_ready": mlst_st_ready,
                 "profile_ready": bool(any(evidence["called_loci"] for evidence in profile_rows)),
                 "readiness": "ready" if not reasons else "incomplete",
                 "reasons": reasons,
@@ -337,7 +349,7 @@ def _readiness(dataset, manifest):
                 else "unavailable",
                 "missing_metadata": [
                     field
-                    for field in ("country", "region", "nuts2", "host", "isolation_source")
+                    for field in ("country", "region", "city", "nuts2", "host", "isolation_source")
                     if not row.get(field)
                 ]
                 + (
@@ -372,6 +384,26 @@ def _readiness(dataset, manifest):
             "reference_database": "not_checked_not_required_for_import",
         },
     }
+
+
+def _operation_label(value):
+    """Translate operation evidence for readers without changing saved statuses."""
+    return {
+        "run_exact_queries": "Exact query retrieval attempted",
+        "not_run_local_assemblies": "Not requested; local assemblies supplied",
+        "not_run_offline": "Not requested; frozen evidence imported",
+        "run_missing_profile_or_lineage_inputs": "Native typing run where needed",
+        "not_run_frozen_import": "Not run; frozen typing imported",
+        "not_run": "Not run",
+        "ready_validated_configuration": "Configured and validated",
+        "unavailable_not_configured": "Not configured",
+        "unavailable_configured_database_or_tool_not_ready": (
+            "Unavailable; configured database or tool is not ready"
+        ),
+        "not_checked_not_required_for_import": (
+            "Not checked; not required for imported evidence"
+        ),
+    }.get(value, value)
 
 
 def _report(audit):
@@ -422,9 +454,9 @@ def _report(audit):
         "<p>Frozen evidence is saved in a validated portable bundle. Missing profiles, "
         "lineage assignments and metadata remain visible.</p></div></header>"
         '<section class="stage"><div class="stage-body"><h2>Typing readiness</h2>'
-        f"<p>Provider retrieval: {text(audit['operations']['provider_retrieval'])}. "
-        f"Typing: {text(audit['operations']['typing'])}. "
-        f"Reference database: {text(audit['operations']['reference_database'])}.</p>"
+        f"<p>Provider retrieval: {text(_operation_label(audit['operations']['provider_retrieval']))}. "
+        f"Typing: {text(_operation_label(audit['operations']['typing']))}. "
+        f"Reference database: {text(_operation_label(audit['operations']['reference_database']))}.</p>"
         f'<div class="measure-strip"><div><span>Samples</span><b>{len(rows)}</b></div>'
         f"<div><span>Ready frozen typing</span><b>{ready}</b></div>"
         f"<div><span>Incomplete typing</span><b>{len(rows) - ready}</b></div></div>"
@@ -471,6 +503,7 @@ def run_prepare(
     enrich_metadata: bool = True,
     client=None,
     _provider_sources: Path | None = None,
+    resume: bool = False,
 ) -> PrepareResult:
     """Import frozen canonical JSON or an existing bundle into a new stage output.
 
@@ -487,21 +520,81 @@ def run_prepare(
         and ("://" in input_path or re.fullmatch(r"[1-9A-HJ-NP-Za-km-z]{20,22}", input_path))
     ):
         input_kind = "collection"
+    if resume and input_kind not in {"collection", "accessions", "assemblies"}:
+        raise DatasetError("--resume is supported only for live collection/accession/assembly preparation")
+    if resume and not typing_config:
+        raise DatasetError("--resume requires --typing-config so native typing work can be recovered")
     if input_kind in {"collection", "accessions", "assemblies"}:
         from dataclasses import asdict
 
-        from chronoclade.pathogenwatch import PathogenwatchError
         from chronoclade.prepare_provider import catalogues_for_records, resolve_queries
+        from chronoclade.prepare_recovery import (
+            DirectoryLock,
+            RecoveryError,
+            begin_job,
+            bind_resolved_cohort,
+            owned_directory,
+            path_identity,
+            save_job,
+        )
+        from chronoclade.execution_provenance import execution_provenance
 
         target.parent.mkdir(parents=True, exist_ok=True)
-        with tempfile.TemporaryDirectory(
-            prefix=".prepare-provider-", dir=target.parent
-        ) as temporary:
-            work = Path(temporary)
+        work = target.with_name(target.name + ".work")
+        input_file = Path(input_path).expanduser() if isinstance(input_path, (str, Path)) else None
+        if input_file is not None and input_file.exists():
+            input_identity = path_identity(input_file)
+        else:
+            input_identity = {"value": str(input_path)}
+        binding = {
+            "target": str(target),
+            "input_kind": input_kind,
+            "input": input_identity,
+            "species": species,
+            "sources": {
+                "metadata": path_identity(metadata) if metadata else None,
+                "typing_config": path_identity(typing_config) if typing_config else None,
+                "query_typing": path_identity(query_typing) if query_typing else None,
+                "public_typing": path_identity(public_typing) if public_typing else None,
+                "cglin_export": path_identity(cglin_export) if cglin_export else None,
+                "catalogues": path_identity(catalogues) if catalogues else None,
+            },
+            "flags": {"enrich_metadata": bool(enrich_metadata)},
+            "provider_base_url": getattr(client, "base_url", None),
+            "execution": execution_provenance(
+                "native-prepare-recovery", "live-local-prepare-recovery-v1"
+            ),
+        }
+        command = ["chronoclade", "prepare", str(input_path), "--out", str(target),
+                   "--input-kind", input_kind]
+        for option, value in (("--species", species), ("--metadata", metadata),
+                              ("--typing-config", typing_config), ("--query-typing", query_typing),
+                              ("--public-typing", public_typing), ("--cglin-export", cglin_export),
+                              ("--catalogues", catalogues)):
+            if value is not None:
+                command.extend((option, str(value)))
+        command.append("--enrich-metadata" if enrich_metadata else "--no-enrich-metadata")
+        command.append("--resume")
+        resume_command = shlex.join(command)
+        lock_path = target.parent / f".{target.name}.prepare-recovery.lock"
+        with DirectoryLock(lock_path):
+            try:
+                manifest = begin_job(work, binding, resume=resume)
+            except RecoveryError as error:
+                raise DatasetError(str(error)) from error
+            attempt_id = uuid.uuid4().hex
+            attempt = owned_directory(work, Path("attempts") / attempt_id, create=True)
+            attempt_record = {
+                "attempt_id": attempt_id,
+                "status": "running",
+                "evidence_directory": f"attempts/{attempt_id}",
+            }
+            manifest.setdefault("attempts", []).append(attempt_record)
+            save_job(work, manifest)
             try:
                 rows, provenance, conflicts, ledger, provider, operations = resolve_queries(
                     input_path,
-                    work,
+                    attempt,
                     input_kind=input_kind,
                     species=species,
                     metadata=metadata,
@@ -511,39 +604,121 @@ def run_prepare(
                     public_typing=public_typing,
                     cglin_export=cglin_export,
                     enrich_metadata=enrich_metadata,
+                    native_checkpoint=work / "native_typing_cache",
+                    native_attempt=owned_directory(attempt, "native_typing_attempts", create=True),
+                    resume_typing=resume,
+                    cohort_validator=lambda resolved: bind_resolved_cohort(work, manifest, resolved),
                 )
-            except (PathogenwatchError, ValueError) as error:
-                raise DatasetError(str(error)) from None
-            explicit = _catalogues(Path(catalogues)) if catalogues else ()
-            values = catalogues_for_records(rows, explicit)
-            source = work / "live_profiles.json"
-            write_json(
-                source,
-                {
-                    "records": rows,
-                    "provenance": provenance,
-                    "conflicts": conflicts,
-                    "retrieval": ledger,
-                    "parameters": {"provider_prepare": provider, "prepare_operations": operations},
-                },
-            )
-            catalogue_file = work / "live_catalogues.json"
-            # Empty catalogue is valid when no profile could be obtained.
-            if not values:
-                # Publish sample-only evidence directly through the frozen adapter.
-                dataset = from_profile_records(
-                    rows,
-                    (),
-                    provenance=provenance,
-                    conflicts=conflicts,
-                    retrieval=ledger,
-                    parameters={"provider_prepare": provider, "prepare_operations": operations},
+                snapshot = provider.get("collection_snapshot")
+                if snapshot:
+                    snapshot_path = Path(snapshot).expanduser().resolve()
+                    try:
+                        snapshot_relative = snapshot_path.relative_to(attempt.resolve())
+                    except ValueError as error:
+                        raise DatasetError(
+                            "Provider collection snapshot is outside the retained prepare sources"
+                        ) from error
+                    if not snapshot_path.is_file():
+                        raise DatasetError("Provider collection snapshot is missing before publication")
+                    provider["collection_snapshot"] = (
+                        Path("sources") / "provider" / snapshot_relative
+                    ).as_posix()
+                explicit = _catalogues(Path(catalogues)) if catalogues else ()
+                values = catalogues_for_records(rows, explicit)
+                reference_parameters = {}
+                if typing_config and operations.get("reference_database") == "ready_validated_configuration":
+                    from chronoclade.pasteur_profile_normalization import reference_descriptor
+                    reference_parameters["native_typing_reference"] = reference_descriptor(typing_config)
+                source = attempt / "live_profiles.json"
+                write_json(
+                    source,
+                    {
+                        "records": rows,
+                        "provenance": provenance,
+                        "conflicts": conflicts,
+                        "retrieval": ledger,
+                        "parameters": {"provider_prepare": provider, "prepare_operations": operations,
+                                       **reference_parameters},
+                    },
                 )
-                provisional = work / "sample_only"
-                manifest = write_dataset(dataset, provisional)
-                return run_prepare(manifest, target, input_kind="dataset", _provider_sources=work)
-            write_json(catalogue_file, [asdict(c) for c in values])
-            return run_prepare(source, target, catalogues=catalogue_file, _provider_sources=work)
+                # Preserve successful evidence from earlier failed attempts without
+                # flattening paths or overwriting the current provider receipt.
+                prior_attempts = [
+                    item for item in manifest.get("attempts", [])
+                    if item.get("attempt_id") != attempt_id
+                ]
+                if prior_attempts:
+                    prior_root = attempt / "prior_attempts"
+                    for prior in prior_attempts:
+                        prior_source = work / prior["evidence_directory"]
+                        prior_destination = prior_root / prior["attempt_id"]
+                        for evidence in prior_source.rglob("*"):
+                            if evidence.is_file() and evidence.suffix.lower() in {
+                                ".json", ".jsonl", ".npy", ".csv", ".bin", ".raw", ".tsv",
+                            }:
+                                relative = evidence.relative_to(prior_source)
+                                destination = prior_destination / relative
+                                destination.parent.mkdir(parents=True, exist_ok=True)
+                                shutil.copyfile(evidence, destination)
+                if not values:
+                    dataset = from_profile_records(
+                        rows,
+                        (),
+                        provenance=provenance,
+                        conflicts=conflicts,
+                        retrieval=ledger,
+                        parameters={"provider_prepare": provider, "prepare_operations": operations,
+                                    **reference_parameters},
+                    )
+                    provisional = attempt / "sample_only"
+                    manifest_path = write_dataset(dataset, provisional)
+                    result = run_prepare(
+                        manifest_path, target, input_kind="dataset", _provider_sources=attempt
+                    )
+                else:
+                    catalogue_file = attempt / "live_catalogues.json"
+                    write_json(catalogue_file, [asdict(c) for c in values])
+                    result = run_prepare(
+                        source, target, catalogues=catalogue_file, _provider_sources=attempt
+                    )
+                _validate_previous_stage(target)
+                load_dataset(target / "dataset.json", mmap_mode=None)
+                attempt_record["status"] = "published"
+                manifest["status"] = "complete"
+                save_job(work, manifest)
+                # The final bundle has passed its sealed artifact validation. Remove
+                # only this positively identified, job-owned scratch tree.
+                saved = _json(work / "prepare-recovery.json")
+                if (saved.get("binding") != binding or saved.get("status") != "complete"
+                        or saved.get("job_id") != manifest.get("job_id")):
+                    raise DatasetError("Recovery ownership marker changed; preserved work directory")
+                shutil.rmtree(work)
+                return result
+            except KeyboardInterrupt as error:
+                attempt_record["status"] = "interrupted"
+                attempt_record["failure_type"] = "KeyboardInterrupt"
+                manifest["status"] = "incomplete"
+                if not typing_config:
+                    shutil.rmtree(work, ignore_errors=True)
+                    raise DatasetError("Preparation interrupted") from error
+                save_job(work, manifest)
+                raise DatasetError(
+                    f"Preparation interrupted. Recovery checkpoint retained at {work}.\n"
+                    f"Resume with: {resume_command}"
+                ) from error
+            except Exception as error:
+                attempt_record["status"] = "failed"
+                attempt_record["failure_type"] = type(error).__name__
+                manifest["status"] = "incomplete"
+                if not typing_config:
+                    # Non-native live preparation keeps its historical ephemeral boundary.
+                    shutil.rmtree(work, ignore_errors=True)
+                    raise DatasetError(str(error)) from error
+                save_job(work, manifest)
+                detail = str(error) or f"{type(error).__name__}: preparation failed"
+                raise DatasetError(
+                    f"{detail}\nRecovery checkpoint retained at {work}.\nResume with: {resume_command}"
+                ) from error
     if input_kind not in {"auto", "profiles", "dataset"}:
         raise DatasetError(
             "prepare requires profiles, dataset, collection, accessions or assemblies"
@@ -584,6 +759,9 @@ def run_prepare(
         dataset, assemblies = _portable_assemblies(dataset, source.parent, assembly_staging)
         source_evidence = {"path": "sources/input.json", "sha256": file_sha256(source)}
         parameters = dict(dataset.parameters)
+        if typing_config:
+            from chronoclade.pasteur_profile_normalization import reference_descriptor
+            parameters["native_typing_reference"] = reference_descriptor(typing_config)
         parameters["prepare"] = {
             "input_kind": kind,
             "source": source_evidence,
@@ -622,6 +800,7 @@ def run_prepare(
                     ".npy",
                     ".csv",
                     ".bin",
+                    ".raw",
                     ".tsv",
                 }:
                     if evidence.suffix.lower() == ".json":
@@ -636,6 +815,9 @@ def run_prepare(
         audit = _readiness(dataset, manifest)
         write_json(bundle / "readiness.json", audit)
         (bundle / "report.html").write_text(_report(audit), encoding="utf-8")
+        from chronoclade.stage_readme import write_stage_readme
+        write_stage_readme(bundle, 'prepare', report='report.html',
+                           readiness=audit['readiness'], published_directory=target)
         # Validate the actual saved dataset, then seal all stage-owned artifacts.
         load_dataset(manifest)
         artifacts = []

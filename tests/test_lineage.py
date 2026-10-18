@@ -172,6 +172,20 @@ def test_unknown_locations_are_missing_traits_not_countries(tmp_path: Path) -> N
     assert [row["location"] for row in metadata] == [sample.location for sample in samples]
 
 
+def test_lineage_metadata_csv_retains_optional_city_and_region(tmp_path: Path) -> None:
+    import csv
+    from chronoclade.lineage import _write_lineage_inputs
+    from chronoclade.metadata import Sample
+
+    sample = Sample(
+        "F1", tmp_path / "sample.fasta", "2020", "Greece", "Klebsiella pneumoniae",
+        "ST147", "local", country="Greece", region="Attica", city="Athens",
+    )
+    _, metadata_path, _ = _write_lineage_inputs(tmp_path, [sample])
+    row = next(csv.DictReader(metadata_path.open(newline="")))
+    assert (row["country"], row["region"], row["city"]) == ("Greece", "Attica", "Athens")
+
+
 def test_single_location_skips_model_and_clears_stale_reconstruction(
     tmp_path: Path, monkeypatch
 ) -> None:

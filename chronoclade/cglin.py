@@ -79,6 +79,63 @@ def group_key(scheme: str, version: str, components: Iterable[int], depth: int) 
     return json.dumps([scheme, version, list(prefix[:depth])], separators=(",", ":"))
 
 
+PREFIX_CONSENSUS_METHOD = "plincer-best-match-common-prefix-v1"
+
+
+def _validated_consensus(evidence, components):
+    """Check explicit native best-match evidence, never infer it from a flag."""
+    if not isinstance(evidence, Mapping) or evidence.get("method") != PREFIX_CONSENSUS_METHOD:
+        raise CGLINError("Unsupported cgLIN prefix-consensus evidence")
+    digest = evidence.get("raw_assignment_sha256")
+    if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+        raise CGLINError("cgLIN prefix consensus requires its raw assignment hash")
+    codes = evidence.get("best_match_codes")
+    if not isinstance(codes, list) or not codes:
+        raise CGLINError("cgLIN prefix consensus requires returned best-match codes")
+    parsed = []
+    for code in codes:
+        parts, status = parse_code(code)
+        if status not in {"complete", "partial"} or not parts:
+            raise CGLINError("Invalid returned best-match code in cgLIN prefix consensus")
+        parsed.append(parts)
+    shared = []
+    for parts in zip(*parsed):
+        if len(set(parts)) != 1:
+            break
+        shared.append(parts[0])
+    known = evidence.get("known_prefix")
+    if (not isinstance(known, list) or any(type(v) is not int for v in known)
+            or known != shared or tuple(known) != tuple(components)):
+        raise CGLINError("cgLIN prefix-consensus evidence disagrees with its preserved code")
+    return tuple(shared)
+
+
+def resolved_prefix(row: Mapping[str, Any], depth: int) -> tuple[int, ...] | None:
+    """Return a known prefix; a global provisional flag alone is insufficient.
+
+    Native plincer evidence can establish a prefix even when later components
+    disagree. External provisional numeric codes without that evidence remain
+    unresolved. This function never changes an assignment or fills a component.
+    """
+    components, status = parse_code(row.get("cglin_raw"))
+    if status not in {"complete", "partial"} or len(components) < depth:
+        return None
+    provisional = (row.get("cglin_status") == "provisional"
+                   or row.get("cglin_provisional") is True
+                   or _text(row.get("cglin_provisional")).lower() in {"true", "1", "yes"})
+    if provisional:
+        evidence = row.get("cglin_prefix_consensus")
+        if not evidence:
+            return None
+        try:
+            known = _validated_consensus(evidence, components)
+        except CGLINError:
+            return None
+        if len(known) < depth:
+            return None
+    return tuple(components[:depth])
+
+
 def normalise_assignment(
     row: Mapping[str, Any],
     *,
@@ -123,11 +180,15 @@ def normalise_assignment(
         "cglin_frozen_export_sha256": _text(row.get("cglin_frozen_export_sha256")),
         "cglin_export_row": dict(row.get("cglin_export_row") or row),
     }
+    consensus = row.get("cglin_prefix_consensus")
+    if consensus is not None:
+        _validated_consensus(consensus, components)
+        result["cglin_prefix_consensus"] = dict(consensus)
     for depth in depths:
         key = group_key(scheme, version, components, depth)
         result[f"cglin_group_{depth}"] = key
         result[f"cglin_status_{depth}"] = (
-            ("provisional" if provisional else "resolved") if key else status
+            ("resolved" if resolved_prefix(result, depth) is not None else "provisional") if key else status
         )
     return result
 

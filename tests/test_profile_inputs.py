@@ -10,6 +10,7 @@ import pytest
 from chronoclade.pathogenwatch import PathogenwatchClient
 from chronoclade.profile_inputs import (
     ProfileInputError,
+    _apply_overrides,
     _canonical,
     collection_id,
     materialise_assemblies,
@@ -38,6 +39,29 @@ def test_canonical_adapter_preserves_public_assembly_identity_metadata():
     assert row["source_checksum"] == checksum
     assert row["source_length"] == 1234
     assert row["qc_pass"] is True
+
+
+def test_canonical_adapter_preserves_explicit_city_without_inference_from_nuts2():
+    row = _canonical(
+        {
+            "source_genome_id": "public-id",
+            "metadata/User defined metadata/City": "Oxford",
+            "metadata/User defined metadata/Region": "Oxfordshire",
+            "metadata/User defined metadata/NUTS2": "UKJ1",
+        },
+        origin="context",
+        species="Klebsiella pneumoniae",
+    )
+    assert row["city"] == "Oxford"
+    assert row["region"] == "Oxfordshire"
+    assert row["nuts2"] == "UKJ1"
+
+    nuts_only = _canonical(
+        {"source_genome_id": "other-id", "nuts2": "UKJ1"},
+        origin="context",
+        species="Klebsiella pneumoniae",
+    )
+    assert nuts_only["city"] == ""
 
 
 def client_fixture(members, *, api_key="", downloads=None, size=None):
@@ -420,6 +444,48 @@ def test_accession_csv_metadata_is_applied_to_exact_identity(tmp_path):
     assert query["collection_date"] == "2015-06"
     assert query["date_precision"] == "month"
     assert query["region"] == "Oxford"
+
+
+def test_identity_only_override_does_not_create_manual_metadata_marker(tmp_path):
+    row = {
+        "sample_id": "query-A",
+        "source_genome_id": "source-A",
+        "accession": "SRR123",
+        "aliases": ["SRR123", "source-A"],
+        "country": "GB",
+    }
+    updated = _apply_overrides(
+        [row],
+        [
+            {
+                "accession": "SRR123",
+                "source_genome_id": "source-A",
+                "sample_id": "query-A",
+                "country": "  ",
+            }
+        ],
+        tmp_path,
+    )
+    assert updated == [row]
+
+
+def test_real_metadata_override_keeps_field_conflict_and_precedence(tmp_path):
+    row = {
+        "sample_id": "query-A",
+        "source_genome_id": "source-A",
+        "aliases": ["SRR123"],
+        "country": "GB",
+        "metadata_override_conflicts": [{"field": "host", "source_value": "human"}],
+    }
+    updated = _apply_overrides(
+        [row], [{"accession": "SRR123", "country": "Greece"}], tmp_path
+    )[0]
+    assert updated["country"] == "Greece"
+    assert updated["manual_metadata_override"] is True
+    assert updated["metadata_override_conflicts"] == [
+        {"field": "host", "source_value": "human"},
+        {"field": "country", "source_value": "GB", "manual_value": "Greece"},
+    ]
 
 
 def test_imported_collection_profiles_skip_unnecessary_export(tmp_path, monkeypatch):

@@ -8,6 +8,7 @@ from pathlib import Path
 
 from chronoclade.adaptive_context import annotate_cglin_datasets
 from chronoclade.errors import WorkflowError
+from chronoclade.metadata_geography import aggregate_metadata_geography
 from chronoclade.metadata import slugify_lineage
 
 
@@ -39,10 +40,7 @@ def route_datasets(inputs):
 
 
 def geography(rows):
-    counts = Counter((r.get("origin", "context"), r.get("country") or "Unknown",
-                      r.get("region") or "Unknown", r.get("nuts2") or "Unknown") for r in rows)
-    return [dict(origin=k[0], country=k[1], region=k[2], nuts2=k[3], count=n)
-            for k, n in sorted(counts.items())]
+    return aggregate_metadata_geography(rows)
 
 
 def run_fast_datasets(inputs, output, *, seed, bootstrap_replicates,

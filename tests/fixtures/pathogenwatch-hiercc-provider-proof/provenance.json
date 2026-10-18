@@ -1,0 +1,75 @@
+{
+  "accession_resolution_evidence": {
+    "bytes": 1163,
+    "path": "accession_resolution/receipt.json",
+    "sha256": "6a9f609a255b8a7b7efe77cf56c4beeef1116564abce48f27c01cd740bd57609"
+  },
+  "analysis_exports": [
+    {
+      "batch_receipts": [
+        {
+          "base_url": "https://pathogen.watch",
+          "download": "cgmlst",
+          "endpoint": "/api/downloads/cgmlst",
+          "job": "cgmlst-562-1",
+          "missing_source_genome_ids": [],
+          "numeric_request_ids": [
+            "108048"
+          ],
+          "request_evidence": "recorded_exact_http_request",
+          "response_bytes": 32802,
+          "response_sha256": "69ebf6b425d9c52b539d3bb8387986259a43e34d6651021bcf98be734c8f5085",
+          "retry_attempt": 1,
+          "returned_source_genome_ids": [
+            "iLGx7naVnHXTvwPF8DEgAo"
+          ],
+          "route": "/api/downloads/cgmlst?job=cgmlst-562-1",
+          "saved_response_path": "organism_0/batch_cgmlst_cgmlst-562-1_0/response.raw",
+          "source_genome_ids": [
+            "iLGx7naVnHXTvwPF8DEgAo"
+          ],
+          "status": "accepted"
+        }
+      ],
+      "download": "cgmlst",
+      "job": "cgmlst-562-1",
+      "requested_count": 1,
+      "scope_provenance": "server-advertised analysis job; typing database version and fingerprint unavailable",
+      "status": "downloaded"
+    },
+    {
+      "batch_receipts": [
+        {
+          "base_url": "https://pathogen.watch",
+          "download": "hclink",
+          "endpoint": "/api/downloads/hclink",
+          "job": "hclink-562-4",
+          "missing_source_genome_ids": [],
+          "numeric_request_ids": [
+            "108048"
+          ],
+          "request_evidence": "recorded_exact_http_request",
+          "response_bytes": 173,
+          "response_sha256": "c5ccab9dabf1f1ab4a831ea385c2819bac8db9ba5d187ab63556c9a29a5fdd76",
+          "retry_attempt": 1,
+          "returned_source_genome_ids": [
+            "iLGx7naVnHXTvwPF8DEgAo"
+          ],
+          "route": "/api/downloads/hclink?job=hclink-562-4",
+          "saved_response_path": "organism_0/batch_hclink_hclink-562-4_0/response.raw",
+          "source_genome_ids": [
+            "iLGx7naVnHXTvwPF8DEgAo"
+          ],
+          "status": "accepted"
+        }
+      ],
+      "download": "hclink",
+      "job": "hclink-562-4",
+      "requested_count": 1,
+      "scope_provenance": "server-advertised HClink assignment job; database release, version and fingerprint unavailable",
+      "status": "downloaded"
+    }
+  ],
+  "context_discovery": "not_run",
+  "input_kind": "accessions"
+}

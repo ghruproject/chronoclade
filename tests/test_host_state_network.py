@@ -86,3 +86,81 @@ def test_nearest_host_comparison_cannot_fall_back_to_context_country():
     host = build_state_network(tree, rows, [comparison], state_field='host', tree_basis='cgmlst')
     assert host['nearest_edges'][0]['source'] == 'Human'
     assert host['nearest_edges'][0]['target'] == 'Unknown'
+
+
+def test_optional_metadata_networks_use_subgroup_tree_and_rows(tmp_path):
+    from chronoclade.cgmlst.workflow import _add_state_networks
+
+    tree = Phylo.read(StringIO('((a:1,b:1):1,(c:1,d:1):1);'), 'newick')
+    rows = [
+        dict(sample_id='a', country='UK', region='North', city='Oxford', host=None, role='input'),
+        dict(sample_id='b', country='UK', region='North', city='Oxford', host=None, role='context'),
+        dict(sample_id='c', country='UK', region='South', city='Leeds', host=None, role='input'),
+        dict(sample_id='d', country='UK', region='South', city='Leeds', host=None, role='context'),
+    ]
+    location = build_location_network(tree, rows, tree_basis='cgmlst')
+    location.update(cohort_id='CG_1', id='all', label='All inputs')
+    view_tree = Phylo.read(StringIO('(a:1,b:1);'), 'newick')
+    view = build_location_network(view_tree, rows[:2], tree_basis='cgmlst')
+    view.update(cohort_id='CG_1', id='lin_1', label='LIN5: 1 (1 input)')
+    view['input_ids'] = ['a']
+    location['views'] = [view]
+
+    analysis = dict(location_network=[location], paths={}, nearest_neighbours=[])
+    _add_state_networks(analysis, rows, tmp_path)
+
+    assert analysis['state_networks']['host'] == []
+    for field, expected in [('region', 'UK / North'), ('city', 'UK / North / Oxford')]:
+        network = analysis['state_networks'][field][0]
+        assert network['sample_count'] == 4
+        assert network['state_field'] == field
+        subgroup = network['views'][0]
+        assert subgroup['sample_count'] == 2
+        assert subgroup['input_ids'] == ['a']
+        assert {item['state'] for item in subgroup['state_definitions']} == {expected}
+        assert all(item['state'] not in {'South', 'UK / South / Leeds'}
+                   for item in subgroup['state_definitions'])
+        audit = json.loads((tmp_path / f'CG_1_{field}_network.json').read_text())
+        assert audit == network
+
+
+def test_profile_selector_exposes_only_observed_optional_fields(tmp_path, monkeypatch):
+    import chronoclade.location_network.state_selector as selector
+    import chronoclade.profile_report as report
+    from chronoclade.profile_report import _state_network_views
+
+    captured = {}
+    rendered_fields = []
+
+    def render_networks(value, directory, cohorts=None, *, state_field='country', include_assets=True):
+        rendered_fields.append((state_field, value))
+        return f'<panel data-state="{state_field}"></panel>'
+
+    def choose(country_panel, host_panel=None, *, panels=None):
+        captured['fields'] = set(panels or {})
+        captured['panels'] = panels or {}
+        captured['country'] = country_panel
+        return '<selector></selector>'
+
+    monkeypatch.setattr(report, '_location_network', render_networks)
+    monkeypatch.setattr(selector, 'state_network_selector', choose)
+    data = {
+        'state_networks': {
+            'country': [{'nodes': [{'country': 'UK'}], 'edges': []}],
+            'host': [],
+            'region': [{
+                'state_field': 'region', 'state_label': 'region',
+                'known_state_count': 1, 'sample_count': 4,
+                'unknown_state_count': 0, 'status': 'insufficient_metadata',
+                'state_plural': 'regions', 'cohort_id': 'CG_1',
+            }],
+            'city': [],
+        }
+    }
+
+    html = _state_network_views(data, tmp_path)
+    assert html == '<selector></selector>'
+    assert captured['fields'] == {'region'}
+    assert captured['country'] == '<panel data-state="country"></panel>'
+    assert captured['panels']['region'] == '<panel data-state="region"></panel>'
+    assert [field for field, _ in rendered_fields] == ['country', 'region']

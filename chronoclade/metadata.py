@@ -47,6 +47,9 @@ class Sample:
     origin: str
     is_reference: bool = False
     patient_id: str = ""
+    country: str = ""
+    region: str = ""
+    city: str = ""
 
     @property
     def lineage_key(self) -> tuple[str, str]:
@@ -147,6 +150,9 @@ def read_metadata(path: Path) -> list[Sample]:
                         row.get("is_reference") or "", row_number=row_number
                     ),
                     patient_id=(row.get("patient_id") or "").strip(),
+                    country=(row.get("country") or "").strip(),
+                    region=(row.get("region") or "").strip(),
+                    city=(row.get("city") or "").strip(),
                 )
             )
 

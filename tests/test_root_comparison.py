@@ -8,6 +8,9 @@ def test_clock_comparison_keeps_primary_tree_network_and_saved_evidence(tmp_path
     path.write_text('((a:1,b:2):1,(c:3,d:4):1);')
     before=path.read_bytes()
     rows=[{'sample_id':s,'collection_date':str(2010+i)} for i,s in enumerate('abcd')]
+    for row in rows:
+        row['cgmlst_profile'] = {str(i): str(i) for i in range(629)}
+        row['provider_response'] = {'unused': 'x' * 100_000}
     analysis={'distance_units':'mismatch fraction','cohorts':[{'cohort_id':'one',
       'sample_ids':list('abcd'),'tree_path':'tree.nwk'}],
       'root_to_tip':[{'cohort_id':'one','root':'outgroup','normalization_loci':629}],
@@ -23,6 +26,9 @@ def test_clock_comparison_keeps_primary_tree_network_and_saved_evidence(tmp_path
     assert result['signed_original_baseline'] is None
     assert result['audit']['pairwise_distances_preserved_within_diagnostic_branch_policy'] is True
     assert json.loads((tmp_path/'one_root_comparison.json').read_text())['audit']['status']=='rooted'
+    assert (tmp_path/'one_root_comparison.json').stat().st_size < 30_000
+    assert 'cgmlst_profile' not in (tmp_path/'one_root_comparison.json').read_text()
+    assert len(rows[0]['cgmlst_profile']) == 629
     html=write_profile_report(analysis,directory=tmp_path).read_text()
     assert 'Clock-compatible (date-optimised)' not in html
     assert 'How much does the root affect the slope?' not in html

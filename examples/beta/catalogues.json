@@ -1,0 +1,13 @@
+[
+  {
+    "scheme_id": "beta:fixture",
+    "scheme_version": "1",
+    "loci": [
+      "locus-a",
+      "locus-b",
+      "locus-c"
+    ],
+    "source": "local synthetic fixture",
+    "complete": true
+  }
+]

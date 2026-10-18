@@ -1,0 +1,68 @@
+{
+  "groups": [
+    {
+      "organismId": "562",
+      "ids": [
+        108048
+      ],
+      "name": "Escherichia coli",
+      "supported": true,
+      "downloads": [
+        {
+          "name": "cgmlst",
+          "label": "cgMLST (Escherichia/Shigella cgMLST v1 - Enterobase)",
+          "job": "cgmlst-562-1"
+        },
+        {
+          "name": "clermontyping",
+          "label": "ClermonTyping",
+          "job": "clermontyping-562-1"
+        },
+        {
+          "name": "ectyper",
+          "label": "ECTyper",
+          "job": "ectyper-562-1"
+        },
+        {
+          "name": "hclink",
+          "label": "HierCC",
+          "job": "hclink-562-4"
+        },
+        {
+          "name": "mlst",
+          "label": "MLST (Escherichia coli#1 - Enterobase)",
+          "job": "mlst-562-5"
+        },
+        {
+          "name": "mlst2",
+          "label": "MLST 2 (Escherichia coli#2 - Pasteur)",
+          "job": "mlst2-562-2"
+        },
+        {
+          "name": "plasmidfinder",
+          "label": "PlasmidFinder",
+          "job": "plasmidfinder-ebacter-1"
+        },
+        {
+          "name": "rfplus",
+          "label": "ResFinder",
+          "job": "rfplus-562-1"
+        },
+        {
+          "name": "stecfinder",
+          "label": "STECFinder",
+          "job": "stecfinder-1"
+        },
+        {
+          "name": "virulencefinder",
+          "label": "VirulenceFinder",
+          "job": "virulencefinder-562-1"
+        }
+      ]
+    }
+  ],
+  "requested_numeric_ids": [
+    108048
+  ],
+  "sha256": "fc0375913e950901589791594262ab822a694d43828e8c50119cec927303725f"
+}

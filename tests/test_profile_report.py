@@ -568,7 +568,8 @@ def test_network_viewer_excludes_foreign_missing_and_non_image_paths(tmp_path: P
     try:
         output = write_profile_report({"location_network": [{
             "cohort_id": "CG39", "network_figure": str(foreign),
-            "full_network_figure": "missing.svg", "views": [{"label": "Missing metadata"}],
+            "full_network_figure": "missing.svg", "nodes": [{"country": "Greece"}],
+            "edges": [], "views": [{"label": "Missing metadata"}],
         }]}, directory=tmp_path)
         html = output.read_text()
         assert str(foreign) not in html
