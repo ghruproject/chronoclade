@@ -10,7 +10,7 @@ import time
 import numpy as np
 from Bio import Phylo
 
-from chronoclade.context_refinement import _lineage
+from chronoclade.profile_types import _lineage
 from chronoclade.metadata_dates import date_interval
 from chronoclade.sample_labels import sample_labels
 from chronoclade.profile_analysis import _csv, write_profile_network_figures

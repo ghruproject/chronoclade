@@ -24,3 +24,8 @@ runtime-provenance.json
 
 # Local scientific input assemblies and benchmark execution evidence
 validation/science/
+
+# Research runs and interface review artefacts stay outside the product repository.
+validation/
+research/
+.impeccable/

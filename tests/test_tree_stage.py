@@ -57,7 +57,7 @@ def selection_fixture(
 
 @pytest.fixture
 def native_stubs(monkeypatch):
-    import chronoclade.lineage as lineage
+    import chronoclade.native_pipeline as lineage
 
     monkeypatch.setattr("chronoclade.tree_stage.workflow.require_tools", lambda names: None)
     monkeypatch.setattr(
@@ -66,8 +66,8 @@ def native_stubs(monkeypatch):
     )
     calls = []
 
-    def core(files, members, reference, threads, force, mode, coherence_policy="strict", seed=None):
-        calls.append(mode)
+    def core(files, members, reference, threads, force, coherence_policy="strict", seed=None):
+        calls.append("corrected")
         ids = [s.sample_id for s in members]
         newick = "(" + ",".join(f"{ident}:0.001" for ident in ids) + ");\n"
         files.starting_tree.write_text(newick)
@@ -112,7 +112,7 @@ def test_failed_replacement_preserves_last_manifest(tmp_path, native_stubs, monk
     def broken(*args, **kwargs):
         raise WorkflowError("native failure")
 
-    monkeypatch.setattr("chronoclade.lineage._run_core_phylogeny", broken)
+    monkeypatch.setattr("chronoclade.native_pipeline._run_core_phylogeny", broken)
     with pytest.raises(WorkflowError, match="native failure"):
         run_tree(selection, output=tmp_path / "tree", force=True)
     assert load_tree_result(tmp_path / "tree/tree.json") == saved
@@ -210,7 +210,7 @@ def test_real_coherence_checks_preserve_flagged_cohort(tmp_path, monkeypatch, fl
     synthetic alignment reproduces the historical biology. Both screens use
     actual pairwise SNP counts; only external binaries are stubbed.
     """
-    from chronoclade.lineage import LineageFiles, _run_core_phylogeny
+    from chronoclade.native_pipeline import LineageFiles, _run_core_phylogeny
     from chronoclade.metadata import Sample
     from chronoclade.evidence import read_alignment
 
@@ -229,13 +229,13 @@ def test_real_coherence_checks_preserve_flagged_cohort(tmp_path, monkeypatch, fl
         elif cmd[0] == "ClonalFrameML":
             files.tree.write_text(files.starting_tree.read_text())
             alignment(files.filtered_alignment, flag_stage in {"corrected", "both"})
-    monkeypatch.setattr("chronoclade.lineage._run_command", command)
+    monkeypatch.setattr("chronoclade.native_pipeline._run_command", command)
     if policy == "strict" and flag_stage in {"corrected", "both"}:
         with pytest.raises(WorkflowError, match="outlier"):
-            _run_core_phylogeny(files, members, members[0], 1, False, "corrected", coherence_policy=policy)
+            _run_core_phylogeny(files, members, members[0], 1, False, coherence_policy=policy)
         assert "ClonalFrameML" in calls
     else:
-        tree, alignment, _ = _run_core_phylogeny(files, members, members[0], 1, False, "corrected", coherence_policy=policy)
+        tree, alignment, _ = _run_core_phylogeny(files, members, members[0], 1, False, coherence_policy=policy)
         assert "ClonalFrameML" in calls
         assert set(read_alignment(alignment)) == set(ids)
         assert {tip.name for tip in Phylo.read(tree, "newick").get_terminals()} == set(ids)
@@ -260,7 +260,7 @@ def test_coherence_policy_binds_resume_and_report(tmp_path, native_stubs):
 
 
 def test_diagnostic_warning_and_flagged_statistics_in_saved_report(tmp_path, native_stubs, monkeypatch):
-    import chronoclade.lineage as lineage
+    import chronoclade.native_pipeline as lineage
     core = lineage._run_core_phylogeny
     def flagged(*args, **kwargs):
         result = core(*args, **kwargs)
@@ -284,20 +284,18 @@ def test_diagnostic_warning_and_flagged_statistics_in_saved_report(tmp_path, nat
     assert "Flagged genomes: d" in report
 
 
-@pytest.mark.parametrize("mode", ["fast", "corrected"])
 @pytest.mark.parametrize("seed", [None, 20261013])
-def test_iqtree_seed_is_explicit_only_when_configured(tmp_path, monkeypatch, mode, seed):
-    from chronoclade.lineage import LineageFiles, _run_core_phylogeny
+def test_iqtree_seed_is_explicit_only_when_configured(tmp_path, monkeypatch, seed):
+    from chronoclade.native_pipeline import LineageFiles, _run_core_phylogeny
     from chronoclade.metadata import Sample
     files = LineageFiles.in_directory(tmp_path)
     members = [Sample(i, tmp_path / f"{i}.fa", "", "", "sp", "lin", "local") for i in "abc"]
     commands = []
     def command(cmd, **kwargs):
         commands.append(cmd)
-    monkeypatch.setattr("chronoclade.lineage._run_command", command)
-    monkeypatch.setattr("chronoclade.lineage.screen_alignment", lambda *args, **kwargs: {"flagged_samples": []})
-    monkeypatch.setattr("chronoclade.lineage.run_phipack_screen", lambda **kwargs: {})
-    _run_core_phylogeny(files, members, members[0], 1, False, mode, seed=seed)
+    monkeypatch.setattr("chronoclade.native_pipeline._run_command", command)
+    monkeypatch.setattr("chronoclade.native_pipeline.screen_alignment", lambda *args, **kwargs: {"flagged_samples": []})
+    _run_core_phylogeny(files, members, members[0], 1, False, seed=seed)
     iq = next(cmd for cmd in commands if cmd[0] == "iqtree")
     if seed is None:
         assert "-seed" not in iq
@@ -306,7 +304,7 @@ def test_iqtree_seed_is_explicit_only_when_configured(tmp_path, monkeypatch, mod
 
 
 def test_native_tree_passes_seed_and_binds_resume(tmp_path, native_stubs, monkeypatch):
-    import chronoclade.lineage as lineage
+    import chronoclade.native_pipeline as lineage
     original = lineage._run_core_phylogeny
     observed = []
     def core(*args, **kwargs):
@@ -359,7 +357,7 @@ def test_native_tree_requires_input_for_reference(tmp_path, native_stubs, monkey
 
 def test_strict_raw_review_warning_and_policy_version(tmp_path, native_stubs, monkeypatch):
     """A recombinant raw outlier can pass the unchanged corrected gate, as in Bowers101."""
-    import chronoclade.lineage as lineage
+    import chronoclade.native_pipeline as lineage
     import chronoclade.tree_stage.workflow as workflow
 
     core = lineage._run_core_phylogeny

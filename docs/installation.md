@@ -85,4 +85,4 @@ Authenticated sequence/cgLIN downloads use `PATHOGENWATCH_API_KEY`, or
 `~/.config/chronoclade/pathogenwatch.json` containing an `api_key` field with
 permissions `0600`. Never commit this file. Offline fixture tests need no
 credentials. The same Pixi CLI runs on macOS/Linux laptops and Linux SLURM
-workers; SLURM is optional. See the [pilot](pathogenwatch-pilot.md).
+workers; SLURM is optional. See the [independent workflow](independent-suite.md#local-and-slurm-jobs).

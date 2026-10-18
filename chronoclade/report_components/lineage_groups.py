@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 from Bio import Phylo
 
-from chronoclade.context_refinement import _lineage
+from chronoclade.profile_types import _lineage
 from chronoclade.provider_hiercc import reported_metadata, reported_scope
 
 

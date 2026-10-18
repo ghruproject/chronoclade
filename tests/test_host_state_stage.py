@@ -207,7 +207,7 @@ def test_dated_time_report_uses_same_host_topology_without_running_native_tools(
 
     monkeypatch.setattr("chronoclade.time_stage.workflow.require_tools", lambda names: None)
     monkeypatch.setattr("chronoclade.time_stage.workflow.tools", lambda names: {name: {"path": None} for name in names})
-    monkeypatch.setattr("chronoclade.lineage._run_dated_tree", fake_dated_tree)
+    monkeypatch.setattr("chronoclade.native_pipeline._run_dated_tree", fake_dated_tree)
     monkeypatch.setattr("chronoclade.temporal_report.write_timetree_confidence", lambda job: {"status": "fixture"})
     monkeypatch.setattr("chronoclade.temporal_report.write_timetree_figures", lambda *args, **kwargs: None)
 

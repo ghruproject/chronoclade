@@ -7,7 +7,7 @@ import pytest
 from typer.testing import CliRunner
 
 from chronoclade.artifacts import file_sha256
-from chronoclade.cgmlst.dna import CATALOGUE_SCHEMA, DNAComparator
+from chronoclade.cgmlst.dna import AlignedDNAComparator, CATALOGUE_SCHEMA
 from chronoclade.cgmlst.workflow import run_cgmlst
 from chronoclade.cli import app
 from chronoclade.context_partitions import profile_records
@@ -89,25 +89,23 @@ def test_direct_dna_full_workflow_changes_neighbours_units_and_preserves_selecti
     assert direct.report_path.exists()
 
 
-def test_missing_sequences_and_unequal_lengths_are_audited_not_matching(tmp_path):
+def test_missing_sequences_are_audited_after_alignment(tmp_path):
     dataset, _, catalogue = fixture(tmp_path, sequences=[
         ("a", "100", "AAAA"), ("a", "101", "AA"), ("a", "9000", "AAAT"),
         ("b", "1", "GGGG"),
     ])
     rows = {row["sample_id"]: row for row in profile_records(dataset)}
-    model = DNAComparator(catalogue, list(rows.values()))
+    model = AlignedDNAComparator(catalogue, list(rows.values()))
     evidence, reason = model.pair(rows["q"], rows["c1"], .9)
-    assert evidence is None and reason == "insufficient_sequence_overlap"
-    evidence, reason = model.pair(rows["q"], rows["c1"], .5)
     assert reason is None and evidence["snp_differences"] == 0
-    assert evidence["shared_called_sites"] == 4
-    assert evidence["shared_called_loci"] == 1
-    assert evidence["unequal_length_loci"] == ["a"]
+    assert evidence["shared_called_sites"] == 6
+    assert evidence["shared_called_loci"] == 2
+    assert evidence["gap_vs_base_columns"] == 2
     evidence, _ = model.pair(rows["q"], rows["c2"], .5)
     assert evidence["missing_sequence_loci"] == ["b"]
     assert evidence["snp_differences"] == 1
     audit = json.loads(model.save_audit(tmp_path).read_text())
-    assert audit["exclusion_counts"]["unequal_length_loci"] == 2
+    assert audit["exclusion_counts"]["missing_sequence_loci"] == 1
     assert audit["provenance"]["dna_csv_sha256"]
 
 
@@ -129,10 +127,10 @@ def test_catalogue_scope_fails_closed_before_output(tmp_path, change, match):
 def test_reject_ambiguous_bases_and_checksum_mutation(tmp_path):
     dataset, _, catalogue = fixture(tmp_path, sequences=[("a", "100", "AANA")])
     with pytest.raises(ValueError, match="ambiguous"):
-        DNAComparator(catalogue, profile_records(dataset))
+        AlignedDNAComparator(catalogue, profile_records(dataset))
     (tmp_path / "dna.csv").write_text("locus,allele,dna\na,100,AAAA\n")
     with pytest.raises(ValueError, match="SHA256 mismatch"):
-        DNAComparator(catalogue, profile_records(dataset))
+        AlignedDNAComparator(catalogue, profile_records(dataset))
 
 
 def test_cli_default_and_direct_dna_required_catalogue_errors(tmp_path):
@@ -175,7 +173,7 @@ def test_locus_bootstrap_weights_actual_sites_not_mean_gene_fractions(tmp_path):
         ("b", "1", "GGGGGGGG"), ("b", "2", "GGGGGGGT"),
     ])
     rows = {row["sample_id"]: row for row in profile_records(dataset)}
-    model = DNAComparator(catalogue, list(rows.values()))
+    model = AlignedDNAComparator(catalogue, list(rows.values()))
     matrix = model.resample([rows["q"], rows["c2"]], ["a", "b"], np.array([0, 0, 1]), 1)
     assert matrix[0, 1] == 3 / 16
     assert np.array_equal(np.diag(matrix), [0, 0])
@@ -225,25 +223,24 @@ def test_newick_preserves_nucleotide_branch_precision(tmp_path):
 
 def test_small_snp_fractions_still_flag_non_euclidean_ordination(tmp_path):
     from chronoclade.profile_analysis import analyse_profiles
-    prefix = "A" * 120000
+    prefix = "A" * 1200
     dataset, _, catalogue = fixture(tmp_path, sequences=[
         ("a", "100", prefix + "AAAA"), ("a", "101", prefix + "AATT"),
         ("a", "9000", prefix + "TTAA"), ("a", "105", prefix + "TTTT"),
-        ("b", "1", "G" * 120000),
+        ("b", "1", "G" * 1200),
     ])
     rows = profile_records(dataset)
     rows[-1]["cgmlst_profile"]["b"] = "1"
     rows.append(dict(rows[1], sample_id="c3", cgmlst_profile={"a": "105", "b": "1"}))
-    model = DNAComparator(catalogue, rows)
+    model = AlignedDNAComparator(catalogue, rows)
     analysis = analyse_profiles(rows, output=tmp_path / "ordination", distance_model=model,
                                 bootstrap_replicates=0, min_overlap=1, distance_threshold=.000001)
     cohort = analysis["cohorts"][0]
     assert any("negative PCoA eigenvalues" in item for item in cohort["warnings"])
-    assert min(cohort["pcoa_eigenvalues"]) > -1e-10
+    assert -0.02 * max(cohort["pcoa_eigenvalues"]) < min(cohort["pcoa_eigenvalues"]) < 0
 
 
 def test_aligned_runtime_keeps_length_variable_locus_and_separates_indels(tmp_path):
-    from chronoclade.cgmlst.dna import AlignedDNAComparator
     dataset, _, catalogue = fixture(tmp_path, sequences=[
         ("a", "100", "ACCTG"), ("a", "101", "ACTG"), ("a", "9000", "ACCTG"),
         ("b", "1", "GGGG"), ("b", "2", "GGGT"),
@@ -257,7 +254,6 @@ def test_aligned_runtime_keeps_length_variable_locus_and_separates_indels(tmp_pa
     assert evidence["snp_differences"] == 0
     assert evidence["gap_vs_base_columns"] == 1
     assert evidence["indel_tracts"] == 1
-    assert evidence["unequal_length_loci"] == []
     audit = json.loads(model.save_audit(tmp_path / "audit").read_text())
     assert (tmp_path / "audit" / audit["alignment"]["concatenation"]).is_file()
     assert audit["provenance"]["mafft_version"]

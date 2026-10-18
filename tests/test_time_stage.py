@@ -91,7 +91,7 @@ def test_native_treetime_dating_saved_tree_without_phylogeny_rebuild(
 
     if not shutil.which("treetime"):
         pytest.skip("Native TreeTime unavailable")
-    import chronoclade.lineage as lineage
+    import chronoclade.native_pipeline as lineage
 
     original = lineage._run_core_phylogeny
 
@@ -178,9 +178,9 @@ def test_time_preserves_tree_coherence_review(tmp_path, native_stubs):
 
 @pytest.mark.parametrize("seed,keep_polytomies", [(None, False), (20261013, True)])
 def test_dated_tree_seed_and_polytomy_flags(tmp_path, monkeypatch, seed, keep_polytomies):
-    from chronoclade.lineage import LineageFiles, _run_dated_tree
+    from chronoclade.native_pipeline import LineageFiles, _run_dated_tree
     commands = []
-    monkeypatch.setattr("chronoclade.lineage._run_command", lambda command, **kwargs: commands.append(command))
+    monkeypatch.setattr("chronoclade.native_pipeline._run_command", lambda command, **kwargs: commands.append(command))
     files = LineageFiles.in_directory(tmp_path)
     _run_dated_tree(files, 2000, False, seed=seed, keep_polytomies=keep_polytomies)
     command = commands[0]
@@ -236,7 +236,7 @@ def test_same_tips_changed_rooted_topology_fails_before_publish(tmp_path, native
         # Source is a trifurcation; retaining exact tips while adding a clade is forbidden.
         files.time_tree.parent.mkdir(parents=True, exist_ok=True)
         Phylo.write(Phylo.read(StringIO("((q:1,c:1):1,d:2);"), "newick"), files.time_tree, "nexus")
-    monkeypatch.setattr("chronoclade.lineage._run_dated_tree", altered_dating)
+    monkeypatch.setattr("chronoclade.native_pipeline._run_dated_tree", altered_dating)
     with pytest.raises(WorkflowError, match="changed the saved rooted topology"):
         run_time(tmp_path / "tree/tree.json", output=tmp_path / "time", allow_unsupported=True)
     assert not (tmp_path / "time/time.json").exists()

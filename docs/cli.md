@@ -101,8 +101,3 @@ requirements where supported.
 ```bash
 pixi run chronoclade preflight
 ```
-
-## Context geography
-
-Country figures can be regenerated offline from a saved `context_catalogue.json`
-without running phylogeny. See [context geography](context-geography.md).

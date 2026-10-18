@@ -1,8 +1,4 @@
-"""Scope-checked nucleotide comparisons of frozen cgMLST allele sequences.
-
-Runtime comparisons align alleles per locus before genome reconstruction and
-concatenation. DNAComparator preserves the historical positional research method.
-"""
+"""Scope-checked nucleotide comparisons of aligned cgMLST allele sequences."""
 
 from __future__ import annotations
 
@@ -17,7 +13,7 @@ import re
 import numpy as np
 
 from chronoclade.artifacts import write_json
-from chronoclade.context_refinement import _allele, _loci, _profile
+from chronoclade.profile_types import _allele, _loci, _profile
 from chronoclade.profile_analysis import _pair
 
 CATALOGUE_SCHEMA = "chronoclade.allele-sequence-catalogue"
@@ -95,27 +91,44 @@ def read_catalogue(path, records):
         raise ValueError(f"Invalid frozen allele-sequence catalogue: {error}") from error
 
 
-class DNAComparator:
-    """A pair/locus-resampling adapter for the existing descriptive profile engine."""
+class AlignedDNAComparator:
+    """Compare per-locus MAFFT alignments through the profile analysis engine."""
 
     metadata = {
         "distance_method": "direct-dna",
-        "distance_definition": "fraction of nucleotide substitutions across jointly called, equal-length cgMLST allele sequences",
+        "distance_definition": "fraction of nucleotide substitutions at jointly ACGT columns in per-locus MAFFT alignments reconstructed and concatenated by genome",
         "distance_units": "cgMLST nucleotide mismatch fraction",
         "raw_difference_field": "snp_differences",
-        "nearest_ranking": "raw nucleotide substitutions among sufficiently jointly callable, equal-length cgMLST alleles; all raw-distance ties retained",
+        "nearest_ranking": "raw substitutions at jointly ACGT columns of aligned cgMLST loci; all raw-distance ties retained",
+        "alignment_method": "per-locus MAFFT, followed by genome reconstruction and concatenation",
     }
     limitations = [
-        "Direct DNA compares equal-length cgMLST alleles sitewise, assuming homologous positions; no alignment is inferred.",
-        "Missing DNA and unequal-length allele pairs are excluded; every comparison records its loci and nucleotide denominator.",
-        "These are substitutions within supplied cgMLST genes, not genome-wide or recombination-corrected SNP distances.",
+        "Each variable locus is aligned independently with MAFFT before genome reconstruction and concatenation.",
+        "Substitutions count only jointly ACGT columns; missing calls are N and alignment gaps are reported separately.",
+        "Gene-panel SNPs are not genome-wide or recombination-corrected distances; alignment uncertainty remains.",
     ]
-    failure_reasons = ("missing_call", "missing_sequence", "unequal_length")
+    failure_reasons = ("missing_call", "missing_sequence", "no_jointly_called_sites")
 
     def __init__(self, path, records):
+        import shutil
+        import tempfile
+        from chronoclade.cgmlst.locus_alignment import align_catalogue
+
         self.sequences, self.scope, self.provenance = read_catalogue(path, records)
         self._locus_cache, self._pair_cache = {}, {}
+        self._gap_cache = {}
         self.audit = []
+        executable = shutil.which("mafft")
+        if executable is None:
+            raise ValueError("Direct DNA requires MAFFT for per-locus alignment; use the Pixi cgmlst environment")
+        self._alignment_directory = tempfile.TemporaryDirectory(prefix="chronoclade-locus-alignment-")
+        self.alignment = align_catalogue(path, records, self._alignment_directory.name, executable)
+        self._aligned_sequences = self.alignment.aligned_alleles
+        self.provenance = {**self.provenance, "alignment_method": self.metadata["alignment_method"],
+                           "mafft_version": self.alignment.provenance["mafft"]["version"],
+                           "mafft_sha256": self.alignment.provenance["mafft"]["sha256"],
+                           "mafft_options": self.alignment.provenance["mafft"]["options"],
+                           "concatenation_sha256": self.alignment.provenance["concatenation_sha256"]}
 
     def locus_pair(self, locus, left, right):
         key = (locus, left, right)
@@ -123,13 +136,15 @@ class DNAComparator:
             if left is None or right is None:
                 result = (0, 0, "missing_call")
             else:
-                a, b = self.sequences.get((locus, left)), self.sequences.get((locus, right))
+                a = self._aligned_sequences.get((locus, left))
+                b = self._aligned_sequences.get((locus, right))
                 if a is None or b is None:
                     result = (0, 0, "missing_sequence")
-                elif len(a) != len(b):
-                    result = (0, 0, "unequal_length")
                 else:
-                    result = (sum(x != y for x, y in zip(a, b, strict=True)), len(a), None)
+                    from chronoclade.cgmlst.locus_alignment import _scalar_stats
+                    substitutions, sites, gap_base, both_gap, missing, tracts = _scalar_stats(a, b)
+                    self._gap_cache[key] = (gap_base, both_gap, tracts)
+                    result = (substitutions, sites, None if sites else "no_jointly_called_sites")
             self._locus_cache[key] = result
         return self._locus_cache[key]
 
@@ -162,10 +177,13 @@ class DNAComparator:
             "distance": differences / sites if sites else None,
             "missing_call_loci": failures["missing_call"],
             "missing_sequence_loci": failures["missing_sequence"],
-            "unequal_length_loci": failures.get("unequal_length", []),
-            **({"no_jointly_called_sites_loci": failures["no_jointly_called_sites"]}
-               if "no_jointly_called_sites" in failures else {}),
+            "no_jointly_called_sites_loci": failures["no_jointly_called_sites"],
         }
+        gaps = [self._gap_cache.get((locus, _allele(a.get(locus)), _allele(b.get(locus))), (0, 0, 0))
+                for locus in loci]
+        result.update(gap_vs_base_columns=sum(row[0] for row in gaps),
+                      both_gap_columns=sum(row[1] for row in gaps),
+                      indel_tracts=sum(row[2] for row in gaps))
         if any(failures.values()):
             self.audit.append({"sample_a": key[0], "sample_b": key[1],
                                "status": "comparable" if eligible else "unavailable", **result})
@@ -201,94 +219,20 @@ class DNAComparator:
         return differences / sites
 
     def save_audit(self, directory):
+        import shutil
+        from chronoclade.artifacts import file_sha256
+
+        destination = Path(directory) / "locus_alignment"
+        shutil.copytree(self._alignment_directory.name, destination, dirs_exist_ok=True)
         path = Path(directory) / "sequence_comparison_audit.json"
         write_json(path, {"schema": "chronoclade.cgmlst.sequence-comparison-audit", "schema_version": 1,
                           "scope": self.scope, "provenance": self.provenance,
                           "pair_exclusions": self.audit,
                           "exclusion_counts": dict(Counter(
                               reason for row in self.audit for reason in (f"{name}_loci" for name in self.failure_reasons)
-                              if row[reason]))})
-        return path
-
-
-class AlignedDNAComparator(DNAComparator):
-    """Normal direct-DNA route: per-locus MSA, reconstructed concatenation.
-
-    The positional comparator above is retained for historical research receipts.
-    Runtime analysis uses this adapter, never an unequal-length exclusion shortcut.
-    """
-
-    metadata = {
-        **DNAComparator.metadata,
-        "distance_definition": "fraction of nucleotide substitutions at jointly ACGT columns in per-locus MAFFT alignments reconstructed and concatenated by genome",
-        "nearest_ranking": "raw substitutions at jointly ACGT columns of aligned cgMLST loci; all raw-distance ties retained",
-        "alignment_method": "per-locus MAFFT, followed by genome reconstruction and concatenation",
-    }
-    limitations = [
-        "Each variable locus is aligned independently with MAFFT before genome reconstruction and concatenation.",
-        "Substitutions count only jointly ACGT columns; missing calls are N and alignment gaps are reported separately.",
-        "Gene-panel SNPs are not genome-wide or recombination-corrected distances; alignment uncertainty remains.",
-    ]
-    failure_reasons = ("missing_call", "missing_sequence", "no_jointly_called_sites")
-
-    def __init__(self, path, records):
-        import shutil
-        import tempfile
-        from chronoclade.cgmlst.locus_alignment import align_catalogue
-
-        super().__init__(path, records)
-        executable = shutil.which("mafft")
-        if executable is None:
-            raise ValueError("Direct DNA requires MAFFT for per-locus alignment; use the Pixi cgmlst environment")
-        self._alignment_directory = tempfile.TemporaryDirectory(prefix="chronoclade-locus-alignment-")
-        self.alignment = align_catalogue(path, records, self._alignment_directory.name, executable)
-        self._aligned_sequences = self.alignment.aligned_alleles
-        self._gap_cache = {}
-        self.provenance = {**self.provenance, "alignment_method": self.metadata["alignment_method"],
-                           "mafft_version": self.alignment.provenance["mafft"]["version"],
-                           "mafft_sha256": self.alignment.provenance["mafft"]["sha256"],
-                           "mafft_options": self.alignment.provenance["mafft"]["options"],
-                           "concatenation_sha256": self.alignment.provenance["concatenation_sha256"]}
-
-    def locus_pair(self, locus, left, right):
-        key = (locus, left, right)
-        if key not in self._locus_cache:
-            if left is None or right is None:
-                result = (0, 0, "missing_call")
-            else:
-                a = self._aligned_sequences.get((locus, left))
-                b = self._aligned_sequences.get((locus, right))
-                if a is None or b is None:
-                    result = (0, 0, "missing_sequence")
-                else:
-                    from chronoclade.cgmlst.locus_alignment import _scalar_stats
-                    substitutions, sites, gap_base, both_gap, missing, tracts = _scalar_stats(a, b)
-                    self._gap_cache[key] = (gap_base, both_gap, tracts)
-                    result = (substitutions, sites, None if sites else "no_jointly_called_sites")
-            self._locus_cache[key] = result
-        return self._locus_cache[key]
-
-    def pair(self, left, right, overlap):
-        result, reason = super().pair(left, right, overlap)
-        if result is not None:
-            a, b = _profile(left), _profile(right)
-            gaps = [self._gap_cache.get((locus, _allele(a.get(locus)), _allele(b.get(locus))), (0, 0, 0))
-                    for locus in _loci(left, a)]
-            result.update(gap_vs_base_columns=sum(row[0] for row in gaps),
-                          both_gap_columns=sum(row[1] for row in gaps),
-                          indel_tracts=sum(row[2] for row in gaps))
-        return result, reason
-
-    def save_audit(self, directory):
-        import shutil
-        from chronoclade.artifacts import file_sha256
-        destination = Path(directory) / "locus_alignment"
-        shutil.copytree(self._alignment_directory.name, destination, dirs_exist_ok=True)
-        path = super().save_audit(directory)
-        payload = json.loads(path.read_text())
-        payload["alignment"] = {"path": "locus_alignment/alignment.json",
-                                "sha256": file_sha256(destination / "alignment.json"),
-                                "concatenation": "locus_alignment/concatenated.fasta",
-                                "partitions": "locus_alignment/partitions.json"}
-        write_json(path, payload)
+                              if row[reason])),
+                          "alignment": {"path": "locus_alignment/alignment.json",
+                                        "sha256": file_sha256(destination / "alignment.json"),
+                                        "concatenation": "locus_alignment/concatenated.fasta",
+                                        "partitions": "locus_alignment/partitions.json"}})
         return path

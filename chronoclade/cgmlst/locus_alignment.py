@@ -15,7 +15,7 @@ import subprocess
 import numpy as np
 
 from chronoclade.cgmlst.dna import read_catalogue
-from chronoclade.context_refinement import _allele, _profile
+from chronoclade.profile_types import _allele, _profile
 
 MAFFT_OPTIONS = ("--thread", "1", "--inputorder", "--auto", "--nuc", "--quiet")
 
@@ -103,7 +103,7 @@ class LocusAlignment:
 
     def pairs(self, min_loci=599):
         if not self.samples:
-            raise ValueError("Pair iteration requires materialized samples; use aligned_matrix for streaming alignments")
+            raise ValueError("Pair iteration requires materialized samples")
         if not 1 <= min_loci <= len(self.partitions):
             raise ValueError("Minimum compared loci lies outside the canonical scheme")
         vectors = {ident: np.frombuffer(seq.encode(), dtype=np.uint8)

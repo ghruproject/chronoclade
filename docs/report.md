@@ -114,10 +114,3 @@ The ensemble comparison uses exact shared anchors. It distinguishes within-run
 model uncertainty from variation between alternative selections; whole-selection
 roots can describe different ancestors. See [tree](tree-stage.md) and
 [time](time-stage.md) for the recorded checks and comparison policies.
-
-## Historical reports
-
-Preserved reports may include PhiPack and earlier assembly-screen sections.
-Those sections describe their original run and are not produced by the current
-independent cgMLST module. Interpret saved results using the methods and evidence
-bundled with that run.

@@ -3,13 +3,11 @@
 This walkthrough takes a small *Klebsiella pneumoniae* dataset from local
 assemblies through public cgMLST context, a recombination-adjusted SNP tree and
 a decision about whether dating is supported. It uses the normal live-data
-workflow. The final section records a separate two-isolate Mac validation; its
-cached inputs are not needed for your own run.
+workflow.
 
 ## Install and prepare references
 
-Install [Pixi](https://pixi.sh/latest/). Use the branch or commit named in the beta publication receipt until the
-changes are merged into the default branch.
+Install [Pixi](https://pixi.sh/latest/).
 Install the locked environments and check the native programs:
 
 ```sh
@@ -150,30 +148,3 @@ failed stage log before removing its work folder.
   mode stops for review.
 - **Time is unsupported:** report the negative assessment; there is no dated
   tree or confidence region for that run.
-
-## Recorded local check
-
-A separate V14 validation followed two Greek ST258 isolates, ERR8771929 and
-ERR8772239, collected on 2019-05-14. It reused a frozen provider snapshot,
-configured native references and an assembly cache, so it is evidence for this
-local replay rather than a fresh-download recipe. The frozen source had 13,421
-accessible records; LIN8 refinement retained 386 source rows and identity
-reconciliation produced 232 unique public comparisons. Nearest-neighbour ties
-expanded the requested context budget to 26 contexts plus the two inputs. All
-26 selected context assemblies were cached.
-
-Both inputs were ready with 628/629 loci called. The tree completed 100/100 date
-permutations over 24 date clusters. Dating was unsupported (p=0.0891 at the
-0.05 threshold), so no dated tree or node intervals were produced. The recorded
-run and independent evidence are under
-`validation/beta/mac-native-final-plan/execution-v14/`; the validation manifest
-and cached FASTAs are local files and are not required for the normal workflow
-above.
-
-A separate supported 63-genome benchmark was rerun with the final V16 build,
-using its saved corrected SNP tree. It retained all 63 genomes and the same
-rooted topology, and reproduced the MRCA estimate of 1995.6604 with a 90%
-max-posterior region of 1994.268418–1998.078415. This checks the supported
-dating route and its uncertainty output; it is not a fresh SNP-tree run.
-The source tree, old result and new result remained separately checksummed.
-Evidence: `validation/beta/positive-subsampling-plan/time-closeout-selection001-v16/`.

@@ -277,7 +277,6 @@ environments:
       - conda: https://conda.anaconda.org/bioconda/linux-64/perl-io-compress-2.216-pl5321h503566f_0.conda
       - conda: https://conda.anaconda.org/bioconda/linux-64/perl-json-xs-4.04-pl5321h9948957_0.conda
       - conda: https://conda.anaconda.org/bioconda/linux-64/perl-list-moreutils-xs-0.430-pl5321h7b50bb2_5.tar.bz2
-      - conda: https://conda.anaconda.org/bioconda/linux-64/phipack-1.1-h7b50bb2_7.conda
       - conda: https://conda.anaconda.org/bioconda/linux-64/rapidnj-2.3.3-hd63eeec_0.conda
       - conda: https://conda.anaconda.org/bioconda/linux-64/ska2-0.5.1-h4349ce8_0.conda
       - conda: https://conda.anaconda.org/bioconda/noarch/perl-archive-tar-3.14-pl5321hcbfc158_0.conda
@@ -456,7 +455,6 @@ environments:
       - conda: https://conda.anaconda.org/bioconda/linux-aarch64/perl-io-compress-2.216-pl5321h80f0ee0_0.conda
       - conda: https://conda.anaconda.org/bioconda/linux-aarch64/perl-json-xs-4.04-pl5321h163da20_0.conda
       - conda: https://conda.anaconda.org/bioconda/linux-aarch64/perl-list-moreutils-xs-0.430-pl5321h661a7b0_5.tar.bz2
-      - conda: https://conda.anaconda.org/bioconda/linux-aarch64/phipack-1.1-h661a7b0_7.conda
       - conda: https://conda.anaconda.org/bioconda/linux-aarch64/rpsbproc-0.5.1-h7645e38_0.conda
       - conda: https://conda.anaconda.org/bioconda/linux-aarch64/ska2-0.5.1-hba26009_0.conda
       - conda: https://conda.anaconda.org/bioconda/noarch/perl-archive-tar-3.14-pl5321hcbfc158_0.conda
@@ -641,7 +639,6 @@ environments:
       - conda: https://conda.anaconda.org/bioconda/osx-64/perl-io-compress-2.216-pl5321h5eaf441_0.conda
       - conda: https://conda.anaconda.org/bioconda/osx-64/perl-json-xs-4.04-pl5321h5fa12a8_0.conda
       - conda: https://conda.anaconda.org/bioconda/osx-64/perl-list-moreutils-xs-0.430-pl5321h18d8cf3_5.tar.bz2
-      - conda: https://conda.anaconda.org/bioconda/osx-64/phipack-1.1-h2413b67_7.conda
       - conda: https://conda.anaconda.org/bioconda/osx-64/ska2-0.5.1-h00cbfe0_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.7.22-hbd8a1cb_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cycler-0.12.1-pyhcf101f3_2.conda
@@ -808,7 +805,6 @@ environments:
       - conda: https://conda.anaconda.org/bioconda/osx-arm64/perl-io-compress-2.216-pl5321haef7865_0.conda
       - conda: https://conda.anaconda.org/bioconda/osx-arm64/perl-json-xs-4.04-pl5321h4675bf2_0.conda
       - conda: https://conda.anaconda.org/bioconda/osx-arm64/perl-list-moreutils-xs-0.430-pl5321hbdacb55_5.tar.bz2
-      - conda: https://conda.anaconda.org/bioconda/osx-arm64/phipack-1.1-h745f407_7.conda
       - conda: https://conda.anaconda.org/bioconda/osx-arm64/ska2-0.5.1-hda65a65_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.7.22-hbd8a1cb_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cycler-0.12.1-pyhcf101f3_2.conda
@@ -1568,7 +1564,6 @@ environments:
       - conda: https://conda.anaconda.org/bioconda/linux-64/perl-io-compress-2.216-pl5321h503566f_0.conda
       - conda: https://conda.anaconda.org/bioconda/linux-64/perl-json-xs-4.04-pl5321h9948957_0.conda
       - conda: https://conda.anaconda.org/bioconda/linux-64/perl-list-moreutils-xs-0.430-pl5321h7b50bb2_5.tar.bz2
-      - conda: https://conda.anaconda.org/bioconda/linux-64/phipack-1.1-h7b50bb2_7.conda
       - conda: https://conda.anaconda.org/bioconda/linux-64/ska2-0.5.1-h4349ce8_0.conda
       - conda: https://conda.anaconda.org/bioconda/noarch/perl-archive-tar-3.14-pl5321hcbfc158_0.conda
       - conda: https://conda.anaconda.org/bioconda/noarch/perl-io-zlib-1.15-pl5321hdfd78af_1.tar.bz2
@@ -1711,7 +1706,6 @@ environments:
       - conda: https://conda.anaconda.org/bioconda/linux-aarch64/perl-io-compress-2.216-pl5321h80f0ee0_0.conda
       - conda: https://conda.anaconda.org/bioconda/linux-aarch64/perl-json-xs-4.04-pl5321h163da20_0.conda
       - conda: https://conda.anaconda.org/bioconda/linux-aarch64/perl-list-moreutils-xs-0.430-pl5321h661a7b0_5.tar.bz2
-      - conda: https://conda.anaconda.org/bioconda/linux-aarch64/phipack-1.1-h661a7b0_7.conda
       - conda: https://conda.anaconda.org/bioconda/linux-aarch64/rpsbproc-0.5.1-h7645e38_0.conda
       - conda: https://conda.anaconda.org/bioconda/linux-aarch64/ska2-0.5.1-hba26009_0.conda
       - conda: https://conda.anaconda.org/bioconda/noarch/perl-archive-tar-3.14-pl5321hcbfc158_0.conda
@@ -1861,7 +1855,6 @@ environments:
       - conda: https://conda.anaconda.org/bioconda/osx-64/perl-io-compress-2.216-pl5321h5eaf441_0.conda
       - conda: https://conda.anaconda.org/bioconda/osx-64/perl-json-xs-4.04-pl5321h5fa12a8_0.conda
       - conda: https://conda.anaconda.org/bioconda/osx-64/perl-list-moreutils-xs-0.430-pl5321h18d8cf3_5.tar.bz2
-      - conda: https://conda.anaconda.org/bioconda/osx-64/phipack-1.1-h2413b67_7.conda
       - conda: https://conda.anaconda.org/bioconda/osx-64/ska2-0.5.1-h00cbfe0_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.7.22-hbd8a1cb_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cycler-0.12.1-pyhcf101f3_2.conda
@@ -1993,7 +1986,6 @@ environments:
       - conda: https://conda.anaconda.org/bioconda/osx-arm64/perl-io-compress-2.216-pl5321haef7865_0.conda
       - conda: https://conda.anaconda.org/bioconda/osx-arm64/perl-json-xs-4.04-pl5321h4675bf2_0.conda
       - conda: https://conda.anaconda.org/bioconda/osx-arm64/perl-list-moreutils-xs-0.430-pl5321hbdacb55_5.tar.bz2
-      - conda: https://conda.anaconda.org/bioconda/osx-arm64/phipack-1.1-h745f407_7.conda
       - conda: https://conda.anaconda.org/bioconda/osx-arm64/ska2-0.5.1-hda65a65_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/ca-certificates-2026.7.22-hbd8a1cb_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/cycler-0.12.1-pyhcf101f3_2.conda
@@ -2242,18 +2234,6 @@ packages:
     - perl-list-moreutils-xs >=0.430,<0.431.0a0
   size: 51506
   timestamp: 1741776389435
-- conda: https://conda.anaconda.org/bioconda/linux-64/phipack-1.1-h7b50bb2_7.conda
-  sha256: 66843de5e0d9e018d54d4aefbac5f40815ea704889c48eb26ecbfcc235275ff2
-  md5: 4afda8ef0104c56d9dcb7ca62542a660
-  depends:
-  - libgcc >=13
-  license: GPL-3.0-or-later
-  purls: []
-  run_exports:
-    weak:
-    - phipack >=1.1,<2.0a0
-  size: 71520
-  timestamp: 1759465489555
 - conda: https://conda.anaconda.org/bioconda/linux-64/rapidnj-2.3.3-hd63eeec_0.conda
   sha256: 74ac02a72e7a5d5755265c3af994f80cae8138b9fa65c9ebf4afe4c5ca8a7568
   md5: d5cf57d996a2e78365c248362a4ecafe
@@ -2409,18 +2389,6 @@ packages:
     - perl-list-moreutils-xs >=0.430,<0.431.0a0
   size: 51048
   timestamp: 1741776294812
-- conda: https://conda.anaconda.org/bioconda/linux-aarch64/phipack-1.1-h661a7b0_7.conda
-  sha256: 3d40526f93cf9936c94c8296d94fff5ff48cc434cd731c3f810fd42c4c3c5f48
-  md5: b7dc5221c296da2ec53febeb7bfd62d0
-  depends:
-  - libgcc >=13
-  license: GPL-3.0-or-later
-  purls: []
-  run_exports:
-    weak:
-    - phipack >=1.1,<2.0a0
-  size: 72637
-  timestamp: 1759465101562
 - conda: https://conda.anaconda.org/bioconda/linux-aarch64/rpsbproc-0.5.1-h7645e38_0.conda
   sha256: 277aa2f124627062c768367ce9b73c0d27c6f0481518ad0339276d4e48d69c45
   md5: 52d43ad51789a1b1b25c7684829bc85c
@@ -2654,16 +2622,6 @@ packages:
     - perl-list-moreutils-xs >=0.430,<0.431.0a0
   size: 44178
   timestamp: 1741776966235
-- conda: https://conda.anaconda.org/bioconda/osx-64/phipack-1.1-h2413b67_7.conda
-  sha256: 532921ae84b1edfd4f7df257524a1b63f68518f27035d121f7f81ce9b6e41638
-  md5: d5464229b7cbe69be63551551a5e5af6
-  license: GPL-3.0-or-later
-  purls: []
-  run_exports:
-    weak:
-    - phipack >=1.1,<2.0a0
-  size: 70059
-  timestamp: 1759466051604
 - conda: https://conda.anaconda.org/bioconda/osx-64/ska2-0.5.1-h00cbfe0_0.conda
   sha256: f9fb9bb1ef67fcc56f90151490301c12d34171e1cedc0fae9c853ac8c8462b1f
   md5: d106bb14fea1e1e7e79da8510ea40082
@@ -2797,16 +2755,6 @@ packages:
     - perl-list-moreutils-xs >=0.430,<0.431.0a0
   size: 43423
   timestamp: 1741776343291
-- conda: https://conda.anaconda.org/bioconda/osx-arm64/phipack-1.1-h745f407_7.conda
-  sha256: c6e57958214a761c168da9a12899b50a9c648893bc7ec6fd8b53d0b9e3c1ddf5
-  md5: 44e6f3a32257e25815da4fde98bb47e9
-  license: GPL-3.0-or-later
-  purls: []
-  run_exports:
-    weak:
-    - phipack >=1.1,<2.0a0
-  size: 69062
-  timestamp: 1759465262452
 - conda: https://conda.anaconda.org/bioconda/osx-arm64/ska2-0.5.1-hda65a65_0.conda
   sha256: 4d206e472b24dbf636c169d329ea7d46ea8f6a9b3555a0354feb36491615235e
   md5: 71b691a3501ef849b9e1ec4eabd8a119

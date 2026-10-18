@@ -6,7 +6,7 @@ import json
 import numpy as np
 
 from chronoclade.artifacts import file_sha256
-from chronoclade.context_refinement import _allele, _profile, _loci
+from chronoclade.profile_types import _allele, _profile, _loci
 from chronoclade.profile_analysis import _pair
 from chronoclade.typing_scopes import typing_scope
 from chronoclade.matrix_distances import BinaryDistanceEvidence

@@ -249,9 +249,8 @@ request is eliminated on retry.
 
 Native-reference reuse checks the actual caller/assignment resource contents,
 not just the configuration path. Changing a database or scheme rejects an old
-numerical resume. Older prepared bundles with only a configuration fingerprint
-need an explicit `--typing-config` and a new output directory for fresh analysis;
-their historical results remain readable.
+numerical resume. Prepared bundles with only a configuration fingerprint need an explicit
+`--typing-config` and a new output directory for fresh analysis.
 
 For an independently validated captured whole-ST raw source, use
 `--context-source path/to/provider-source.json` instead of `--fetch-context`.

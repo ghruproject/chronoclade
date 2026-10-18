@@ -19,7 +19,7 @@ from Bio.Phylo.TreeConstruction import DistanceMatrix, DistanceTreeConstructor
 
 from chronoclade.sample_labels import sample_labels
 from chronoclade.metadata_dates import date_interval as _date_interval
-from chronoclade.context_refinement import _allele, _lineage, _loci, _profile
+from chronoclade.profile_types import _allele, _lineage, _loci, _profile
 from chronoclade.typing_scopes import compatible_typing as _compatible, typing_scope as _scope
 from chronoclade.temporal_diagnostics import date_regression, allele_unit_diagnostic
 from chronoclade.profile_groups import complete_linkage_groups as _clusters, group_sensitivity
@@ -334,7 +334,7 @@ def analyse_profiles(
     difference_field = distance_model.metadata["raw_difference_field"] if distance_model else "allele_differences"
     distance_units = distance_model.metadata["distance_units"] if distance_model else "cgMLST mismatch fraction"
     sequence_fields = ["snp_differences", "shared_called_sites", "missing_call_loci",
-                       "missing_sequence_loci", "unequal_length_loci"] if distance_model else []
+                       "missing_sequence_loci"] if distance_model else []
     if distance_model and distance_model.metadata.get("alignment_method"):
         sequence_fields += ["gap_vs_base_columns", "both_gap_columns", "indel_tracts",
                             "no_jointly_called_sites_loci"]

@@ -141,7 +141,7 @@ def run_time(tree_manifest, *, output, force=False, allow_unsupported=False):
                     "Dating requires at least three saved eligible dated samples, even with an override"
                 )
             require_tools(["treetime"])
-            from chronoclade.lineage import LineageFiles, _write_csv, _run_dated_tree
+            from chronoclade.native_pipeline import LineageFiles, _write_csv, _run_dated_tree
             from chronoclade.temporal_report import (
                 write_timetree_confidence,
                 write_timetree_figures,
