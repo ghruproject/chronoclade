@@ -47,8 +47,8 @@ nav:
       - Large cgMLST blocks: cgmlst-scale.md
       - Independent tree stage: tree-stage.md
       - Independent time stage: time-stage.md
+      - Pasteur reference authorisation: pasteur-auth.md
   - Apple Silicon Klebsiella walkthrough: mac-klebsiella-walkthrough.md
-  - Klebsiella beta example: beta/WORKED_EXAMPLE.md
   - Pathogenwatch context:
       - Frozen metadata: pathogenwatch.md
       - cgLIN assignments: cglin.md

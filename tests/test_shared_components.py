@@ -19,9 +19,9 @@ from chronoclade.selections import selected_context_records
 from chronoclade.datasets import PreparedDataset, load_dataset
 assert "@font-face" in report_styles()
 for name in (
-    "chronoclade.report", "chronoclade.temporal_report", "chronoclade.profile_analysis",
-    "chronoclade.cgmlst.workflow", "chronoclade.lineage", "chronoclade.pathogenwatch",
-    "chronoclade.context_refinement", "torch", "esm",
+    "chronoclade.temporal_report", "chronoclade.profile_analysis",
+    "chronoclade.cgmlst.workflow", "chronoclade.native_pipeline", "chronoclade.pathogenwatch",
+    "chronoclade.profile_types",
 ):
     assert name not in sys.modules, name
 """],

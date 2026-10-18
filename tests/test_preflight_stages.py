@@ -6,8 +6,8 @@ from chronoclade.cli import app
 
 
 def test_lean_prepare_preflight_and_missing_tree_tools(monkeypatch):
-    monkeypatch.setattr('chronoclade.workflow.tool_status', lambda: {'ska': None, 'iqtree': None, 'ClonalFrameML': None, 'treetime': None})
-    monkeypatch.setattr('chronoclade.workflow.native_platform_supported', lambda: False)
+    monkeypatch.setattr('chronoclade.native_tools.tool_status', lambda: {'ska': None, 'iqtree': None, 'ClonalFrameML': None, 'treetime': None})
+    monkeypatch.setattr('chronoclade.native_tools.native_platform_supported', lambda: False)
     runner = CliRunner()
     lean = runner.invoke(app, ['preflight', '--stage', 'prepare'])
     assert lean.exit_code == 0
@@ -19,8 +19,8 @@ def test_lean_prepare_preflight_and_missing_tree_tools(monkeypatch):
 
 
 def test_time_preflight_only_checks_time_tool(monkeypatch):
-    monkeypatch.setattr('chronoclade.workflow.tool_status', lambda: {'ska': None, 'iqtree': None, 'treetime': '/bin/treetime'})
-    monkeypatch.setattr('chronoclade.workflow.native_platform_supported', lambda: True)
+    monkeypatch.setattr('chronoclade.native_tools.tool_status', lambda: {'ska': None, 'iqtree': None, 'treetime': '/bin/treetime'})
+    monkeypatch.setattr('chronoclade.native_tools.native_platform_supported', lambda: True)
     result = CliRunner().invoke(app, ['preflight', '--stage', 'time'])
     assert result.exit_code == 0
     assert '/bin/treetime' in result.output

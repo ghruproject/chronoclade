@@ -2,7 +2,7 @@
 
 import pytest
 
-from chronoclade.typing_concordance import TypingConcordanceError, compare_typing_results
+from typing_concordance_helpers import TypingConcordanceError, compare_typing_results
 
 
 def assignment(**changes):

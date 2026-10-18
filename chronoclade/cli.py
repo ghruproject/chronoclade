@@ -72,7 +72,7 @@ def preflight(
 ) -> None:
     """Check stage software; references, credentials and inputs are checked separately."""
 
-    from chronoclade.workflow import native_platform_supported, tool_status
+    from chronoclade.native_tools import native_platform_supported, tool_status
 
     requirements = {"all": None, "prepare": (), "cgmlst": (),
                     "tree": ("ska", "iqtree", "ClonalFrameML", "treetime"),

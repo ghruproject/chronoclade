@@ -446,7 +446,7 @@ def test_prepare_import_has_no_scientific_stage_or_provider_dependency():
             "-c",
             (
                 "import sys; import chronoclade.prepare_stage; "
-                "forbidden = {'torch', 'chronoclade.profile_inputs', 'chronoclade.workflow', "
+                "forbidden = {'chronoclade.profile_inputs', 'chronoclade.native_tools', "
                 "'chronoclade.profile_analysis', 'chronoclade.pathogenwatch'}; "
                 "assert not forbidden.intersection(sys.modules), forbidden.intersection(sys.modules)"
             ),

@@ -144,8 +144,8 @@ def test_cli_stage_help_is_lazy():
     script = (
         "import sys; from chronoclade.cli import app; from typer.testing import CliRunner; "
         "assert CliRunner().invoke(app,['--help']).exit_code==0; "
-        "assert 'chronoclade.workflow' not in sys.modules; "
-        "assert 'chronoclade.lineage' not in sys.modules; "
+        "assert 'chronoclade.native_tools' not in sys.modules; "
+        "assert 'chronoclade.native_pipeline' not in sys.modules; "
         "assert 'torch' not in sys.modules; assert 'esm' not in sys.modules"
     )
     result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)

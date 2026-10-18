@@ -156,16 +156,14 @@ saved tree. Missing metadata stays unknown, and a field with only one observed
 state cannot support a useful network. Reconstructed changes depend on the tree,
 root, metadata and sampling frame; they do not prove transmission or migration.
 Geographic summaries describe available records, not prevalence, incidence or
-country of acquisition. See [cgLIN](cglin.md) and
-[geography](context-geography.md).
+country of acquisition. See [cgLIN](cglin.md).
 
 The current public context workflow retrieves compatible profiles and metadata
 for the requested species/ST and lineage scope. cgMLST analyses those profiles
 and selects representatives; tree acquires assemblies only for the selected IDs.
 A nearest relative is nearest within the retrieved, compatible pool, not among
 all public bacterial genomes. Provider coverage and incomplete annotations limit
-interpretation. Historical Pathogenwatch pilot fixtures and selection methods
-are described separately in [the pilot record](pathogenwatch-pilot.md).
+interpretation.
 
 Native typing uses Pathogenwatch's cgMLST caller and `plincer` or exact `hclink`.
 Missing, ambiguous and novel alleles, incomplete assignments and database

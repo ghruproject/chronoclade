@@ -36,7 +36,7 @@ def test_support_inference_records_shared_and_absent_splits(tmp_path, monkeypatc
         tree.write_text('((a,b)98,(d,(c,e)82));')
         report.write_text('UFBoot2')
 
-    monkeypatch.setattr('chronoclade.lineage._run_command', native)
+    monkeypatch.setattr('chronoclade.native_pipeline._run_command', native)
     result = run_branch_support(alignment=alignment, corrected_tree=corrected,
         directory=tmp_path, output_root=tmp_path, replicates=1000, threads=1, seed=42)
     assert corrected.read_bytes() == original
@@ -60,7 +60,7 @@ def test_wrong_tip_set_is_rejected(tmp_path, monkeypatch):
         tree.write_text('((a,b),(c,wrong));')
         report.write_text('IQ-TREE')
 
-    monkeypatch.setattr('chronoclade.lineage._run_command', native)
+    monkeypatch.setattr('chronoclade.native_pipeline._run_command', native)
     with pytest.raises(WorkflowError, match='exact selected tip set'):
         run_branch_support(alignment=alignment, corrected_tree=corrected,
             directory=tmp_path, output_root=tmp_path, replicates=1000, threads=1, seed=42)

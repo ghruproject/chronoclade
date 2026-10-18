@@ -2,7 +2,7 @@
 
 import copy
 
-from chronoclade.context_refinement import _lineage
+from chronoclade.profile_types import _lineage
 from chronoclade.typing_scopes import compatible_typing as _compatible
 from chronoclade.location_network.reconstruction import (
     build_location_network,

@@ -2,10 +2,7 @@ import numpy as np
 from pathlib import Path
 
 from chronoclade.profile_report import (
-    write_corrected_report,
-    write_fast_group_index,
     write_profile_report,
-    write_stage_index,
 )
 
 
@@ -129,39 +126,8 @@ def test_report_escapes_user_text_and_neighbour_output_links_only_existing_files
     assert "rooted tree" in html
 
 
-def test_stage_index_links_existing_reports_only(tmp_path: Path) -> None:
-    (tmp_path / "fast").mkdir()
-    (tmp_path / "fast" / "profile_report.html").write_text("fast", encoding="utf-8")
-    index = write_stage_index(
-        tmp_path,
-        {"fast": {"report": "fast/profile_report.html", "status": "complete"},
-         "finish": "finish/profile_report.html"},
-    )
-
-    html = index.read_text(encoding="utf-8")
-    assert 'href="fast/profile_report.html"' in html
-    assert "finish/profile_report.html" not in html
 
 
-def test_corrected_report_marks_dating_not_assessed_and_keeps_guardrails(tmp_path: Path) -> None:
-    output = write_corrected_report(
-        {
-            "species": "Klebsiella pneumoniae",
-            "lineage": "ST23",
-            "sample_count": 12,
-            "context": {"local_samples": 5, "context_samples": 7},
-            "temporal_status": "not_assessed",
-            "temporal_signal_reason": "Fewer than three usable distinct collection dates; temporal signal was not assessed.",
-        },
-        directory=tmp_path,
-    )
-    html = output.read_text(encoding="utf-8")
-
-    assert "Recombination-adjusted analysis" in html
-    assert "Fewer than three usable distinct collection dates" in html
-    assert "No temporal test or calendar tree is implied" in html
-    assert "not proof of transmission" in html
-    assert "country network reconstruction is not available" in html
 
 
 def test_report_separates_query_context_coverage_and_explains_unknown_support(tmp_path: Path) -> None:
@@ -417,79 +383,10 @@ def test_neighbour_table_prioritises_formatted_normalized_distance(tmp_path: Pat
     assert nearest.index("Normalized distance") < nearest.index("Allele differences / shared loci")
 
 
-def test_adaptive_context_report_separates_dataset_pool_from_tree_and_keeps_one_figure_set(tmp_path):
-    provenance = {
-        "coverage": {"queries": {"total": 9}, "context": {"total": 252}},
-        "adaptive_context_selection": {
-            "method": "adaptive-cglin-context", "min_context": 20,
-            "datasets": [{
-                "analysis_dataset": "ST39_CG39", "mlst_st": "39", "clonal_group": "CG39",
-                "input_count": 9, "public_cg_pool_count": 787, "selected_context_count": 252,
-                "subgroups": [{
-                    "input_prefix": [0, 0, 39, 39, 0], "input_count": 7,
-                    "context_counts": {"5": 162, "6": 155, "7": 146},
-                    "selected_level": 7, "selected_context_count": 146, "limited_context": False,
-                }, {
-                    "input_prefix": [0, 0, 39, 39, 9], "input_count": 1,
-                    "context_counts": {"5": 4, "6": 1, "7": 1},
-                    "selected_level": 5, "selected_context_count": 4, "limited_context": True,
-                }],
-                "selected_context_geography": [
-                    {"country": "Unknown", "region": "Unknown", "nuts2": "Unknown", "count": 2, "denominator": 252}
-                ],
-                "selected_context_years": [{"year": "Unknown", "count": 3, "denominator": 252}],
-            }],
-        },
-    }
-    html = write_profile_report({"records_count": 261}, directory=tmp_path, provenance=provenance).read_text()
-    assert html.index('id="subsamples"') < html.index("Input datasets and their public context")
-    assert "CG39" in html and "787" in html and "252" in html
-    assert "Level 5 context" in html and "Level 7 context" in html
-    assert "Limited context" in html and "Minimum met" in html
-    assert "actual cgMLST allele differences" in html
-    assert "jointly compared loci and distance ties" in html
-    assert "before tree subsampling or profile exclusions" in html
-    assert "Full public clonal-group pool" in html
-    assert "separate figures are not generated for every LIN level" in html
-    assert html.count('id="figures"') == 1
-    assert "REP-inspired" not in html
-    assert "Archivo" in html
 
 
-def test_adaptive_context_report_escapes_prefix_and_dataset_text(tmp_path):
-    html = write_profile_report({}, directory=tmp_path, provenance={
-        "adaptive_context_selection": {"min_context": 20, "datasets": [{
-            "analysis_dataset": "<script>", "clonal_group": "<script>",
-            "subgroups": [{"input_prefix": ["<script>"], "context_counts": {}}],
-            "selected_context_years": [{"year": "<script>", "count": 1, "denominator": 1}],
-        }]}
-    }).read_text()
-    assert "<script>" not in html
-    assert "&lt;script&gt;" in html
 
 
-def test_fast_group_index_links_only_existing_contained_reports_and_escapes(tmp_path):
-    group = tmp_path / 'ST39_CG39'
-    group.mkdir()
-    (group / 'profile_report.html').write_text('report')
-    outside = tmp_path.parent / 'outside_report.html'
-    outside.write_text('outside')
-    html = write_fast_group_index(tmp_path, [
-        {"species": "<script>", "lineage": "ST39_CG39", "input_count": 9,
-         "context_count": 252, "report": "ST39_CG39/profile_report.html"},
-        {"lineage": "unsafe", "report": outside},
-        {"lineage": "absent", "report": "missing/profile_report.html"},
-    ], provenance={"adaptive_context_selection": {"datasets": [{
-        "analysis_dataset": "ST39_CG39", "mlst_st": "39", "clonal_group": "CG39",
-        "public_cg_pool_count": 787,
-    }]}}).read_text()
-    assert 'href="ST39_CG39/profile_report.html"' in html
-    assert 'outside_report.html' not in html
-    assert 'missing/profile_report.html' not in html
-    assert '<script>' not in html and '&lt;script&gt;' in html
-    assert '787' in html and '252' in html and 'CG39' in html
-    assert 'Archivo' in html
-    assert '<img' not in html
 
 
 def test_network_viewer_switches_weighted_reconstructions_and_retains_nearest_ties(tmp_path: Path) -> None:

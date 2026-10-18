@@ -202,7 +202,7 @@ def run_tree(
     require_tools(["ska", "iqtree", "ClonalFrameML"])
     output, job = prepare_job(output, digest, "tree", force)
     try:
-        from chronoclade.lineage import (
+        from chronoclade.native_pipeline import (
             LineageFiles,
             _write_lineage_inputs,
             _run_core_phylogeny,
@@ -243,7 +243,7 @@ def run_tree(
         input_members = [sample for sample in members if sample.origin == "local"]
         selected_reference = select_reference(input_members)
         tree_path, alignment, _ = _run_core_phylogeny(
-            files, members, selected_reference, threads, force, "corrected", coherence_policy=coherence_policy, seed=seed
+            files, members, selected_reference, threads, force, coherence_policy=coherence_policy, seed=seed
         )
         coherence = {"policy": coherence_policy, "screen_policy_version": COHERENCE_SCREEN_POLICY_VERSION, "raw_action": "review_and_retain", "corrected_action": "abort_on_flags" if coherence_policy == "strict" else "review_and_retain"}
         for label, audit_path in (("raw", files.coherence_screen), ("corrected", files.clonal_coherence_screen)):

@@ -38,7 +38,7 @@ def splits(tree):
 
 def run_branch_support(*, alignment, corrected_tree, directory, output_root, replicates, threads, seed, force=False):
     """Infer a separate ML tree; never replace the ClonalFrameML dating topology."""
-    from chronoclade.lineage import _run_command
+    from chronoclade.native_pipeline import _run_command
 
     validate_replicates(replicates)
     if not replicates:

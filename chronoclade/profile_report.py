@@ -8,23 +8,15 @@ from pathlib import Path
 from typing import Any
 
 from chronoclade.location_network.widget import interactive_network_html, widget_assets
-from chronoclade.report import (
-    _context_geography_visual,
-    _context_selection_summary,
-    _country_network_visual,
-    _neighbourhood_visual,
-    _public_health_visual,
-    _recombination_visual,
-)
 from chronoclade.report_components.styles import report_styles
 from chronoclade.report_components.tables import write_report_html
 from chronoclade.temporal_diagnostics import diagnostic_display_units
-from chronoclade.sample_labels import label_analysis, read_sample_labels
+from chronoclade.sample_labels import label_analysis
 from chronoclade.report_components.profile_summary import _reported, location_columns
 
 
 def _profile_styles() -> str:
-    """Use the established lineage-report design for profile and corrected reports."""
+    """Use the established report design for profile analyses."""
     return report_styles() + """
 .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));border:1px solid var(--ink);margin:24px 0}.metrics>div{padding:16px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);min-width:0}dt{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.06em}dd{margin:6px 0 0;font-size:21px;font-weight:700;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}.muted,.empty{color:var(--muted)}.notice,.caution{background:#fff8dc;padding:15px;margin:18px 0}.table-wrap{max-width:100%;overflow:auto;scrollbar-color:var(--blue) #e5e7ec}.table-wrap table{min-width:580px}.table-wrap:focus-visible{outline:3px solid #ffb800;outline-offset:3px}.figures{display:block}.figures figure{margin:28px 0}.figures img{max-height:none;object-fit:contain}.groups{display:block}.group{padding:22px 0;border-top:1px solid var(--line)}.group h3{margin:0 0 12px}.group .metrics{margin:16px 0}.compact-group,.coverage-details{border-top:1px solid var(--line);padding:0;background:#fff}.compact-group summary,.coverage-details summary{cursor:pointer;padding:14px 0;font-weight:700}.compact-group[open]{padding-bottom:18px}.warnings{margin:8px 0}.profile-subsection{margin-top:32px}.profile-subsection h2{font-size:27px}.profile-subsection>p{margin-top:12px}@media(max-width:800px){.table-wrap table{min-width:580px}.metrics{grid-template-columns:1fr}.metrics>div{border-right:0}.table-wrap th:first-child,.table-wrap td:first-child{position:sticky;left:0;background:#fff}.contents{overflow:auto}}
     """
@@ -754,76 +746,8 @@ def _shared_tree_selection_summary(data: dict[str, Any]) -> str:
     return text
 
 
-def _adaptive_context_summary(provenance: dict[str, Any]) -> str:
-    audit = _mapping(provenance.get("adaptive_context_selection"))
-    datasets = _records(audit.get("datasets"))
-    if not datasets:
-        return ""
-    overview = _table(datasets, [
-        ("mlst_st", "MLST ST"), ("clonal_group", "Clonal group"),
-        ("input_count", "Your input genomes"),
-        ("public_cg_pool_count", "Available public CG comparisons"),
-        ("selected_context_count", "Chosen public context pool"),
-    ], empty="No typed input datasets were available.")
-    rows = []
-    for dataset in datasets:
-        for subgroup in _records(dataset.get("subgroups")):
-            counts = _mapping(subgroup.get("context_counts"))
-            prefix = subgroup.get("input_prefix", [])
-            rows.append({
-                "cg": dataset.get("clonal_group"),
-                "prefix": ",".join(str(part) for part in prefix) if isinstance(prefix, list) else prefix,
-                "inputs": subgroup.get("input_count"),
-                "level5": counts.get("5"), "level6": counts.get("6"), "level7": counts.get("7"),
-                "selected_level": subgroup.get("selected_level"),
-                "selected_count": subgroup.get("selected_context_count"),
-                "coverage": "Limited context" if subgroup.get("limited_context") else "Minimum met",
-            })
-    selection = _table(rows, [
-        ("cg", "Clonal group"), ("prefix", "Input level-5 prefix"), ("inputs", "Inputs"),
-        ("level5", "Level 5 context"), ("level6", "Level 6 context"),
-        ("level7", "Level 7 context"), ("selected_level", "Chosen level"),
-        ("selected_count", "Chosen context"), ("coverage", "Context coverage"),
-    ], empty="No subgroup selection counts were supplied.")
-    minimum = escape(_text(audit.get("min_context")))
-    return (
-        '<h3>Input datasets and their public context</h3>'
-        '<p>Inputs are separated by MLST sequence type, then by clonal group. '
-        'Each dataset is analysed separately.</p>' + overview
-        + '<h3>Which closer LIN groups were chosen?</h3>'
-        + '<p>For each input level-5 subgroup, start at level 7 and widen to level 6 '
-        'or 5 until every input has at least ' + minimum + ' public comparisons. '
-        'This minimum is a sampling setting, not a biological cutoff. Sparse groups '
-        'remain visible as limited context. Counts at each level combine the matching '
-        'prefixes represented by the inputs; overlapping comparisons are counted once '
-        'in the chosen dataset pool.</p>' + selection
-        + '<p>LIN prefixes define where to search. Closest relatives are ranked by '
-        'actual cgMLST allele differences, with jointly compared loci and distance ties '
-        'reported below. One set of figures describes each dataset; separate figures '
-        'are not generated for every LIN level.</p>'
-    )
 
 
-def _adaptive_context_metadata(provenance: dict[str, Any]) -> str:
-    datasets = _records(_mapping(provenance.get("adaptive_context_selection")).get("datasets"))
-    blocks = []
-    for dataset in datasets:
-        countries = _records(dataset.get("selected_context_geography"))
-        years = _records(dataset.get("selected_context_years"))
-        if not countries and not years:
-            continue
-        blocks.append('<h3>Complete chosen context pool: '
-                      + escape(_text(dataset.get("analysis_dataset"))) + '</h3>')
-        blocks.append('<p>These counts use all public metadata in the chosen LIN groups, '
-                      'before tree subsampling or profile exclusions. Missing locations and '
-                      'collection years remain in the denominator.</p>')
-        blocks.append(_table(countries, location_columns(countries) + [("count", "Public samples"),
-                      ("denominator", "Chosen context pool")],
-                      empty="Country metadata for the complete chosen pool was not available."))
-        blocks.append(_table(years, [("year", "Collection year"), ("count", "Public samples"),
-                      ("denominator", "Chosen context pool")],
-                      empty="Collection-year metadata for the complete chosen pool was not available."))
-    return "".join(blocks)
 
 
 def _context_funnel(provenance: dict[str, Any]) -> str:
@@ -1098,7 +1022,6 @@ def write_profile_report(
         if query_count is not None and public_context_count is not None else
         f"{focal} genomes · Profile comparison"
     )
-    adaptive_selection = bool(_records(_mapping(prov.get("adaptive_context_selection")).get("datasets")))
     context_scope_description = (
         _text(prov.get("context_scope"), "Supplied inputs only; no public context retrieval or lineage refinement")
         if partition_kind == "st" else
@@ -1106,17 +1029,14 @@ def write_profile_report(
         if partition_kind == "hiercc" else
         "Compatible public profiles in this reported cgLIN block, before assembly subsampling."
         if partition_kind == "cglin" else
-        "All public genomes in the chosen LIN context groups, before tree subsampling."
-        if adaptive_selection else (
-            "Compatible public profiles in this lineage block, before assembly subsampling."
-            if data.get("partition") else "Additional genomes selected for comparison."
-        )
+        "Compatible public profiles in this lineage block, before assembly subsampling."
+        if data.get("partition") else "Additional genomes selected for comparison."
     )
-    catalogue_heading = "Full public clonal-group pool" if adaptive_selection else "Frozen public catalogue"
+    catalogue_heading = "Frozen public catalogue"
     catalogue_geography = (
         f'<h3>{escape(catalogue_heading)}</h3>'
         + _geography_table(data.get("public_catalogue_geography"), label=catalogue_heading, include_origin=False)
-        if data.get("public_catalogue_geography") or adaptive_selection else ""
+        if data.get("public_catalogue_geography") else ""
     )
     metadata_geography = _records(data.get("metadata_geography"))
     input_geography = [row for row in metadata_geography if row.get("origin") in {"local", "query", "focal"}]
@@ -1192,7 +1112,7 @@ def write_profile_report(
         f'<div id="concentration"><h3>Concentration in time and place</h3>{_group_cards(concentration, kind="concentration")}</div></details>'
         '<details class="coverage-details" id="coverage"><summary>Coverage, exclusions and context selection</summary>'
         f'{_provenance_notes(prov)}{_input_coverage(prov)}{_context_funnel(prov)}{_coverage(data)}'
-        f'{_adaptive_context_summary(prov)}{_adaptive_context_metadata(prov)}{catalogue_geography}</details>'
+        f'{catalogue_geography}</details>'
         '<details class="coverage-details" id="cohorts"><summary>Profile comparability and tree diagnostics</summary>'
         '<p>A comparability cohort contains genomes with sufficiently comparable profiles. '
         'It is a technical analysis set, not an inferred genetic cluster.</p>'
@@ -1252,209 +1172,4 @@ def write_profile_report(
     write_report_html(output, document, encoding="utf-8")
     from chronoclade.report_components.output_guide import write_output_guide
     write_output_guide(directory)
-    return output
-
-
-def write_fast_group_index(
-    directory: Path,
-    datasets: list[dict[str, Any]],
-    *,
-    provenance: dict | None = None,
-) -> Path:
-    """Link separate input-group analyses without duplicating their figures."""
-    directory = Path(directory)
-    directory.mkdir(parents=True, exist_ok=True)
-    audit = _mapping(_mapping(provenance).get("adaptive_context_selection"))
-    audit_datasets = _records(audit.get("datasets"))
-    rows = []
-    for dataset in datasets:
-        lineage = _text(dataset.get("lineage"))
-        matching = next((item for item in audit_datasets
-                         if item.get("analysis_dataset") == lineage), {})
-        candidate = dataset.get("report")
-        link = '<span class="muted">Report unavailable</span>'
-        if isinstance(candidate, (str, Path)):
-            path = Path(candidate)
-            if not path.is_absolute():
-                path = directory / path
-            try:
-                relative = path.resolve().relative_to(directory.resolve())
-            except (OSError, ValueError):
-                relative = None
-            if relative is not None and path.is_file():
-                link = f'<a href="{escape(relative.as_posix(), quote=True)}">Open group report</a>'
-        values = [dataset.get("species"), lineage,
-                  matching.get("mlst_st", dataset.get("mlst_st")),
-                  matching.get("clonal_group", dataset.get("clonal_group")),
-                  dataset.get("input_count", matching.get("input_count")),
-                  matching.get("public_cg_pool_count"),
-                  dataset.get("context_count", matching.get("selected_context_count"))]
-        cells = "".join(f"<td>{escape(_text(value))}</td>" for value in values)
-        rows.append(f"<tr>{cells}<td>{link}</td></tr>")
-    headers = ["Species", "Dataset", "MLST ST", "Clonal group", "Your inputs",
-               "Available public CG pool", "Chosen public context", "Results"]
-    table = ('<div class="table-wrap" tabindex="0" role="region" aria-label="Input analysis datasets">'
-             '<table><thead><tr>'
-             + "".join(f'<th scope="col">{header}</th>' for header in headers)
-             + '</tr></thead><tbody>' + "".join(rows) + '</tbody></table></div>')
-    if not rows:
-        table = '<p class="empty">No group reports are available yet.</p>'
-    document = (
-        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
-        '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        '<title>ChronoClade fast group reports</title><style>' + _profile_styles() + '</style></head>'
-        '<body><main class="shell"><header class="identity">'
-        '<div class="identity-mark">ChronoClade · cgMLST ANALYSIS REPORT</div>'
-        '<div class="identity-copy"><h1>Fast profile results</h1>'
-        '<p>Choose an input dataset to explore its context.</p></div></header>'
-        '<section class="stage" id="summary"><div class="stage-body">'
-        '<h2>Your input datasets</h2><p>Inputs are separated by MLST sequence type, '
-        'then by their reported group. Each group has its own context selection, nearest-neighbour '
-        'results, PCoA and genetic tree.</p>' + table
-        + '<p>Available public CG pool counts exclude your inputs. Chosen public context '
-        'counts describe the complete selected groups, before tree subsampling. '
-        'Open a group report to see its reported grouping basis, context scope, and the country and '
-        'collection-year breakdowns.</p></div></section></main></body></html>'
-    )
-    output = directory / "profile_report.html"
-    write_report_html(output, document, encoding="utf-8")
-    return output
-
-
-def write_stage_index(output: Path, stages: dict) -> Path:
-    """Write a compact HTML index linking only to stage reports that exist."""
-
-    output = Path(output)
-    output.mkdir(parents=True, exist_ok=True)
-    entries = []
-    for name, raw in stages.items():
-        if isinstance(raw, dict):
-            candidate = raw.get("report", raw.get("path"))
-            status = raw.get("status", "available")
-        else:
-            candidate, status = raw, "available"
-        if not isinstance(candidate, (str, Path)):
-            continue
-        path = Path(candidate)
-        if not path.is_absolute():
-            path = output / path
-        try:
-            rel = path.resolve().relative_to(output.resolve())
-        except (OSError, ValueError):
-            continue
-        if not path.is_file():
-            continue
-        entries.append(
-            f'<li><a href="{escape(rel.as_posix(), quote=True)}">{escape(str(name))}</a>'
-            f' <span>{escape(str(status))}</span></li>'
-        )
-    links = "".join(entries) or '<li class="empty">No stage reports are available yet.</li>'
-    page = (
-        '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-        '<title>ChronoClade analysis reports</title><style>' + _profile_styles() + '</style><body><main class="shell">'
-        '<header class="identity"><div class="identity-mark">ChronoClade · RUN SUMMARY</div><div class="identity-copy"><h1>Analysis reports</h1><p>Choose a completed analysis.</p></div></header>'
-        '<section class="stage"><div class="stage-body"><ul>' + links + '</ul></div></section></main></body></html>'
-    )
-    index = output / "index.html"
-    write_report_html(index, page, encoding="utf-8")
-    return index
-
-
-def write_corrected_report(report: dict, *, directory: Path) -> Path:
-    """Write the corrected-tree report before any date-based analysis is run."""
-
-    directory = Path(directory)
-    directory.mkdir(parents=True, exist_ok=True)
-    data = label_analysis(_mapping(report), read_sample_labels(directory))
-    species = _text(data.get("species"))
-    lineage = _text(data.get("lineage"))
-    context = _mapping(data.get("context"))
-    count = data.get("sample_count", "Not reported")
-    selection = _context_selection_summary(directory)
-    geography = _context_geography_visual(directory, species)
-    recombination = _recombination_visual(data, directory)
-    neighbours = _neighbourhood_visual(directory)
-    network = _country_network_visual(directory)
-    public_summary, public_evidence = _public_health_visual(data, directory)
-
-    temporal_status = _text(data.get("temporal_status", "not_assessed"))
-    temporal_reason = _text(
-        data.get(
-            "temporal_reason",
-            data.get(
-                "temporal_signal_reason",
-                data.get("reason", "Dating is assessed only in finish stage"),
-            ),
-        )
-    )
-    if temporal_status == "not_assessed":
-        temporal_section = (
-            '<section class="stage" id="dating"><div class="stage-body"><h2>Dating</h2><p><strong>Not assessed in this stage.</strong> '
-            f"{escape(temporal_reason)}</p><p>No temporal test or calendar tree is implied by this report.</p></div></section>"
-        )
-    else:
-        temporal_section = (
-            '<section class="stage" id="dating"><div class="stage-body"><h2>Dating status</h2>'
-            f"<p>{escape(temporal_status)}: {escape(temporal_reason)}</p></div></section>"
-        )
-
-    context_values = [
-        ("Analysed genomes", count),
-        ("Focal samples", context.get("local_samples", context.get("focal_samples", "Not reported"))),
-        ("Selected context", context.get("context_samples", context.get("selected_context", "Not reported"))),
-        ("Context locations", context.get("context_locations", "Not reported")),
-    ]
-    files = _mapping(data.get("outputs"))
-    output_links = []
-    for label, key in (
-        ("Corrected genetic tree", "genetic_tree"),
-        ("Pairwise SNP distances", "clonal_pairwise_distances"),
-        ("Nearest-relative results", "nearest_neighbours"),
-        ("Country network data", "country_network"),
-    ):
-        raw = files.get(key)
-        if not isinstance(raw, str):
-            continue
-        candidate = Path(raw)
-        if not candidate.is_absolute():
-            candidate = directory / candidate
-        try:
-            relative = candidate.resolve().relative_to(directory.resolve())
-        except (OSError, ValueError):
-            continue
-        if candidate.is_file():
-            output_links.append(
-                f'<li><a href="{escape(relative.as_posix(), quote=True)}">{escape(label)}</a></li>'
-            )
-    stage_link = ""
-    fast_candidates = [directory / prefix / name for prefix in ("../../fast", "../../../../fast") for name in ("profile_report.html", "index.html")]
-    for candidate in fast_candidates:
-        if candidate.is_file():
-            from os.path import relpath
-            relative = Path(relpath(candidate.resolve(), directory.resolve()))
-            stage_link = (
-                f'<p><a href="{escape(relative.as_posix(), quote=True)}">Open the earlier profile-first report</a></p>'
-            )
-            break
-    links_section = (
-        "<ul>" + "".join(output_links) + "</ul>" if output_links else
-        '<p class="muted">No additional output files were listed in the analysis record.</p>'
-    )
-    document = f"""<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="light">
-<title>ChronoClade corrected report — {escape(species)} {escape(lineage)}</title><style>
-{_profile_styles()}
-</style></head><body><main class="shell"><header class="identity"><div class="identity-mark">ChronoClade · TREE ANALYSIS REPORT</div><div class="identity-copy">
-<h1><i>{escape(species.replace("_", " "))}</i><span>{escape(lineage)}</span></h1><p>{escape(_text(count))} genomes · Recombination-adjusted analysis</p>{stage_link}</div></header>
-<nav class="contents" aria-label="Report topics"><a href="#summary">Overview</a><a href="#countries">Countries</a><a href="#relationships">Closest relatives</a><a href="#network">Country network</a><a href="#interpretation">Interpretation</a><a href="#dating">Dating</a><a href="#outputs">Methods &amp; files</a></nav>
-<section class="stage" id="summary"><div class="stage-body"><h2>Your results at a glance</h2>{_metric_cards(context_values)}<p class="muted">Country composition and corrected-tree counts use the records available to this analysis. Public-catalogue totals, where reported, have a separate denominator.</p></div></section>
-<section class="stage" id="countries"><div class="stage-body"><h2>Collection locations</h2>{selection}{geography}<p class="muted">Recorded locations describe submitted metadata. They do not establish where infection was acquired or population prevalence.</p></div></section>
-<section class="stage" id="relationships"><div class="stage-body"><h2>Closest relatives</h2>{neighbours}</div></section>
-<section class="stage" id="recombination"><div class="stage-body"><h2>Recombination evidence</h2>{recombination}</div></section>
-<section class="stage" id="interpretation"><div class="stage-body"><h2>Genomic interpretation</h2>{public_summary}{public_evidence}</div></section>
-<section class="stage" id="network"><div class="stage-body"><h2>What location changes does the tree suggest?</h2>{network}<p class="muted">Location changes depend on the rooted tree and supplied sample metadata. They include reconstruction uncertainty and are not proof of transmission or acquisition direction.</p></div></section>
-{temporal_section}
-<section class="stage" id="outputs"><div class="stage-body"><h2>Available files</h2>{links_section}</div></section><footer class="report-close"><div>Generated by ChronoClade. The supporting files preserve the corrected tree and comparison results.</div></footer></main></body></html>"""
-    output = directory / "corrected_report.html"
-    write_report_html(output, document, encoding="utf-8")
     return output

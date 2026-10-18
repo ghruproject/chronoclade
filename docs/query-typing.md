@@ -7,8 +7,7 @@ cgMLST report analyses the retained profiles and selects representatives for
 the tree module. Context assemblies are acquired for the selected SNP-tree
 analysis. A LIN code alone does not establish how close two genomes are.
 
-The walkthrough below targets Klebsiella. E. coli/HierCC acceptance is deferred
-while its assignment-reference source is being resolved.
+The walkthrough below targets Klebsiella. E. coli HierCC requires a compatible assignment reference database.
 
 ## Install the tools
 
@@ -144,9 +143,7 @@ unversioned exports are not silently combined.
 
 `setup-typing --species ecoli --prepare-db` now installs the public
 [EnteroBase Escherichia.cgMLSTv1 allele catalogue](https://enterobase.warwick.ac.uk/schemes/Escherichia.cgMLSTv1/)
-through a frozen, resumable directory index. See the
-[public scheme inventory](beta/ENTEROBASE_SUPPORT.md) for the distinction between
-available allele definitions and validated native organism support. The current inspected catalogue has
+through a frozen, resumable directory index. The catalogue currently has
 2,513 loci; setup derives the count from the snapshot rather than assuming a
 fixed count. It does not download the large profile table merely to read its
 header. The original compressed allele files remain unchanged; a separate caller

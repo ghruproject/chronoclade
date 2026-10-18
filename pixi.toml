@@ -23,7 +23,6 @@ docs-serve = "mkdocs serve"
 clonalframeml = ">=1.20,<1.21"
 iqtree = ">=2.4,<4"
 ska2 = ">=0.5.1,<0.6"
-phipack = ">=1.1,<1.2"
 blast = ">=2.16,<3"
 
 [feature.time.dependencies]
