@@ -183,12 +183,6 @@ saved tree and metadata. The command does not upload data. See
 [export commands](docs/cli.md#viewer-exports) and
 [export file descriptions](docs/outputs.md#viewer-export-files).
 
-## Older run interface
-
-`chronoclade run --mode fast|full|finish` and `prepare-context` remain available.
-Their defaults, context limits and output paths differ from the independent
-commands above. See [the older staged workflow](docs/staged-workflow.md).
-
 ## Documentation and development
 
 The [documentation site](https://ghruproject.github.io/chronoclade/) includes

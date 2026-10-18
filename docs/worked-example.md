@@ -9,38 +9,17 @@ ChronoClade was run on 72 assemblies from this collection in the AllTheBacteria
 2025-05 release. The subset contains 69 Australian isolates, one New Zealand
 isolate and two external comparators. Seventeen collection years are represented.
 
-## Prepare the assemblies
+## Historical result
 
-The repository records every accession and collection year in
-`validation/st239_baines2015/input_manifest.csv`. Place the corresponding
-assemblies in the run directory, then create the ChronoClade metadata table:
+This is an archived analysis and its accompanying report, preserved as scientific
+evidence from an earlier ChronoClade workflow. It is not a recipe for running the
+current software. Use the [independent module workflow](independent-suite.md) or
+the [current Klebsiella walkthrough](mac-klebsiella-walkthrough.md) for present-day
+commands.
 
-```bash
-mkdir -p validation/st239_baines2015/run
-
-pixi run python validation/st239_baines2015/prepare_metadata.py \
-  --assemblies validation/st239_baines2015/run/assemblies \
-  --output validation/st239_baines2015/run/metadata.csv
-```
-
-The accession manifest is versioned. The downloaded assemblies are not.
-
-## Run ChronoClade
-
-```bash
-pixi run chronoclade validate \
-  validation/st239_baines2015/run/metadata.csv
-
-pixi run chronoclade run \
-  validation/st239_baines2015/run/metadata.csv \
-  --mode finish \
-  --output validation/st239_baines2015/run/results \
-  --threads 8 \
-  --lineage-jobs 1 \
-  --randomisation-jobs 4 \
-  --date-randomisations 100 \
-  --seed 20260818
-```
+The accession manifest is versioned; the downloaded assemblies are not. The
+results and methods below describe the preserved run and should be interpreted
+within its original sampling and software context.
 
 ## Root-to-tip regression
 

@@ -1,5 +1,9 @@
 # Profile-first workflow validation
 
+> Historical execution record. Commands below describe a retired interface and
+> are preserved as evidence, not current instructions. For new analyses, use
+> [the supported four-stage workflow](../../docs/independent-suite.md).
+
 Validated locally on 9 October 2026.
 
 - Live Pathogenwatch collection `jX5cwsoyJ1KDquMqssUzAD`: 23 query genomes, all profiles retrieved through the collection's advertised cgMLST job, five locus bootstrap replicates, 253 comparable pairs, no assembly downloads. This is the supplied *S. aureus* collection, not the Klebsiella ST147 dataset.

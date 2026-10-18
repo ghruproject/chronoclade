@@ -51,7 +51,3 @@ population confidence interval.
 
 Typing availability, assembly access and metadata completeness depend on the
 provider and reference configuration. Missing evidence remains explicit.
-
-The older `run --mode fast|full|finish` interface remains documented in the
-[staged workflow](staged-workflow.md). Its limits and paths differ from the
-independent modules.

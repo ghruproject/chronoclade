@@ -164,11 +164,12 @@ are available; a freshly downloaded caller snapshot is not silently declared
 compatible with an older dated hclink database.
 
 
-```bash
-pixi run chronoclade prepare-context ecoli-focal.csv --scheme ecoli \
-  --typing-config ~/.local/share/chronoclade/typing/query_config.json \
-  --hiercc-level HC1100 --output ecoli-context
-```
+## Current module handoff
+
+Use `type-queries` to create a saved typing result, then prepare the input dataset
+and retrieve context through cgMLST. The independent workflow is documented in
+[the tool suite guide](independent-suite.md); E. coli/HierCC remains outside the
+accepted beta scope described above.
 
 The `ecoli` discovery shortcut uses Pathogenwatch's `mlst` search field; `mlst2`
 is an explicit alternative field. Always check that the chosen ST refers to the
@@ -185,10 +186,10 @@ The current country-group atlas uses Klebsiella cgLIN; E. coli HierCC currently
 supports query assignment and comparison-pool refinement, rather than a HierCC
 country-group atlas. Country counts and the location network are organism-neutral.
 
-For cluster execution, install in a cluster-visible directory and run the same
-`prepare-context` command inside a batch job. Afterwards, the combined metadata
-and context manifest feed ChronoClade's existing SLURM analysis workflow. A live
-cluster run is separate from local native validation.
+For cluster execution, use the generated stage job scripts documented in the
+[independent workflow](independent-suite.md#local-and-slurm-jobs). Stage the
+saved input and referenced files on the cluster; local validation does not
+establish that a physical cluster run has completed.
 
 ## Evidence and limits
 

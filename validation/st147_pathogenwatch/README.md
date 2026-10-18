@@ -1,5 +1,9 @@
 # ST147 Pathogenwatch release pilot
 
+> Historical execution record. Commands below describe a retired interface and
+> are preserved as evidence, not current instructions. For new analyses, use
+> [the supported four-stage workflow](../../docs/independent-suite.md).
+
 The executable laptop and SLURM recipe is in [the pilot guide](../../docs/pathogenwatch-pilot.md).
 Use `scripts/st147_pilot.py` for bounded preparation, analysis and completely offline
 selection/country-table replay. Ordinary CI generates compact synthetic public

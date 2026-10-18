@@ -2,13 +2,14 @@
 
 ## Stages and profile analysis
 
-The public `chronoclade run` modes are cumulative. `fast` (the default) analyses
-available cgMLST profiles without downloading public assemblies. `full` selects
-context assemblies and runs the recombination-corrected genomic workflow but
-stops before clock fitting. `finish` adds the temporal-signal tests and gated
-time scaling. The profile-stage root-to-tip diagnostic and the finish-stage
-clock test answer different questions; the former never passes the temporal
-gate.
+ChronoClade separates preparation, profile analysis and selection, corrected
+SNP-tree inference, and dating into independent modules. Preparation resolves
+inputs and typing; cgMLST analyses compatible profiles and selects representatives;
+tree acquires the selected assemblies, infers a recombination-adjusted phylogeny
+and assesses temporal signal; time dates a saved tree only when its evidence
+supports dating. Exploratory profile-date regressions and formal tree-stage
+temporal assessment answer different questions; the former never passes the
+temporal gate.
 
 Each profile comparison requires compatible species, cgMLST scheme/version,
 database provenance where available, and a compatible locus set. Allele
@@ -51,8 +52,8 @@ without profiles.
 
 ## Whole-genome phylogeny
 
-The following assembly methods apply to `full` and `finish`. Clock methods
-apply only to `finish`.
+The following assembly methods apply to the `tree` module. Clock methods apply
+to temporal assessment in `tree` and dating in `time`.
 
 ChronoClade analyses each `species` and `lineage` group independently. SKA2
 builds a split-k-mer index and maps samples to a selected reference to produce a
@@ -87,7 +88,7 @@ members of each pair. The report always gives the callable-site count beside the
 SNP count. These corrected distances provide a second opportunity to identify
 unusual genomes after recombination has been modelled.
 
-## Finish-stage root-to-tip analysis
+## Tree-stage root-to-tip analysis
 
 TreeTime reroots the recombination-corrected phylogeny by least squares and fits
 root-to-tip distance against sampling date. ChronoClade disables automatic
@@ -101,7 +102,7 @@ times reliably.[^murray]
 
 ## Date-randomisation test
 
-The `finish` stage's default `root-to-tip` method permutes sampling dates among tips while
+The tree stage's default `root-to-tip` method permutes sampling dates among tips while
 retaining the corrected tree and sequence length. TreeTime repeats the same
 least-squares clock analysis for each permutation. The empirical one-sided
 p-value compares observed R² with the permutation distribution and includes a
@@ -129,18 +130,17 @@ population groups.[^duche]
 
 ## Stage boundaries
 
-`fast` does not align assemblies, screen recombination with PhiPack, build a
-whole-genome tree or run date permutations. It reports the profile comparisons
-and metadata available at that stage. `full` builds the corrected genomic
-evidence but does not run the clock methods above. Only `finish` assesses
-temporal signal. With fewer than three usable distinct collection dates,
-`finish` records that temporal analysis was not assessed and leaves the
-corrected report available; it does not create a failed permutation result.
+The cgMLST module analyses compatible profiles and saves representative
+selections; it does not build a whole-genome tree. The tree module performs the
+corrected genomic analysis and assesses temporal signal. When fewer than three
+usable distinct collection dates are available, temporal analysis is recorded as
+not assessed; it is not represented as a failed permutation result. The time
+module reads the saved tree and assessment rather than rebuilding the phylogeny.
 
 ## Time scaling
 
-Passing datasets in `finish` are analysed with TreeTime using marginal time inference,
-covariation and 90% confidence intervals. The output tree has branch positions
+When temporal evidence supports dating, the time module uses TreeTime with
+marginal time inference, covariation and 90% model intervals. The output tree has branch positions
 on a calendar-time axis. ChronoClade exports the root estimate, clock-rate
 uncertainty and each internal node's date interval.
 
@@ -151,58 +151,21 @@ interpretation.
 
 ## Location states and public context
 
-TreeTime's mugration model reconstructs the supplied `location` state on the
-dated tree when time scaling succeeds, or on the corrected genetic tree when
-dating was unsupported or not assessed in `full`.
-This reconstruction is exploratory. Its result depends on how locations were
-defined and sampled.
-
-The full report's StrainHub-style location network groups sampled tips by the
-`location` values in metadata and count, then draws representative changes
-between ancestral states on the rooted analysed tree. Labels are used as
-supplied: there is no automatic geography hierarchy lookup. Use country labels
-for a country-level view; city or hospital labels produce a network at that
-level. Unknown or missing location values are excluded rather than passed to
-the model as a location state. The view uses the existing TreeTime
-maximum-likelihood reconstruction; it does not use StrainHub's parsimony
-algorithm. Solid arrows
-require unique marginal state assignments at both endpoints with confidence of
-at least 0.9. Dashed arrows indicate a tied/ambiguous endpoint or confidence
-below 0.9. The lower endpoint confidence is a display rule, not a joint
-transition probability. Marginal assignments and changes are conditional on
-the rooted tree, sampling and supplied location states. They do not prove
-transmission or migration, and they do not estimate national prevalence.
-Because reconstruction uses the rooted genetic tree, the network can be shown
-after dating is unsupported; it contains no inferred timing. Fast-screen mode
-does not run this reconstruction. Profile `fast` has a separate exploratory
-maximum-parsimony network based on possible changes across alternate sample
-roots; its root fraction is a sensitivity summary, not a probability.
-
-The context workflow freezes a full public Pathogenwatch same-ST catalogue with
-source IDs, accessions, QC, raw metadata, date precision and retrieval hashes.
-It supports *K. pneumoniae* and *E. coli*; other organisms and schemes return an
-explicit unsupported-provider error. Klebsiella uses cgLIN; E. coli uses HierCC.
-QC-passing records are deduplicated by accession-supported sample units,
-without claiming unique patients or infections. Undated records remain in
-country summaries but are excluded from the dated analysis cohort. Same-ST
-membership defines the possible pool; compatible cgLIN prefixes, HierCC clusters
-and cgMLST distances prioritise candidates, reserving 25% of the bounded pool for
-country/year background. Unresolved or incompatible typing falls back explicitly
-to balanced same-ST sampling. Native typing can process query assemblies and the
-bounded downloaded public pool with the same databases before SKA. It screens
-the resulting candidates against every focal sample with SKA
-distance, then retains nearby genomes and a stratified background. The manifest
-records the bounded search. "Nearest" means nearest within the downloaded pool,
-not nearest among all public bacterial genomes.
-
-Country proportions describe available sequenced public records within each
-scheme/version-scoped full cgLIN prefix. Unknown country contributes to the
-denominator. Incomplete/provisional codes retain their status and missing codes
-are assignment coverage, not a single lineage. Prefix depth is not a pairwise
-SNP threshold. These figures do not estimate prevalence, incidence, migration,
-transmission or country of acquisition. Submission bias, missing annotations and
-date uncertainty constrain interpretation. See [cgLIN](cglin.md) and
+cgMLST reports can reconstruct country, host, region or city changes on the
+saved tree. Missing metadata stays unknown, and a field with only one observed
+state cannot support a useful network. Reconstructed changes depend on the tree,
+root, metadata and sampling frame; they do not prove transmission or migration.
+Geographic summaries describe available records, not prevalence, incidence or
+country of acquisition. See [cgLIN](cglin.md) and
 [geography](context-geography.md).
+
+The current public context workflow retrieves compatible profiles and metadata
+for the requested species/ST and lineage scope. cgMLST analyses those profiles
+and selects representatives; tree acquires assemblies only for the selected IDs.
+A nearest relative is nearest within the retrieved, compatible pool, not among
+all public bacterial genomes. Provider coverage and incomplete annotations limit
+interpretation. Historical Pathogenwatch pilot fixtures and selection methods
+are described separately in [the pilot record](pathogenwatch-pilot.md).
 
 Native typing uses Pathogenwatch's cgMLST caller and `plincer` or exact `hclink`.
 Missing, ambiguous and novel alleles, incomplete assignments and database

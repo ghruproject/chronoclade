@@ -20,7 +20,7 @@ from chronoclade.datasets import PreparedDataset, load_dataset
 assert "@font-face" in report_styles()
 for name in (
     "chronoclade.report", "chronoclade.temporal_report", "chronoclade.profile_analysis",
-    "chronoclade.staged_workflow", "chronoclade.lineage", "chronoclade.pathogenwatch",
+    "chronoclade.cgmlst.workflow", "chronoclade.lineage", "chronoclade.pathogenwatch",
     "chronoclade.context_refinement", "torch", "esm",
 ):
     assert name not in sys.modules, name
