@@ -11,8 +11,10 @@ import hashlib
 import os
 import platform
 import shutil
+import signal
 import subprocess
 import tarfile
+import threading
 import urllib.error
 import urllib.request
 from datetime import date, datetime, timezone
@@ -56,6 +58,13 @@ NODE_SHA256 = {
 }
 
 SPECIES = {
+    "saureus": {
+        "name": "Staphylococcus aureus",
+        "mlst_scheme": "saureus_1",
+        "mlst_scheme_id": "2",
+        "lineage_tool": None,
+        "credential": "No lineage assignment is required; public cgMLST alleles are historical records",
+    },
     "klebsiella": {
         "name": "Klebsiella pneumoniae",
         "mlst_scheme": "klebsiella_1",
@@ -90,21 +99,58 @@ def _run(
     log_path: Path | None = None,
 ) -> str:
     try:
-        result = subprocess.run(
-            list(args),
-            cwd=cwd,
-            env=dict(env) if env is not None else None,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            check=False,
-        )
+        if log_path is None:
+            result = subprocess.run(
+                list(args),
+                cwd=cwd,
+                env=dict(env) if env is not None else None,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                check=False,
+            )
+        else:
+            # Explicitly opted-in credential-free native commands only. Keep
+            # stdout's return value separate while streaming both pipes live.
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            stdout = []
+            lock = threading.Lock()
+            with log_path.open("w") as log:
+                process = subprocess.Popen(
+                    list(args), cwd=cwd,
+                    env=dict(env) if env is not None else None,
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    text=True, bufsize=1, start_new_session=os.name != "nt",
+                )
+                def pump(stream, capture):
+                    try:
+                        for line in stream:
+                            if capture:
+                                stdout.append(line)
+                            with lock:
+                                log.write(line)
+                                log.flush()
+                    finally:
+                        stream.close()
+                readers = [threading.Thread(target=pump, args=(process.stdout, True)),
+                           threading.Thread(target=pump, args=(process.stderr, False))]
+                for reader in readers:
+                    reader.start()
+                try:
+                    code = process.wait(timeout=timeout)
+                except BaseException:
+                    if os.name == "nt":
+                        process.kill()
+                    else:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    process.wait()
+                    raise
+                finally:
+                    for reader in readers:
+                        reader.join()
+            result = subprocess.CompletedProcess(list(args), code, "".join(stdout), "")
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise TypingSetupError(f"Setup command failed: {Path(args[0]).name}") from exc
-    if log_path is not None:
-        # Opt-in only for credential-free native indexing, never auth/download tools.
-        log_path.parent.mkdir(parents=True, exist_ok=True)
-        log_path.write_text(result.stdout + "\n" + result.stderr)
     if result.returncode:
         # Tool output can contain remote-service details; do not echo it into reports.
         raise TypingSetupError(
@@ -253,7 +299,7 @@ def _install_mlst(root: Path) -> dict[str, Any]:
 def _normalise_species(species: str | Sequence[str]) -> list[str]:
     values = [species] if isinstance(species, str) else list(species)
     if not values or any(not isinstance(item, str) for item in values):
-        raise TypingSetupError("Select klebsiella, ecoli, or both")
+        raise TypingSetupError("Select klebsiella, ecoli, saureus, or both")
     normalised = []
     for value in values:
         key = " ".join(value.casefold().replace("_", " ").replace(".", " ").split())
@@ -263,6 +309,8 @@ def _normalise_species(species: str | Sequence[str]) -> list[str]:
             canonical = "klebsiella"
         elif key in {"ecoli", "e coli", "escherichia coli"}:
             canonical = "ecoli"
+        elif key in {"saureus", "s aureus", "staphylococcus aureus", "staph aureus"}:
+            canonical = "saureus"
         else:
             raise TypingSetupError(f"Unsupported native typing species: {value}")
         if canonical not in normalised:
@@ -275,6 +323,29 @@ def _database_state(root: Path, species: str) -> dict[str, Any]:
     # The native MLST index is generated separately from downloaded scheme data.
     index = root / "databases" / "mlst-index" / spec["mlst_scheme"]
     scheme_data = root / "databases" / "mlst-schemes"
+    if spec["lineage_tool"] is None:
+        try:
+            from chronoclade.query_typing import validate_cgmlst_index
+
+            caller_version = _database_version(root, species, "cgmlst")
+            if caller_version is None:
+                raise TypingSetupError("cgMLST scheme version is missing")
+            validate_cgmlst_index(index, spec["mlst_scheme"], caller_version)
+            cgmlst_ready = True
+        except (OSError, ValueError):
+            cgmlst_ready = False
+        return {
+            "ready": cgmlst_ready,
+            "cgmlst_ready": cgmlst_ready,
+            "lineage_ready": False,
+            "lineage_assignment": "not_required_caller_only",
+            "cgmlst_index": str(index),
+            "cgmlst_scheme_data": str(scheme_data),
+            "lineage_database": None,
+            "missing_resources": [] if cgmlst_ready else [str(index)],
+            "lineage_database_authentication": spec["credential"],
+            "cgmlst_access_scope": _cgmlst_access_scope(root, species),
+        }
     lineage = root / "databases" / spec["lineage_tool"]
     if species == "klebsiella":
         required = [
@@ -384,7 +455,7 @@ def _query_config(root: Path, species: list[str], tools: Mapping[str, Any]) -> d
         caller_version = _database_version(root, name, "cgmlst")
         lineage_version = _database_version(root, name, "lineage")
         caller_tool = tools["mlst"]
-        lineage_tool = tools[spec["lineage_tool"]]
+        lineage_tool = tools.get(spec["lineage_tool"])
         caller = {
             "command": caller_tool["command"],
             "scheme": spec["mlst_scheme"],
@@ -392,6 +463,9 @@ def _query_config(root: Path, species: list[str], tools: Mapping[str, Any]) -> d
             "tool_version": f"cgps-mlst {caller_tool['version']}@{caller_tool['commit']}",
             "index_dir": str(root / "databases" / "mlst-index" / spec["mlst_scheme"]),
         }
+        if spec["lineage_tool"] is None:
+            organisms[spec["name"]] = {"cgmlst": caller, "mode": "profiles-only"}
+            continue
         if name == "klebsiella":
             assignment = {
                 "kind": "plincer",
@@ -420,9 +494,11 @@ def _query_config(root: Path, species: list[str], tools: Mapping[str, Any]) -> d
         "ready": all(
             _database_state(root, name)["ready"]
             and _database_version(root, name, "cgmlst") is not None
-            and _database_version(root, name, "lineage") is not None
+            and (SPECIES[name]["lineage_tool"] is None
+                 or _database_version(root, name, "lineage") is not None)
             for name in species
         ),
+        "cgmlst_ready": all(_database_state(root, name)["cgmlst_ready"] for name in species),
         "organisms": organisms,
     }
 
@@ -625,6 +701,7 @@ def _prepare_public_cgmlst(
             "access_mode": access_mode,
             "access_method": "cached_access_or_session_token" if authenticated else "public_route",
             "source_commit": source["commit"],
+            "public_record_restriction": None if authenticated else "Records submitted on or before 2024-12-31; newer alleles require host authentication",
             "selection_sha256": file_sha256(selected_file),
         },
     )
@@ -969,7 +1046,9 @@ def setup_typing(
         raise TypingSetupError(f"uv executable is unavailable: {uv_executable}")
     root = Path(destination).expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True)
-    tools: dict[str, Any] = {"mlst": _install_mlst(root)}
+    with progress_task("setup", "Install pinned cgMLST caller and Node runtime",
+                       details=f"destination {root}"):
+        tools: dict[str, Any] = {"mlst": _install_mlst(root)}
     if "klebsiella" in selected:
         tools["plincer"] = _install_python_tool(uv, root, "plincer", "3.11")
     if "ecoli" in selected:
@@ -985,17 +1064,19 @@ def setup_typing(
                     "reason": tools["mlst"].get("blocker", "Pathogenwatch mlst is not installed."),
                 }
                 continue
-            db_builds[name] = _prepare_public_cgmlst(
-                uv,
-                root,
-                name,
-                tools,
-                pasteur_secrets=(
-                    Path(pasteur_secrets).expanduser()
-                    if name == "klebsiella" and pasteur_secrets is not None
-                    else None
-                ),
-            )
+            with progress_task("setup", f"Download and index {name} cgMLST reference",
+                               details="public records unless protected authentication is configured"):
+                db_builds[name] = _prepare_public_cgmlst(
+                    uv,
+                    root,
+                    name,
+                    tools,
+                    pasteur_secrets=(
+                        Path(pasteur_secrets).expanduser()
+                        if name == "klebsiella" and pasteur_secrets is not None
+                        else None
+                    ),
+                )
         if "klebsiella" in selected and pasteur_secrets is not None:
             db_builds["klebsiella_lineage"] = _build_plincer_db(
                 root, tools["plincer"], Path(pasteur_secrets).expanduser()
@@ -1035,6 +1116,7 @@ def setup_typing(
         "database_preparation": db_note,
         "query_config_path": str(query_config_path),
         "query_config_ready": query_config["ready"],
+        "cgmlst_ready": query_config["cgmlst_ready"],
     }
     path = root / "typing_setup.json"
     path.write_text(json.dumps(report, indent=2) + "\n")

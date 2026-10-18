@@ -145,7 +145,7 @@ def run_tree_ensemble(ensemble_manifest, *, output, ensemble_jobs=1, force=False
     return _execute(manifest, result, ensemble_jobs, worker)
 
 
-def register_tree_ensemble(ensemble_manifest, tree_manifests, *, output):
+def register_tree_ensemble(ensemble_manifest, tree_manifests, *, output, force=False):
     """Bind already-computed checked trees without copying or rerunning them."""
     source = Path(ensemble_manifest).expanduser().resolve()
     ensemble = load_selection_ensemble(source)
@@ -161,7 +161,7 @@ def register_tree_ensemble(ensemble_manifest, tree_manifests, *, output):
         raise WorkflowError("Tree does not belong to this ensemble")
     registered_hashes = {ident: file_sha256(results[ident][0]) for ident in expected if ident in results}
     output, manifest, index = _initial(output, source, "tree", list(expected),
-                                       {"operation": "register_checked_trees", "tree_hashes": registered_hashes}, False)
+                                       {"operation": "register_checked_trees", "tree_hashes": registered_hashes}, force)
     for row in index["runs"]:
         ident = row["selection_id"]
         if ident not in results:
@@ -179,10 +179,13 @@ def register_tree_ensemble(ensemble_manifest, tree_manifests, *, output):
 
 
 def run_time_ensemble(tree_ensemble, *, output, ensemble_jobs=1, force=False,
-                      allow_unsupported=False, cluster_snp_cutoff=10, reuse_results=()):
+                      allow_unsupported=False, cluster_snp_cutoff=10, reuse_results=(),
+                      collect_only=False, missing_outcomes=None):
     from chronoclade.time_stage.workflow import run_time, native_time_parameters
     from chronoclade.time_stage.comparison import compare_time_runs
 
+    if missing_outcomes and not collect_only:
+        raise WorkflowError("Missing task outcomes are only valid for collect-only execution")
     if ensemble_jobs < 1 or cluster_snp_cutoff < 0:
         raise WorkflowError("Invalid ensemble resource or clustering parameter")
     source = Path(tree_ensemble).expanduser().resolve()
@@ -190,6 +193,11 @@ def run_time_ensemble(tree_ensemble, *, output, ensemble_jobs=1, force=False,
     source = _freeze(source)
     reused = {}
     expected = {row["selection_id"]: row for row in trees["runs"]}
+    if missing_outcomes:
+        if (set(missing_outcomes) - set(expected)
+                or any(not isinstance(value, dict) or set(value) - {"reason", "scheduler"}
+                       for value in missing_outcomes.values())):
+            raise WorkflowError("Missing task outcomes may only attach reason and scheduler metadata to known selections")
     dating_parameters = {
         ident: native_time_parameters(
             load_tree_result(_resolve(source.parent, row["result"], "tree result", external=True)),
@@ -197,7 +205,7 @@ def run_time_ensemble(tree_ensemble, *, output, ensemble_jobs=1, force=False,
         )
         for ident, row in expected.items() if row["status"] == "complete"
     }
-    if force and reuse_results:
+    if force and reuse_results and not collect_only:
         raise WorkflowError("Choose checked result reuse or forced execution, not both")
     for path in map(Path, reuse_results):
         checked = load_result(path, "time")
@@ -210,13 +218,20 @@ def run_time_ensemble(tree_ensemble, *, output, ensemble_jobs=1, force=False,
                 or checked["parameters"]["allow_unsupported"] != allow_unsupported):
             raise WorkflowError("Reused dating result differs from the checked tree or gate parameters")
         if checked.get("parameters") != dating_parameters[ident]:
-            raise WorkflowError("Reused dating result differs from the native dating inference policy or seed")
+            raise WorkflowError(
+                "Reused dating result differs from the native dating inference policy or seed; "
+                f"selection {ident}: expected {dating_parameters[ident]!r}, "
+                f"found {checked.get('parameters')!r}. "
+                "Use results from the same inference method and seed, or rerun only this time task; "
+                "the collector will not rerun inference."
+            )
         reused[ident] = (_freeze(path), checked)
     output, manifest, result = _initial(
         output, source, "time", [r["selection_id"] for r in trees["runs"]],
         {"ensemble_jobs": ensemble_jobs, "allow_unsupported": allow_unsupported,
          "cluster_snp_cutoff": cluster_snp_cutoff,
          "dating_parameters_by_selection": dating_parameters,
+         "collect_only": collect_only,
          "reused_time_hashes": {ident: file_sha256(path) for ident, (path, _) in reused.items()}}, force,
     )
 
@@ -229,6 +244,9 @@ def run_time_ensemble(tree_ensemble, *, output, ensemble_jobs=1, force=False,
         tree = trees["runs"][i]
         if tree["status"] != "complete":
             return {**row, "status": tree["status"], "reason": tree.get("reason", "Tree unavailable")}
+        if collect_only:
+            return {**row, "status": "failed", "reason": "No checked time result from array task; inspect task logs and retry",
+                    **(missing_outcomes or {}).get(row["selection_id"], {})}
         path = _resolve(source.parent, tree["result"], "tree result", external=True)
         destination = output / "runs" / f"selection-{i + 1:03d}"
         try:

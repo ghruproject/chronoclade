@@ -45,7 +45,7 @@ def _json(path: Path):
 
 
 def _merge_frozen_metadata(dataset, path):
-    """Apply exact-ID descriptive metadata without changing typing or membership."""
+    """Apply exact-ID metadata, including supplied classical ST annotations."""
     from chronoclade.datasets.adapters import samples_from_records
     from chronoclade.profile_inputs import _csv
 
@@ -53,6 +53,7 @@ def _merge_frozen_metadata(dataset, path):
         "country", "region", "city", "nuts2", "host", "isolation_source", "collection_date",
         "hospital", "hospital_code", "publication_isolate_id", "specimen_type",
         "clinical_specimen", "study_accession", "patient_id", "location",
+        "mlst_st", "mlst_scheme",
     }
     identity = {"accession", "source_genome_id", "sample_id"}
     crosswalk = {r["sample_id"]: r for r in dataset.crosswalk}
@@ -84,9 +85,18 @@ def _merge_frozen_metadata(dataset, path):
             value = override[field]
             if not value:
                 continue
+            if field == 'mlst_st' and not re.fullmatch(r'[1-9][0-9]*', value):
+                raise DatasetError('Metadata mlst_st must be a positive numeric ST')
             if row.get(field) not in (None, "", value):
                 conflicts.append({"sample_id": row["sample_id"], "field": field,
                                   "source": "prepared_metadata", "value": row[field]})
+            if field in {'mlst_st', 'mlst_scheme'}:
+                # User annotations must not retain alleles/provenance from a
+                # different earlier native call as evidence for the new ST.
+                for stale in ('mlst_alleles', 'mlst_database_sha256', 'mlst_tool_version',
+                              'mlst_assembly_sha256', 'mlst_reason'):
+                    row.pop(stale, None)
+                row.update(mlst_source='user_metadata', mlst_status='supplied')
             row[field] = value
             for previous in provenance:
                 if previous.get("sample_id") == row["sample_id"] and previous.get("field") == field and previous.get("selected"):
@@ -307,7 +317,7 @@ def _readiness(dataset, manifest):
             any(_lineage_ready(evidence, kind) for evidence in lineage_rows) if kind else False
         )
         mlst_st = str(row.get("mlst_st") or "").strip()
-        mlst_st_ready = bool(re.fullmatch(r"[1-9][0-9]*", mlst_st)) if kind else None
+        mlst_st_ready = bool(re.fullmatch(r"[1-9][0-9]*", mlst_st))
         reasons = []
         if not any(evidence["called_loci"] for evidence in profile_rows):
             reasons.append(
@@ -321,14 +331,17 @@ def _readiness(dataset, manifest):
             reasons.append("Locus catalogue is explicitly incomplete")
         if kind and not lineage_available:
             reasons.append(f"Resolved {kind} assignment with a known scope is unavailable")
-        if kind and not mlst_st_ready:
-            reasons.append(
-                "A verified seven-gene MLST ST is required for public context discovery; "
-                "add the numeric `mlst_st` from verified metadata before `cgmlst --fetch-context`. "
-                "Do not infer it from cgLIN/HierCC or nearest-neighbour labels."
-            )
         if not kind:
             reasons.append("Lineage readiness is not assessed for this species")
+        if row['role'] == 'input' and not mlst_st_ready:
+            reasons.append(
+                "A verified seven-gene MLST ST is required for public context discovery; "
+                "prepare calls classical MLST for missing STs when an input assembly and mapped caller/database are available. "
+                f"Current status: {row.get('mlst_reason') or 'not available'}. "
+                "Supply an assembly and install the caller with `pixi install --frozen -e mlst`, "
+                "or add numeric `mlst_st` from verified metadata before `cgmlst --fetch-context`. "
+                "Do not infer it from cgLIN/HierCC or nearest-neighbour labels."
+            )
         reference = row.get("assembly_reference")
         samples.append(
             {
@@ -339,6 +352,9 @@ def _readiness(dataset, manifest):
                 "required_lineage_kind": kind,
                 "lineage_ready": bool(lineage_available),
                 "mlst_st_ready": mlst_st_ready,
+                "mlst_st": row.get('mlst_st'),
+                "mlst_scheme": row.get('mlst_scheme'),
+                "mlst_status": row.get('mlst_status') or ('supplied' if mlst_st_ready else 'unavailable'),
                 "profile_ready": bool(any(evidence["called_loci"] for evidence in profile_rows)),
                 "readiness": "ready" if not reasons else "incomplete",
                 "reasons": reasons,
@@ -346,6 +362,8 @@ def _readiness(dataset, manifest):
                 if reference and (manifest.parent / reference).is_file()
                 else "external_reference"
                 if reference
+                else "retrieval_not_assessed"
+                if row.get("source_genome_id") or row.get("numeric_source_id")
                 else "unavailable",
                 "missing_metadata": [
                     field
@@ -393,6 +411,7 @@ def _operation_label(value):
         "not_run_local_assemblies": "Not requested; local assemblies supplied",
         "not_run_offline": "Not requested; frozen evidence imported",
         "run_missing_profile_or_lineage_inputs": "Native typing run where needed",
+        "run_missing_profile_inputs": "Called missing input cgMLST profiles",
         "not_run_frozen_import": "Not run; frozen typing imported",
         "not_run": "Not run",
         "ready_validated_configuration": "Configured and validated",
@@ -406,11 +425,63 @@ def _operation_label(value):
     }.get(value, value)
 
 
-def _report(audit):
+def _parallel_prepare_report(audit, parallel_prepare, evidence_root):
+    """Explain worker results while leaving the collector's import status intact."""
+    if not isinstance(parallel_prepare, dict) or not parallel_prepare.get('tasks'):
+        return ''
+    tasks = parallel_prepare['tasks']
+    by_id = {row['sample_id']: row for row in audit['samples'] if row['role'] == 'input'}
+    count = len(tasks)
+    profiles = sum(by_id.get(task.get('sample_id'), {}).get('profile_ready', False) for task in tasks)
+    sts = sum(by_id.get(task.get('sample_id'), {}).get('mlst_st_ready', False) for task in tasks)
+    summary = (
+        '<h3>Parallel preparation</h3>'
+        f'<p>{count} checked per-assembly worker results were collected. '
+        f'In the combined dataset, {profiles} / {count} inputs have cgMLST profiles '
+        f'and {sts} / {count} have classical MLST STs. '
+        'The collector imported validated worker results; it did not perform typing. '
+        'The import statuses below describe collection, while worker evidence records '
+        'the original calls or reused typing.</p>'
+    )
+    if evidence_root is None:
+        return summary
+    root = Path(evidence_root).resolve()
+    entries = []
+    for task in tasks:
+        raw = task.get('retained_evidence')
+        if not isinstance(raw, str) or not raw:
+            continue
+        directory = (root / raw).resolve()
+        if not directory.is_relative_to(root):
+            continue
+        links = []
+        for relative, label in (
+            ('provider/native_typing/query_typing.json', 'Native cgMLST worker evidence'),
+            ('classical_mlst/audit.json', 'Classical MLST worker evidence'),
+        ):
+            path = (directory / relative).resolve()
+            if path.is_relative_to(root) and path.is_file():
+                from urllib.parse import quote
+                href = quote(path.relative_to(root).as_posix(), safe='/')
+                links.append(f'<a href="{escape(href, quote=True)}">{label}</a>')
+        if links:
+            row = by_id.get(task.get('sample_id'), {})
+            label = row.get('label') or task.get('sample_id') or 'Worker'
+            entries.append(f'<li>{escape(str(label))}: ' + ' · '.join(links) + '</li>')
+    if entries:
+        summary += ('<details class="coverage-details"><summary>Worker typing evidence</summary>'
+                    '<ul>' + ''.join(entries) + '</ul></details>')
+    return summary
+
+
+def _report(audit, *, parallel_prepare=None, evidence_root=None):
     def text(value):
         return escape(str(value), quote=True)
 
-    ready = sum(row["readiness"] == "ready" for row in audit["samples"])
+    ready = sum(row['profile_ready'] for row in audit['samples'])
+    parallel_summary = _parallel_prepare_report(audit, parallel_prepare, evidence_root)
+    typing_label = 'Collector cgMLST typing' if parallel_summary else 'cgMLST typing'
+    eligibility = _next_stage_summary(audit)
     context_audit = audit.get("provider_context")
     context_summary = (
         f"Accessible public context matches: {context_audit['accessible_matches']}; compatible usable profiles: {context_audit['usable']}. Context assemblies were not requested."
@@ -434,11 +505,15 @@ def _report(audit):
                 for value in (
                     row["label"],
                     row["role"],
+                    (f"ST{row['mlst_st']} ({row.get('mlst_scheme') or 'scheme unspecified'}; "
+                     f"{row['mlst_status']})" if row['mlst_st_ready'] else 'Unresolved'),
                     calls,
-                    row["readiness"],
+                    "Available" if row["profile_ready"] else "Unavailable",
                     reasons,
                     ", ".join(row["missing_metadata"]) or "None",
-                    row["assembly_status"],
+                    ("Not bundled; retrieval not assessed"
+                     if row["assembly_status"] == "retrieval_not_assessed"
+                     else row["assembly_status"]),
                 )
             )
             + "</tr>"
@@ -453,14 +528,20 @@ def _report(audit):
         '<div class="identity-copy"><h1>Prepared dataset</h1>'
         "<p>Frozen evidence is saved in a validated portable bundle. Missing profiles, "
         "lineage assignments and metadata remain visible.</p></div></header>"
-        '<section class="stage"><div class="stage-body"><h2>Typing readiness</h2>'
+        '<section class="stage"><div class="stage-body"><h2>Prepared evidence</h2>'
+        + parallel_summary
+        +
         f"<p>Provider retrieval: {text(_operation_label(audit['operations']['provider_retrieval']))}. "
-        f"Typing: {text(_operation_label(audit['operations']['typing']))}. "
-        f"Reference database: {text(_operation_label(audit['operations']['reference_database']))}.</p>"
+        f"{typing_label}: {text(_operation_label(audit['operations']['typing']))}. "
+        f"cgMLST reference database: {text(_operation_label(audit['operations']['reference_database']))}.</p>"
         f'<div class="measure-strip"><div><span>Samples</span><b>{len(rows)}</b></div>'
-        f"<div><span>Ready frozen typing</span><b>{ready}</b></div>"
-        f"<div><span>Incomplete typing</span><b>{len(rows) - ready}</b></div></div>"
+        f"<div><span>cgMLST profiles available</span><b>{ready}</b></div>"
+        f"<div><span>cgMLST profiles missing</span><b>{len(rows) - ready}</b></div></div>"
         f"<p>Missing metadata does not exclude a sample. {text(context_summary)}</p>"
+        '<p>Optional lineage annotations are listed in the reasons below; missing '
+        'cgLIN/HierCC labels do not make an available cgMLST profile unavailable. '
+        'Public-context ST requirements and profile coverage are assessed separately.</p>'
+        f"<h3>Can I continue?</h3><p>{text(eligibility)}</p>"
         '<div class="table-scroll" tabindex="0" role="region" aria-label="Sample readiness">'
         "<table><thead><tr>"
         + "".join(
@@ -468,8 +549,9 @@ def _report(audit):
             for name in (
                 "Sample",
                 "Role",
+                "Classical MLST",
                 "Profile calls",
-                "Typing",
+                "Profile availability",
                 "Reason",
                 "Missing metadata",
                 "Assembly",
@@ -488,6 +570,36 @@ def _report(audit):
     )
 
 
+def _next_stage_summary(audit):
+    """Separate usable profile evidence from provider-specific typing completeness."""
+    inputs = [row for row in audit["samples"] if row["role"] == "input"]
+    missing = [row["sample_id"] for row in inputs if not row["profile_ready"]]
+    incomplete = [row["sample_id"] for row in inputs
+                  if any(not profile["catalogue_complete"] for profile in row["profiles"])]
+    if missing:
+        return (
+            f'{len(missing)} of {len(inputs)} input genomes lack called cgMLST profiles. '
+            'Supply compatible profiles or configure native typing and its reference database '
+            'before interpreting a complete input-genome analysis. See the per-sample reasons below '
+            '(also saved in readiness.json).'
+        )
+    text = (
+        f'Called cgMLST profiles are available for all {len(inputs)} input genomes. '
+        'Continue with cgmlst using the prepared dataset; compatible species and schemes are analysed separately. '
+        'Missing cgLIN/HierCC labels do not prevent profile-distance analysis. '
+    )
+    if incomplete:
+        text += (
+            'The imported locus catalogue is incomplete: distances use the recorded loci only. '
+            'A validated complete catalogue is required to interpret missing calls across the full scheme. '
+        )
+    text += (
+        'Public-context discovery has separate provider-category and credential requirements. '
+        'Missing dates can make time analysis unsupported; missing metadata does not remove genomes.'
+    )
+    return text
+
+
 def run_prepare(
     input_path: str | Path,
     output: str | Path,
@@ -503,6 +615,7 @@ def run_prepare(
     enrich_metadata: bool = True,
     client=None,
     _provider_sources: Path | None = None,
+    _infer_mlst: bool = True,
     resume: bool = False,
 ) -> PrepareResult:
     """Import frozen canonical JSON or an existing bundle into a new stage output.
@@ -757,15 +870,48 @@ def run_prepare(
         assembly_staging = scratch / "assembly_files"
         assembly_staging.mkdir()
         dataset, assemblies = _portable_assemblies(dataset, source.parent, assembly_staging)
+        source_dataset_id = dataset.dataset_id
+        from chronoclade.mlst_typing import fill_missing_mlst
+        if _infer_mlst:
+            typed_samples, mlst_audit = fill_missing_mlst(
+                dataset.samples, assembly_staging, scratch / 'classical_mlst')
+        else:
+            typed_samples = dataset.samples
+            mlst_audit = dataset.parameters.get('classical_mlst', {}).get('samples', [])
+            if mlst_audit:
+                write_json(scratch / 'classical_mlst' / 'audit.json', {
+                    'schema': 'chronoclade.classical-mlst', 'schema_version': 1,
+                    'policy': 'checked per-assembly results; collector inference disabled',
+                    'samples': mlst_audit,
+                })
+        new_mlst_ids = ({row['sample_id'] for row in mlst_audit if row['status'] == 'resolved'}
+                        if _infer_mlst else set())
+        mlst_provenance = [
+            {'sample_id': row['sample_id'], 'field': field, 'source': 'classical_mlst',
+             'value': row[field], 'selected': True}
+            for row in typed_samples if row['sample_id'] in new_mlst_ids
+            for field in ('mlst_st', 'mlst_scheme', 'mlst_assembly_sha256', 'mlst_database_sha256')
+        ]
+        dataset = replace(dataset, samples=typed_samples,
+                          provenance=(*dataset.provenance, *mlst_provenance),
+                          retrieval=(*dataset.retrieval, *(
+                              {'sample_id': row['sample_id'], 'operation': 'classical_mlst',
+                               'status': row['status'], 'reason': row.get('reason')}
+                              for row in mlst_audit if _infer_mlst and row['status'] in {'resolved', 'unresolved', 'failed'})),
+                          dataset_id=None)
         source_evidence = {"path": "sources/input.json", "sha256": file_sha256(source)}
         parameters = dict(dataset.parameters)
+        parameters['classical_mlst'] = {'policy': ('reuse supplied ST; exact primary-scheme calls for missing ST'
+                                                 if _infer_mlst else 'checked per-assembly results; collector inference disabled'),
+                                      'samples': mlst_audit,
+                                      'evidence': 'sources/classical_mlst/audit.json' if mlst_audit else None}
         if typing_config:
             from chronoclade.pasteur_profile_normalization import reference_descriptor
             parameters["native_typing_reference"] = reference_descriptor(typing_config)
         parameters["prepare"] = {
             "input_kind": kind,
             "source": source_evidence,
-            "source_dataset_id": dataset.dataset_id,
+            "source_dataset_id": source_dataset_id,
             "species": species,
             "assemblies": assemblies,
         }
@@ -783,6 +929,8 @@ def run_prepare(
         manifest = write_dataset(dataset, bundle)
         sources = bundle / "sources"
         sources.mkdir()
+        if (scratch / 'classical_mlst').exists():
+            shutil.copytree(scratch / 'classical_mlst', sources / 'classical_mlst')
         shutil.copyfile(source, sources / "input.json")
         if catalogue_path:
             shutil.copyfile(catalogue_path, sources / "catalogues.json")
@@ -814,10 +962,14 @@ def run_prepare(
                     shutil.copyfile(evidence, destination)
         audit = _readiness(dataset, manifest)
         write_json(bundle / "readiness.json", audit)
-        (bundle / "report.html").write_text(_report(audit), encoding="utf-8")
+        parallel_prepare = dataset.parameters.get('parallel_prepare')
+        report = (_report(audit, parallel_prepare=parallel_prepare, evidence_root=bundle)
+                  if parallel_prepare else _report(audit))
+        (bundle / "report.html").write_text(report, encoding="utf-8")
         from chronoclade.stage_readme import write_stage_readme
         write_stage_readme(bundle, 'prepare', report='report.html',
-                           readiness=audit['readiness'], published_directory=target)
+                           readiness=audit['readiness'], published_directory=target,
+                           readiness_summary=_next_stage_summary(audit))
         # Validate the actual saved dataset, then seal all stage-owned artifacts.
         load_dataset(manifest)
         artifacts = []

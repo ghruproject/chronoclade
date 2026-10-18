@@ -87,7 +87,7 @@ Tree never creates a time-scaled phylogeny; it saves `assessment.json` for time.
 
 ### Relative-distance coherence policy
 
-Native `chronoclade tree` defaults to `--coherence-policy strict`, which stops on extreme relative-distance flags before or after recombination correction. These flags can reflect legitimate cohort diversity; they do not establish incorrect genome identity. For an intentionally broad selected cohort, explicitly use `--coherence-policy diagnostic` to retain every selected genome and continue with a visible report warning. Neither policy prunes samples.
+Native `chronoclade tree` defaults to `--coherence-policy strict`. Raw-alignment distance flags are audited and retained for review: recombination can inflate those distances. Strict policy stops only when extreme relative-distance flags remain after recombination correction. These flags can reflect legitimate cohort diversity; they do not establish incorrect genome identity. For an intentionally broad selected cohort, explicitly use `--coherence-policy diagnostic` to retain every selected genome and continue with a visible report warning. Neither policy prunes samples.
 
 Both screens retain TSV and JSON audits, including thresholds, cohort median, median absolute deviation, every sample statistic and flagged statistics. Completed `tree.json` embeds both audits and the policy. The time report carries forward any coherence warning from its source tree. The policy is bound into single-tree resume fingerprints and tree-ensemble parameters. Legacy `run` retains the strict default.
 

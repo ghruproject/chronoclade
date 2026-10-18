@@ -38,7 +38,7 @@ def normalise_typing_species(value: Any) -> str:
     if not isinstance(value, str):
         raise QueryTypingError("Query typing requires a supported species identity")
     key = " ".join(value.replace("_", " ").casefold().split())
-    if key not in {"klebsiella pneumoniae", "escherichia coli"}:
+    if key not in {"klebsiella pneumoniae", "escherichia coli", "staphylococcus aureus"}:
         raise QueryTypingError(f"Unsupported native typing species: {value}")
     return key
 
@@ -59,16 +59,75 @@ def _sha256(path: Path) -> str:
 
 
 def _database_hash(path: Path) -> str:
+    """Bind stable database content, excluding only SQLite locking sidecars.
+
+    SQLite readers may create, alter and remove SHM files concurrently. They are
+    not allele definitions; nonempty WAL/journal files do contain pending data
+    and must stop reference reuse instead of hiding uncheckpointed writes.
+    """
+    path = Path(path)
+
+    def sqlite_file(resource):
+        try:
+            with resource.open('rb') as stream:
+                return stream.read(16) == b'SQLite format 3\x00'
+        except FileNotFoundError:
+            return False
+
+    def checkpointed(resource):
+        if sqlite_file(resource):
+            for suffix in ('-wal', '-journal'):
+                sidecar = resource.with_name(resource.name + suffix)
+                try:
+                    size = sidecar.stat().st_size
+                except FileNotFoundError:
+                    continue
+                if size:
+                    raise QueryTypingError(
+                        f'Typing database has uncheckpointed SQLite writes: {resource.name}')
+
+    def stable_hash(resource):
+        checkpointed(resource)
+        try:
+            before = resource.stat()
+            value = _sha256(resource)
+            after = resource.stat()
+        except FileNotFoundError as error:
+            raise QueryTypingError('Stable typing database resource disappeared while hashing') from error
+        if (before.st_ino, before.st_size, before.st_mtime_ns) != (
+                after.st_ino, after.st_size, after.st_mtime_ns):
+            raise QueryTypingError('Typing database resource changed while hashing')
+        checkpointed(resource)
+        return value
+
     if path.is_file():
-        return _sha256(path)
-    files = sorted(item for item in path.rglob("*") if item.is_file())
+        return stable_hash(path)
+    files = []
+    for item in sorted(path.rglob('*')):
+        suffix = next((s for s in ('-shm', '-wal', '-journal') if item.name.endswith(s)), None)
+        if suffix:
+            base = item.with_name(item.name[:-len(suffix)])
+            if sqlite_file(base):
+                if suffix != '-shm':
+                    try:
+                        size = item.stat().st_size
+                    except FileNotFoundError:
+                        continue  # Reader-owned SQLite sidecar vanished after rglob.
+                    if size:
+                        raise QueryTypingError(
+                            f'Typing database has uncheckpointed SQLite writes: {base.name}')
+                continue
+        if item.is_file():
+            files.append(item)
+        elif not item.exists():
+            raise QueryTypingError('Stable typing database resource disappeared while hashing')
     if not files:
         raise QueryTypingError(f"Empty typing database: {path}")
     digest = hashlib.sha256()
     for item in files:
         digest.update(item.relative_to(path).as_posix().encode())
         digest.update(b"\0")
-        digest.update(_sha256(item).encode())
+        digest.update(stable_hash(item).encode())
         digest.update(b"\n")
     return digest.hexdigest()
 
@@ -226,6 +285,8 @@ def load_typing_config(path: Path, *, profiles_only: bool = False) -> dict[str, 
         )
         if profiles_only:
             continue
+        if species_key == 'staphylococcus aureus':
+            raise QueryTypingError('Native Staphylococcus aureus typing supports profiles-only; lineage assignment is not configured')
         assignment = organism["assignment"]
         assignment["loci_file"] = _path(assignment.get("loci_file"), path.parent)
         assignment["canonical_loci"] = _canonical_loci(assignment["loci_file"])
@@ -571,7 +632,8 @@ def _type_query_assemblies_once(
                 "sample_id": sample.sample_id, "species": sample.species,
                 "assembly_sha256": assembly_hash, "typing_mode": mode,
                 "typing_status": "profiles_only", "lineage_status": "not_requested",
-                "cglin_status" if species_key == "klebsiella pneumoniae" else "hiercc_status": "not_requested",
+                **({'cglin_status': 'not_requested'} if species_key == 'klebsiella pneumoniae'
+                   else {'hiercc_status': 'not_requested'} if species_key == 'escherichia coli' else {}),
                 **parsed, "cgmlst_locus_universe_complete": True,
                 "typing_provenance": provenance[species_key],
                 "cgmlst_database_sha256": provenance[species_key]["cgmlst"]["databases"]["index_dir"]["sha256"],
@@ -718,7 +780,8 @@ def _validate_query_typing_envelope(envelope: dict[str, Any]) -> list[dict[str, 
             for field in ("cgmlst_scheme", "cgmlst_scheme_version"):
                 if not isinstance(row.get(field), str) or row[field] in {"", "unknown"}:
                     raise QueryTypingError("Query profile requires a pinned scheme")
-        expected_scheme = "klebsiella_1" if species_key == "klebsiella pneumoniae" else "ecoli_1"
+        expected_scheme = {'klebsiella pneumoniae': 'klebsiella_1',
+                           'escherichia coli': 'ecoli_1', 'staphylococcus aureus': 'saureus_1'}[species_key]
         if "cgmlst_scheme" in row and row["cgmlst_scheme"] != expected_scheme:
             raise QueryTypingError("Query cgMLST scheme does not match its species")
         if "cgmlst_novel_alleles" in row:

@@ -11,10 +11,21 @@ Use these commands for the four-module workflow:
 | `tree SELECTION --out tree` | Selection JSON or `ensemble.json` | Build corrected SNP trees and assess dates |
 | `time TREE --out time` | `tree.json` or `tree_ensemble.json` | Date supported trees and compare alternatives |
 
-`cgmlst --fetch-context` retrieves matching public profiles and metadata;
+`cgmlst` defaults to `--partition-by profiles`: species and compatible profile
+scope determine blocks, with no cgLIN/HierCC prerequisite. Explicit
+`--partition-by lineage` requires verified labels; legacy `--partition-by st`
+remains input-only. `cgmlst --fetch-context` retrieves compatible public profiles
+and metadata from known species/ST candidate pools;
 assembly acquisition happens in `tree`. `--subsamples` defaults to 1 and requests
 alternative sets from the same block. `--context-size` defaults to 50, with
-mandatory neighbours retained even when they exceed that budget.
+all inputs and mandatory neighbours, including ties, retained even when the
+context count exceeds that budget. The budget does not limit public retrieval.
+Use `cgmlst DATASET --context-preflight --out context-plan` to save a count/cost
+report without details, profiles, assemblies or analysis. `--context-max-candidates N`
+works with that preview or `--fetch-context`. All species/ST pool counts and
+guards are checked before detailed retrieval begins; the guard never truncates
+pools and defaults to unlimited. Repeat an interrupted fetch command with
+`--resume` to reuse checked metadata and profile batches.
 `--representative-reserve` defaults to 0; set it explicitly to retain room for
 optional representatives beyond required neighbours. See [cgMLST](cgmlst.md),
 [tree](tree-stage.md) and [time](time-stage.md) for stage options and examples.
@@ -31,7 +42,9 @@ Report and diagnostic utilities:
 | `list-schemes [--inspect]` | List registered public EnteroBase cgMLST references; optionally check indexes |
 | `setup-scheme SCHEME --destination DIRECTORY` | Install/resume one verified public allele catalogue; caller and HierCC setup remain separate |
 | `authorize-pasteur --pasteur-secrets KEYFILE` | Begin one-time browser authorisation; use `--complete` to enter the verifier privately |
+| `slurm-prepare ASSEMBLIES.csv --typing-config CONFIG ...` | Generate bounded per-assembly preparation workers and a strict full-cohort collector; no submission until its submit script runs |
 | `job ...` | Save a local/SLURM stage script and resource manifest without submitting |
+| `slurm-ensemble tree\|time ...` | Generate bounded selection job arrays and checked collectors; run the generated submit script to submit |
 
 Run `chronoclade COMMAND --help` for the installed options. See
 [Pasteur authorisation](pasteur-auth.md) for the tool-install, consent and

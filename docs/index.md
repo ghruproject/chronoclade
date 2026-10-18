@@ -22,10 +22,13 @@ are excluded from pairwise comparisons, with shared-locus coverage recorded.
 Direct nucleotide comparisons within the cgMLST genes are an optional mode when
 a compatible allele sequence catalogue is available.
 
-Species and MLST ST define the public candidate pool. Compatible LIN or HierCC
-assignments determine the requested context block. Profile analysis includes all
-usable genomes in that block; subsampling prepares smaller assembly datasets for
-the tree and time stages.
+By default, species and compatible cgMLST profile scope define analysis blocks.
+LIN, HierCC and ST labels are optional for local analysis. Public candidate
+discovery uses known species/ST, with compatible profiles compared by distance.
+Verified lineage labels can annotate the results or explicitly restrict the
+analysis with `--partition-by lineage`. No universal NJ-distance or lineage
+cutoff is assumed. All inputs and mandatory nearest-neighbour ties are preserved;
+the context budget limits downstream assembly selection, not profile retrieval.
 
 ## Read the results
 

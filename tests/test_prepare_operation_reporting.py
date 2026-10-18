@@ -108,29 +108,29 @@ def test_existing_operation_statuses_have_readable_labels(status, label):
             "run_missing_profile_or_lineage_inputs",
             "ready_validated_configuration",
             (
-                "Typing: Native typing run where needed",
-                "Reference database: Configured and validated",
+                "cgMLST typing: Native typing run where needed",
+                "cgMLST reference database: Configured and validated",
             ),
         ),
         (
             "not_run_frozen_import",
             "not_checked_not_required_for_import",
             (
-                "Typing: Not run; frozen typing imported",
-                "Reference database: Not checked; not required for imported evidence",
+                "cgMLST typing: Not run; frozen typing imported",
+                "cgMLST reference database: Not checked; not required for imported evidence",
             ),
         ),
         (
             "not_run",
             "unavailable_not_configured",
-            ("Typing: Not run", "Reference database: Not configured"),
+            ("cgMLST typing: Not run", "cgMLST reference database: Not configured"),
         ),
         (
             "not_run",
             "unavailable_configured_database_or_tool_not_ready",
             (
-                "Typing: Not run",
-                "Reference database: Unavailable; configured database or tool is not ready",
+                "cgMLST typing: Not run",
+                "cgMLST reference database: Unavailable; configured database or tool is not ready",
             ),
         ),
     ],
@@ -164,6 +164,6 @@ def test_unknown_operation_statuses_are_visible_and_escaped():
         }
     )
     assert "Provider retrieval: &lt;future-provider&gt;&amp;&quot;" in html
-    assert "Typing: &lt;future-typing&gt;" in html
-    assert "Reference database: &lt;future-reference&gt;" in html
+    assert "cgMLST typing: &lt;future-typing&gt;" in html
+    assert "cgMLST reference database: &lt;future-reference&gt;" in html
     assert "<future-" not in html

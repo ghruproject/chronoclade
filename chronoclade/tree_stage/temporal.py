@@ -125,7 +125,7 @@ def run_clustered_assessment(
         "cluster_count": len(clusters),
         "eligible_sample_ids": [s.sample_id for s in samples],
         "root_policy": "least-squares root refitted for observed and every permutation",
-        "partial_date_policy": "original year/month/day strings retained; TreeTime interprets partial-date intervals",
+        "partial_date_policy": "Original year/month/day metadata and cluster identities retained; native clock inputs serialize year as YYYY-XX-XX and month as YYYY-MM-XX, including permuted assignments, so TreeTime receives their uncertainty intervals.",
         "cluster_weighting": "One exchangeable date per cluster; assigned date expands to all cluster tips. Tip weights in each clock fit are unchanged; tip-level date multiplicities need not be preserved.",
         "confounding": _distance_date_association(biological_tree, samples),
         "citation": "https://doi.org/10.1111/2041-210X.12466",

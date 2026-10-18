@@ -35,10 +35,12 @@ def test_st_partition_scope_separation_and_context_rejection(tmp_path):
         partition_input_profiles(records)
 
 
-def test_opt_in_normal_workflow_preserves_exact_selection_and_unknown_lineage(tmp_path):
+def test_default_profile_and_legacy_st_workflows_preserve_unknown_lineage(tmp_path):
     _, manifest = source(tmp_path)
     default = workflow.run_cgmlst(manifest, tmp_path/'default', bootstrap_replicates=0)
-    assert json.loads(default.manifest_path.read_text())['status'] == 'unavailable'
+    assert json.loads(default.manifest_path.read_text())['status'] == 'complete'
+    lineage = workflow.run_cgmlst(manifest, tmp_path/'lineage', partition_by='lineage', bootstrap_replicates=0)
+    assert json.loads(lineage.manifest_path.read_text())['status'] == 'unavailable'
     result = workflow.run_cgmlst(manifest, tmp_path/'st', partition_by='st', bootstrap_replicates=0)
     saved = json.loads(result.manifest_path.read_text())
     assert saved['status'] == 'complete'

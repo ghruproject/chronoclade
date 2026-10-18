@@ -29,6 +29,7 @@ def test_stage_reruns_when_direct_input_changes(tmp_path: Path) -> None:
 
 def test_dated_tree_keeps_the_root_used_for_temporal_testing(tmp_path: Path, monkeypatch) -> None:
     files = LineageFiles.in_directory(tmp_path)
+    files.metadata.write_text("sample_id,collection_date\nsample,2020\n")
     observed: dict[str, object] = {}
 
     def capture(command, **kwargs):
@@ -44,7 +45,7 @@ def test_dated_tree_keeps_the_root_used_for_temporal_testing(tmp_path: Path, mon
     assert str(files.clock_dir / "rerooted.newick") in command
     assert "--keep-root" in command
     assert "--reroot" not in command
-    assert observed["inputs"] == (files.clock_dir / "rerooted.newick", files.metadata)
+    assert observed["inputs"] == (files.clock_dir / "rerooted.newick", tmp_path / "treetime_dates.csv")
 
 
 def test_unknown_locations_are_missing_traits_not_countries(tmp_path: Path) -> None:
@@ -104,6 +105,10 @@ def test_future_collection_dates_excluded_and_clock_uses_validated_dates(tmp_pat
                         lambda command, **kwargs: calls.append((command, kwargs["inputs"])))
     _run_observed_clock(files, tmp_path / "tree.nwk", 100, False)
     _run_dated_tree(files, 100, False)
-    assert all(str(clock_dates) in command and clock_dates in inputs
+    native_dates = tmp_path / "treetime_dates.csv"
+    assert all(str(native_dates) in command and native_dates in inputs
                for command, inputs in calls)
+    assert "valid,2020-XX-XX" in native_dates.read_text()
+    assert "future," in native_dates.read_text()
+    assert clock_dates.read_text() == "sample_id,collection_date\nvalid,2020\nfuture,\n"
     assert files.metadata.read_text() == "raw original metadata"

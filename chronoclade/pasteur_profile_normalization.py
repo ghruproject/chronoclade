@@ -67,19 +67,20 @@ def _directory_reference(path):
     return {"path": str(path), "files": files, "sha256": content_hash(files)}
 
 
-def reference_descriptor(path):
+def reference_descriptor(path, *, profiles_only=None):
     """Bind canonicalization/assignment inputs by content, without credentials."""
     path = Path(path).expanduser().resolve()
     before = file_sha256(path)
     try:
-        config = load_typing_config(path)
+        config = load_typing_config(path, profiles_only=True) if profiles_only else load_typing_config(path)
     except ValueError as error:
-        raise DatasetError(
-            "Native reference binding requires full caller and lineage readiness; import profiles-only query typing without --typing-config"
-        ) from error
+        if profiles_only is False:
+            raise DatasetError('Native reference binding requires full caller and lineage readiness') from error
+        config = load_typing_config(path, profiles_only=True)
+        profiles_only = True
     organisms = {}
     for species, tools in sorted(config["organisms"].items()):
-        caller, assigner = tools["cgmlst"], tools["assignment"]
+        caller, assigner = tools['cgmlst'], tools.get('assignment') if not profiles_only else None
         index = caller["index_dir"]
         metadata_path = index / f"{caller['scheme']}_metadata.json"
         metadata = json.loads(metadata_path.read_text())
@@ -96,6 +97,14 @@ def reference_descriptor(path):
                 "scheme_details": details_path,
             }.items()
         }
+        organisms[species] = {
+            'caller': {**_provenance(caller, ()), 'resources': caller_files,
+                       'indexed_loci_sha256': content_hash(caller['index_loci']),
+                       'canonical_loci_sha256': content_hash(
+                           assigner['canonical_loci'] if assigner else caller['index_loci'])},
+        }
+        if profiles_only:
+            continue
         fields = (
             ("scheme_file", "profiles_file", "alleles_db", "loci_file")
             if assigner["kind"] == "plincer"
@@ -108,15 +117,7 @@ def reference_descriptor(path):
         for field in fields:
             if field not in file_fields:
                 assignment["databases"][field] = _directory_reference(assigner[field])
-        organisms[species] = {
-            "caller": {
-                **_provenance(caller, ()),
-                "resources": caller_files,
-                "indexed_loci_sha256": content_hash(caller["index_loci"]),
-                "canonical_loci_sha256": content_hash(assigner["canonical_loci"]),
-            },
-            "assignment": assignment,
-        }
+        organisms[species]['assignment'] = assignment
     if file_sha256(path) != before:
         raise DatasetError("Native typing configuration changed while binding its resources")
     descriptor = {
@@ -127,6 +128,8 @@ def reference_descriptor(path):
         "species": sorted(config["organisms"]),
         "resources": organisms,
     }
+    if profiles_only:
+        descriptor['typing_mode'] = 'profiles-only'
     descriptor["sha256"] = content_hash(descriptor)
     return descriptor
 
@@ -170,7 +173,8 @@ def resolve_reference(dataset, explicit=None):
         raise DatasetError("Prepared native reference has no valid configuration locator")
     path = Path(locator)
     try:
-        changed = not path.is_file() or reference_descriptor(path) != descriptor
+        changed = not path.is_file() or reference_descriptor(
+            path, profiles_only=True if descriptor.get('typing_mode') == 'profiles-only' else None) != descriptor
     except (OSError, ValueError) as error:
         raise DatasetError(
             "Prepared native reference is unavailable or changed; supply --typing-config for a fresh analysis"

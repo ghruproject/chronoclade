@@ -28,7 +28,7 @@ def grouping_caption(group_ids, basis=None, threshold=None):
         return "cgLIN groups on NJ tree", "Colours show reported cgLIN prefixes; unassigned tips have no prefix grouping. No additional distance cutoff defines these colours."
     if basis == "reported_hiercc" or all(group.startswith("HierCC ") for group in group_ids):
         return "HierCC groups on NJ tree", "Colours show reported HierCC assignments; unassigned tips have no assignment. No additional distance cutoff defines these colours."
-    if basis == "distance_threshold":
+    if basis in {"distance_threshold", "exploratory_profile_distance"}:
         detail = f" (mismatch fraction {escape(str(threshold))})" if threshold is not None else ""
         return "Genetic groups on NJ tree", "Groups use the declared direct-profile distance threshold" + detail + ", not tree clades."
     return "Groups on NJ tree", "Colours identify supplied group labels; no grouping method is declared in this view."

@@ -55,18 +55,21 @@ without profiles.
 The following assembly methods apply to the `tree` module. Clock methods apply
 to temporal assessment in `tree` and dating in `time`.
 
-ChronoClade analyses each `species` and `lineage` group independently. SKA2
+ChronoClade analyses each saved compatible cgMLST block independently. Optional
+lineage partitioning can narrow those blocks. SKA2
 builds a split-k-mer index and maps samples to a selected reference to produce a
 reference-ordered alignment. Before tree inference, ChronoClade compares each
 genome's median raw SNP proportion with the cohort distribution. A genome is
 flagged only when it is both at least five times the cohort median and an
-extreme robust outlier (robust z-score at least 10). The workflow stops and
-writes `lineage_coherence.tsv` when this screen fails, avoiding an expensive
-tree and recombination run on an obvious accession, species or lineage error.
-After ClonalFrameML, the same relative check is repeated on the filtered
+extreme robust outlier (robust z-score at least 10). Raw flags are written to
+`lineage_coherence.tsv` and retained for review; recombination can inflate raw
+distances. After ClonalFrameML, the same relative check is repeated on the filtered
 alignment and written to `clonal_lineage_coherence.tsv` before clock analysis.
-This relative check is an input safeguard, not a universal bacterial SNP
-threshold or a transmission definition.
+The default strict policy stops on filtered-alignment flags. Explicit diagnostic
+policy retains all selected genomes and carries a visible warning into the reports.
+Neither policy prunes samples. A flag can reflect legitimate cohort diversity;
+it does not establish incorrect identity. This relative check is an input
+safeguard, not a universal bacterial SNP threshold or a transmission definition.
 
 IQ-TREE estimates the starting maximum-likelihood phylogeny with a GTR+G model.
 
@@ -95,6 +98,11 @@ root-to-tip distance against sampling date. ChronoClade disables automatic
 clock-outlier removal at this gate so that samples are not discarded because
 they weaken the temporal fit.
 
+Original year/month precision stays in the metadata; clock inputs serialize
+years as `YYYY-XX-XX` and months as `YYYY-MM-XX` so TreeTime receives the
+corresponding intervals, including in date permutations. This conversion does
+not add support for censored dates or other interval formats.
+
 Root-to-tip regression is useful for visual inspection. It is not treated as a
 formal temporal-signal test because population structure can associate genetic
 distance with sampling date even when the dataset cannot estimate evolutionary
@@ -102,20 +110,19 @@ times reliably.[^murray]
 
 ## Date-randomisation test
 
-The tree stage's default `root-to-tip` method permutes sampling dates among tips while
+The tree stage's default `root-to-tip` method permutes sampling dates among
+maximal monophyletic clusters sharing the same original date string while
 retaining the corrected tree and sequence length. TreeTime repeats the same
 least-squares clock analysis for each permutation. The empirical one-sided
 p-value compares observed R² with the permutation distribution and includes a
 one-count correction. R² drives this screen; the accompanying rate distribution
 is descriptive.
 
-The optional `full-tree` method reruns the complete TreeTime dating fit for every
-permutation and re-estimates the root each time. ChronoClade reports the weak CR1
-and strict CR2 criteria used in bacterial tip-date randomisation tests. Its
-configured decision uses CR2: the observed approximate 95% rate interval must
-overlap none of the corresponding intervals from randomised-date fits. These are
-normal approximations from TreeTime's reported rate standard error, not Bayesian
-credible intervals.
+Internal compatibility helpers also implement full TreeTime refits for each
+permutation and weak CR1/strict CR2 interval criteria. They are not selectable
+through the normal `tree` CLI. Those helpers use approximate 95% rate intervals
+from TreeTime's reported standard error, not Bayesian credible intervals; they
+do not replace the normal clustered root-to-tip gate described here.
 
 A dataset passes when:
 
@@ -125,8 +132,8 @@ A dataset passes when:
 
 The default is 100 permutations and p <= 0.05. This is a pragmatic gate for the
 workflow, not a universal definition of temporal signal. Structured datasets
-may require clustered permutations or sensitivity analyses that preserve known
-population groups.[^duche]
+may require additional sensitivity analyses that preserve known population
+groups beyond the same-date clusters used here.[^duche]
 
 ## Stage boundaries
 
@@ -159,7 +166,10 @@ Geographic summaries describe available records, not prevalence, incidence or
 country of acquisition. See [cgLIN](cglin.md).
 
 The current public context workflow retrieves compatible profiles and metadata
-for the requested species/ST and lineage scope. cgMLST analyses those profiles
+from the known species/ST discovery pools. The default analysis partitions by
+species and compatible profile scope; optional lineage filtering must be requested
+explicitly. Missing ST does not block local analysis but limits public discovery.
+cgMLST analyses those profiles
 and selects representatives; tree acquires assemblies only for the selected IDs.
 A nearest relative is nearest within the retrieved, compatible pool, not among
 all public bacterial genomes. Provider coverage and incomplete annotations limit

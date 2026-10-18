@@ -28,4 +28,5 @@ validation/science/
 # Research runs and interface review artefacts stay outside the product repository.
 validation/
 research/
+reviews/
 .impeccable/

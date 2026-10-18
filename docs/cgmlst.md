@@ -1,42 +1,113 @@
 # Independent cgMLST analysis
 
-`cgmlst` reads a validated prepared bundle. It partitions inputs at an explicit
-cgLIN depth (5 by default; explicit depths 5–10 are supported), includes every matching context
-record already in that bundle, and writes one existing-style report per block.
-Species, supplied MLST ST and lineage scheme/version/database scope separate
-blocks. Declared MLST schemes remain separate. A missing MLST scheme can enter
-the sole declared comparison namespace for its species/ST while its metadata
-remains unknown; multiple declared schemes make that missing namespace ambiguous
-and excluded. It does not automatically narrow to a deeper prefix.
+`cgmlst` reads a validated prepared bundle. By default, `--partition-by profiles`
+forms blocks by species and compatible cgMLST scheme/version/database scope.
+Supplied MLST ST does not split these blocks. cgLIN and HierCC are optional
+reference-scoped annotations, not prerequisites for distance analysis or selection.
+Missing profiles and incompatible profile scopes remain audited exclusions; a
+neighbour's label is never copied to an input.
 
 ```bash
 chronoclade prepare frozen-records.json --catalogues locus-catalogues.json --out prepared
-chronoclade cgmlst prepared/dataset.json --out cgmlst --lin-level 5 \
-  --subsamples 5 --context-size 50
+chronoclade cgmlst prepared/dataset.json --out cgmlst \
+  --subsamples 1 --context-size 10
 ```
 
-For E. coli with existing compatible HierCC assignments, supply an explicit level:
+Use `--fetch-context` to discover public candidates using the inputs' known
+species/ST and retrieve compatible profiles and metadata. Missing ST does not
+block local profile analysis, but that input cannot seed its own same-ST public
+search. Available provider cgMLST support, download access and exact compatible
+profile scope are still required; species support is not inferred from the
+presence of a collection. Context assemblies are acquired only by `tree`.
+Supplied compatible public profile exports are also supported.
+
+Every comparable profile remains in the guide NJ tree and ordination. Distance
+comparisons rank nearest relatives, retain overlap evidence and preserve boundary
+ties. All input genomes remain mandatory in downstream selections. The
+`--context-size 10` budget applies per block to selected context, excludes inputs,
+and can expand for mandatory nearest neighbours. It does not cap the public pool
+retrieved or the computational cost of analysing that pool. There is no universal
+validated NJ-distance cutoff for outbreak membership across species.
+
+### Check retrieval size before a cluster run
+
+Preview all input species/ST pools before requesting profiles:
 
 ```bash
-chronoclade cgmlst prepared/dataset.json --out ecoli-cgmlst --hiercc-level HC10
+chronoclade cgmlst prepared/dataset.json --context-preflight \
+  --context-max-candidates 300 --out context-plan
 ```
 
-Use `--fetch-context` to discover the public same-ST candidate pool and retrieve
-compatible profiles and lineage metadata matching the requested LIN/HierCC block.
-Context assemblies are acquired only by the later tree stage. Supplied public
-profile/lineage exports are also supported. The partition index and `partitions.json`
-record exact included IDs, unmatched context, unresolved inputs and available
-LIN5–10 counts. Counts are scoped to the retrieved/prepared evidence; they do not
-imply complete worldwide surveillance. Missing ST or lineage evidence is reported;
-a neighbour's label is never copied to an input genome.
+This count-only command writes `context-plan/index.html` and
+`context_preflight.json`. It does not retrieve genome details, profiles or
+assemblies and does not run analysis. Public counts need no download credential;
+the plan separately reports whether protected profile-download access is configured.
+Use a separate fresh folder for the plan and the later analysis.
+
+The plan shows every pool's raw candidate count, the combined count, export
+batches per cgMLST analysis, pairwise comparisons and an upper bound for one
+float64 distance matrix before compatibility filtering and deduplication. It is
+not a walltime prediction or a complete peak-memory estimate: working arrays,
+profiles, additional matrices, export polling and optional annotations add cost.
+A disk-backed scale analysis still needs storage and working memory.
+
+The normal `--fetch-context` route also checks **all** pool counts and all
+candidate guards before fetching any detailed metadata or profile exports:
+
+```bash
+chronoclade cgmlst prepared/dataset.json --fetch-context \
+  --context-max-candidates 300 --context-size 10 --subsamples 1 --out cgmlst
+# If interrupted, repeat that command with --resume.
+```
+
+`--context-max-candidates N` refuses an entire species/ST pool above N; it never
+truncates candidates. The default is unlimited, and several accepted pools may
+together exceed N. A refusal saves the complete count plan for review. Increasing
+the guard deliberately with `--resume` does not change the scientific pool: all
+accessible compatible candidates must still be retrieved before neighbours are
+selected. The context budget of ten affects downstream selection, not retrieval
+or full guide analysis.
+
+Interrupted search pages and metadata details have query-bound, checksummed
+checkpoints; completed export batches retain checked receipts. `--resume` reuses
+accepted work, rejects changed source/reference/query identities or corrupted
+checkpoints, and acquires the missing work. The completed context dataset is
+published only after retrieval and validation finish. Counts can change while a
+live provider is being read: a changed count fails explicitly rather than
+pretending transactional snapshot isolation or silently truncating the pool.
+See [Pathogenwatch recovery](pathogenwatch.md) for cache and retry limits.
+
+The partition index and `partitions.json` record memberships, unmatched context,
+unresolved inputs and available lineage counts. Counts describe the accessible
+retrieved/prepared evidence, not worldwide surveillance completeness.
+
+### Explicit lineage blocks
+
+For studies that deliberately need the earlier lineage-restricted scope, request
+it explicitly. Compatible species, supplied MLST namespace/ST and verified
+lineage scheme/version/database scope then separate blocks. Missing or provisional
+assignments cannot silently substitute for verified lineage evidence.
+
+```bash
+chronoclade cgmlst prepared/dataset.json --partition-by lineage \
+  --lin-level 5 --out klebsiella-lineages
+chronoclade cgmlst prepared/dataset.json --partition-by lineage \
+  --hiercc-level HC10 --out ecoli-lineages
+```
+
+Klebsiella LIN depth is 5 by default in lineage mode; explicit depths 5–10 are
+supported. E. coli HierCC requires an explicit level. The historical input-only
+`--partition-by st` mode is described below. Use profile mode for the general
+multi-species workflow.
 
 ### Narrower context with independent display groups
 
-For a documented finer scope, use an explicit prefix depth; no default is chosen
+In explicit lineage mode, for a documented finer scope use a prefix depth; no default is chosen
 from a plot or a regression. For example:
 
 ```bash
-chronoclade cgmlst prepared/dataset.json --fetch-context --context-lin-level 8 \
+chronoclade cgmlst prepared/dataset.json --partition-by lineage \
+  --fetch-context --context-lin-level 8 \
   --lin-level 5 --display-lin-level 8 --backend scale \
   --subsamples 5 --context-size 50 --bootstrap-replicates 0 --out cgmlst-lin8
 ```
@@ -50,7 +121,7 @@ These settings have different purposes:
 | `--display-lin-level 8` | Reported group colours in NJ and MDS | Show reported LIN8 prefixes; coordinates and distances are unchanged |
 | Nearest relatives | Distance-ranked comparisons within each block | Use actual allele differences, jointly called loci and ties; neither LIN depth is a distance cutoff |
 
-Display depth defaults to 7 for compatibility. Representative-selection genetic
+In explicit lineage mode, display depth defaults to 7 for compatibility. Representative-selection genetic
 strata retain the existing reported LIN7 basis independently of display depth;
 this is a reproducible selection convention, not a validated close-relative
 threshold. A LIN8 block may therefore contain only one LIN7 selection stratum;
@@ -74,8 +145,11 @@ these are accessible-provider counts rather than worldwide prevalence.
 Every comparable profile remains in the NJ/ordination analysis and downloadable
 tree. Selection does not prune this guide tree. The approved location network and
 report presentation are reused. Ordination controls show dataset, country, host,
-date and genetic-group colours on the same coordinates. Displayed genetic groups use compatible reported cgLIN prefixes. Optional distance-cut
-diagnostics remain exploratory and do not replace lineage assignments.
+date and genetic-group colours on the same coordinates. Default profile-mode
+groups are exploratory complete-linkage distance groups; reported LIN/HierCC
+codes remain optional annotations. Explicit lineage mode can display compatible
+reported prefixes instead. Neither distance groups nor displayed prefixes
+establish a validated close-relative threshold.
 
 `--backend auto` preserves the size-based backend choice. `--backend scale` uses
 compiled allele distances, compiled complete-linkage and RapidNJ explicitly, even
@@ -194,13 +268,22 @@ even when nearest-neighbour ties exhaust the budget, use `--representative-reser
 The effective context budget is the larger of `--context-size` and the mandatory
 context count plus this reserve; the available pool can limit the result. This is
 explicitly recorded in each selection rather than silently dropping ties.
+`budget_overrun` records mandatory-neighbour overflow, not reserve expansion.
+For example, eight mandatory contexts plus a reserve of three gives an effective
+budget of eleven when ten were requested, while mandatory `budget_overrun`
+remains zero. Inputs are additional to those eleven contexts.
 
 Nonmandatory representatives vary across reproducible seeds while retaining the
 selection strata and quota policy. Every selection records IDs, per-ID reasons,
 coverage, missing metadata, source distance units and checksums. Pairwise overlap
 and cumulative unique coverage are retained in the ensemble. A block with too few
 choices can produce repeated sets; those are explicitly labelled as duplicates,
-not presented as independent evidence of convergence.
+not presented as independent evidence of convergence. This can happen even in a
+large context pool if the fixed selected stratum quotas each have only one eligible
+genome. Alternative seeds vary representatives within those quotas; they do not
+redistribute quotas between genetic/time/location strata. Review the saved
+stratum eligibility and quota evidence to distinguish a large pool from available
+within-stratum choice.
 
 Each block writes `selection_bundle/ensemble.json` and
 `selection_bundle/selections/selection-001.json` (and subsequent alternatives).
@@ -231,7 +314,7 @@ and their user-supplied provenance. Hospital, NUTS2 and specimen fields are reta
 ```bash
 chronoclade prepare accessions.csv --species "Klebsiella pneumoniae" \
   --metadata study-metadata.csv --out prepared
-chronoclade cgmlst prepared/dataset.json --fetch-context --lin-level 5 \
+chronoclade cgmlst prepared/dataset.json --fetch-context \
   --subsamples 5 --context-size 50 --representative-reserve 50 --out cgmlst
 # If interrupted, repeat the cgmlst command with --resume.
 ```
@@ -333,27 +416,23 @@ difference between their sampling dates, and it is neither an empirical cutoff
 nor an uncertainty bound. Stronger predictive evidence and independently
 labelled epidemiological comparisons would be needed to justify a cutoff.
 
-## Supplied profiles without lineage assignments
+## Legacy input-only ST blocks
 
-For a relationship analysis of supplied inputs that have cgMLST profiles but no
-verified LIN/HierCC assignment, explicitly select:
+The default profile mode supports supplied profiles with no lineage assignments
+and compatible public context. To reproduce the narrower historical input-only
+partitioning by species, MLST namespace/ST and compatible profile scope, explicitly
+select:
 
 ```bash
 chronoclade cgmlst prepared/dataset.json --partition-by st --out input_profiles
 ```
 
-This partitions by species, MLST namespace/ST and compatible profile scope.
-It accepts input records only and rejects prepared public context, `--fetch-context`
-and lineage/context-scope options. It does not assign lineage codes, retrieve
-context or establish a close-relative cutoff. Missing lineage evidence stays
-explicit. All supplied inputs remain required in the downstream selection; this
-option does not subsample away the input set. The normal lineage-based workflow
-remains the default.
-
-The partition mode, exact memberships, exclusions and source bundle are recorded
-in the analysis/partition manifests and selection provenance. Resume rejects a
-changed mode. This input-only route is useful while a separate HierCC reference
-is unavailable, but is not evidence that native HierCC assignment is supported.
+This legacy mode accepts input records only and rejects prepared public context,
+`--fetch-context` and lineage/context-scope options. It assigns no lineage labels
+or close-relative cutoff. All supplied inputs remain required in each downstream
+selection. The partition mode, memberships and exclusions are saved; resume
+rejects a changed mode. Availability of profile analysis does not establish
+native LIN/HierCC assignment capability.
 
 ## Reading the comparison scope
 

@@ -470,6 +470,7 @@ def resolve_queries(
     metadata=None,
     client=None,
     typing_config=None,
+    profiles_only=None,
     query_typing=None,
     public_typing=None,
     cglin_export=None,
@@ -573,6 +574,7 @@ def resolve_queries(
         "reference_database": "unavailable_not_configured",
     }
     ledger = []
+    effective_profiles_only = profiles_only is True
     if typing_config:
         from chronoclade.query_typing import (
             QueryTypingError,
@@ -581,9 +583,22 @@ def resolve_queries(
         )
 
         try:
-            config = load_typing_config(Path(typing_config))
-        except QueryTypingError:
+            if effective_profiles_only:
+                config = load_typing_config(Path(typing_config), profiles_only=True)
+            else:
+                try:
+                    config = load_typing_config(Path(typing_config))
+                except QueryTypingError as full_error:
+                    if profiles_only is False:
+                        raise
+                    # Missing optional lineage references must not block an
+                    # independently validated cgMLST caller and frozen index.
+                    config = load_typing_config(Path(typing_config), profiles_only=True)
+                    effective_profiles_only = True
+                    operations["lineage_assignment_unavailable_reason"] = str(full_error)
+        except QueryTypingError as config_error:
             operations.update(
+                reference_database_unavailable_reason=str(config_error),
                 reference_database="unavailable_configured_database_or_tool_not_ready",
                 typing_tool_installation="configured_not_ready",
             )
@@ -600,7 +615,14 @@ def resolve_queries(
             operations.update(
                 reference_database="ready_validated_configuration",
                 typing_tool_installation="configured_available",
+                native_typing_mode="profiles-only" if effective_profiles_only else "full",
             )
+            typing_options = {"profiles_only": True} if effective_profiles_only else {}
+            if effective_profiles_only:
+                operations["lineage_assignment"] = (
+                    "not_requested_profiles_only" if profiles_only is True
+                    else "not_run_optional_assignment_unavailable"
+                )
             if native_checkpoint is not None and resume_typing:
                 from chronoclade.query_typing import validate_typing_checkpoint
 
@@ -614,15 +636,19 @@ def resolve_queries(
                         checkpoint_rows, output=work / "query_assemblies_preflight", client=client
                     )
                     validate_typing_checkpoint(
-                        checkpoint_samples, Path(typing_config), Path(native_checkpoint)
+                        checkpoint_samples, Path(typing_config), Path(native_checkpoint),
+                        **typing_options,
                     )
-            assigned = assign_existing_profiles(rows, config, work / "native_lineage_assignment")
+            assigned = (set() if effective_profiles_only else
+                        assign_existing_profiles(rows, config, work / "native_lineage_assignment"))
             if assigned:
                 operations["lineage_assignment"] = "run_existing_compatible_profiles"
             need = [
                 r
                 for r in rows
-                if r["sample_id"] not in assigned and (not _has_profile(r) or not _has_lineage(r))
+                if r["sample_id"] not in assigned and (
+                    not _has_profile(r) or (not effective_profiles_only and not _has_lineage(r))
+                )
             ]
             if need:
                 samples = materialise_assemblies(
@@ -630,7 +656,7 @@ def resolve_queries(
                 )
                 if native_checkpoint is None:
                     assignments = type_query_assemblies(
-                        samples, Path(typing_config), work / "native_typing"
+                        samples, Path(typing_config), work / "native_typing", **typing_options
                     )
                 else:
                     assignments = type_query_assemblies(
@@ -643,13 +669,14 @@ def resolve_queries(
                         # an existing cache must still be resumed and validated.
                         resume=resume_typing and Path(native_checkpoint).exists(),
                         attempt_output=Path(native_attempt),
+                        **typing_options,
                     )
                     # Retain the established portable export as well as the
                     # prepare-owned recovery cache, which is removed on success.
                     write_json(work / "native_typing" / "query_typing.json", {
                         "schema_version": 1,
                         "created_at": datetime.now(timezone.utc).isoformat(),
-                        "typing_mode": "full",
+                        "typing_mode": "profiles-only" if effective_profiles_only else "full",
                         "assignments": assignments,
                     })
                 by_id = {r["sample_id"]: r for r in assignments}
@@ -658,20 +685,22 @@ def resolve_queries(
                     row["assembly"] = str(sample.assembly)
                     # Caller supplies its ordered full universe, distinct from an observed export.
                     row["cgmlst_locus_universe_complete"] = True
-                operations.update(
-                    typing="run_missing_profile_or_lineage_inputs",
-                    lineage_assignment="run_missing_profile_or_lineage_inputs",
+                operations["typing"] = (
+                    "run_missing_profile_inputs" if effective_profiles_only
+                    else "run_missing_profile_or_lineage_inputs"
                 )
+                if not effective_profiles_only:
+                    operations["lineage_assignment"] = "run_missing_profile_or_lineage_inputs"
     for row in rows:
         row.update(role="input", identity_resolved=bool(row.get("source_genome_id")))
         ledger.append(
             {
                 "sample_id": row["sample_id"],
                 "operation": "prepare_typing",
-                "status": "ready" if _has_profile(row) and _has_lineage(row) else "incomplete",
-                "reason": None
-                if _has_profile(row) and _has_lineage(row)
-                else operations["reference_database"],
+                "status": "ready" if _has_profile(row) else "incomplete",
+                "reason": None if _has_profile(row) else operations["reference_database"],
+                "lineage_status": "ready" if _has_lineage(row) else "unavailable_optional",
+                "native_typing_mode": operations.get("native_typing_mode", "not_run"),
             }
         )
     provenance = [

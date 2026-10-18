@@ -386,8 +386,21 @@ def _run_core_phylogeny(
 
 
 def _clock_dates_path(files: LineageFiles) -> Path:
-    path = files.directory / "clock_dates.csv"
-    return path if path.is_file() else files.metadata
+    """Prepare precise external clock inputs without changing saved metadata."""
+    from chronoclade.metadata_dates import treetime_date
+
+    source = files.directory / "clock_dates.csv"
+    if not source.is_file():
+        source = files.metadata
+    with source.open(newline="", encoding="utf-8") as stream:
+        rows = [
+            {"sample_id": row["sample_id"],
+             "collection_date": treetime_date(row.get("collection_date"))}
+            for row in csv.DictReader(stream)
+        ]
+    target = files.directory / "treetime_dates.csv"
+    _write_csv(target, ["sample_id", "collection_date"], rows)
+    return target
 
 
 def _run_observed_clock(files: LineageFiles, tree: Path, sequence_length: int, force: bool) -> None:

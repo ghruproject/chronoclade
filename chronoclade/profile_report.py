@@ -112,7 +112,7 @@ def _asset(directory: Path, paths: dict[str, Any], keys: tuple[str, ...], label:
             f'<figcaption>{escape(label)} · <a href="{escape(rel, quote=True)}">Open full-size figure</a>'
             "</figcaption></figure>"
         )
-    return f'<p><a href="{escape(rel, quote=True)}">{escape(label)} file</a></p>'
+    return f'<p><a href="{escape(rel, quote=True)}" download>{escape(label)} file</a></p>'
 
 
 def _cohort_figures(value: object, directory: Path, field: str, label: str) -> str:
@@ -137,7 +137,7 @@ def _cohort_figures(value: object, directory: Path, field: str, label: str) -> s
             continue
         if path.suffix.casefold() not in {".svg", ".png", ".jpg", ".jpeg", ".webp"}:
             figures.append(
-                f'<p><a href="{escape(path.as_posix(), quote=True)}">{escape(cohort)} · {escape(label)} file</a></p>'
+                f'<p><a href="{escape(path.as_posix(), quote=True)}" download>{escape(cohort)} · {escape(label)} file</a></p>'
             )
             continue
         figures.append(
@@ -402,7 +402,7 @@ def _download_links(directory: Path, paths: dict[str, Any]) -> str:
             continue
         rel = path.as_posix()
         links.append(
-            f'<li><a href="{escape(rel, quote=True)}">{escape(label.replace("_", " "))}</a>'
+            f'<li><a href="{escape(rel, quote=True)}" download>{escape(label.replace("_", " "))}</a>'
             f' <small>{escape(path.name)}</small></li>'
         )
     if not links:
@@ -576,7 +576,7 @@ def _cohorts(value: object, directory: Path) -> str:
             tree_path = _path_file(directory, {"tree": raw_tree}, "tree")
             if tree_path is not None:
                 rel = tree_path.as_posix()
-                tree = f'<a href="{escape(rel, quote=True)}">{escape(rel)}</a>'
+                tree = f'<a href="{escape(rel, quote=True)}" download>{escape(rel)}</a>'
         warnings = row.get("warnings", [])
         warning_html = "" if not warnings else '<ul class="warnings">' + "".join(
             f"<li>{escape(_text(item))}</li>" for item in (warnings if isinstance(warnings, list) else [warnings])
@@ -1009,6 +1009,7 @@ def write_profile_report(
         genetic_group_summary,
         grouping_rule,
         input_scope,
+        reported_lineage_annotations,
         nearest_summary,
         selection_handoff,
     )
@@ -1025,6 +1026,8 @@ def write_profile_report(
     context_scope_description = (
         _text(prov.get("context_scope"), "Supplied inputs only; no public context retrieval or lineage refinement")
         if partition_kind == "st" else
+        "Profiles grouped by species and compatible cgMLST scheme. Public context uses available provider categories; reported lineage labels are optional annotations."
+        if partition_kind == "profiles" else
         "Compatible public profiles in this reported HierCC block, before assembly subsampling."
         if partition_kind == "hiercc" else
         "Compatible public profiles in this reported cgLIN block, before assembly subsampling."
@@ -1055,6 +1058,9 @@ def write_profile_report(
         empty="Threshold sensitivity is unavailable.") if sensitivity_rows else ""
     concentration = data.get("time_place_concentration")
     distance_diagnostic_note = (
+        "These exploratory groups use measured profile distances. Reported cgLIN/HierCC labels are optional annotations; "
+        "they are not assigned or inferred from these groups. Thresholds are not biologically validated."
+        if partition_kind == "profiles" else
         "These exploratory groups are profile-distance diagnostics. They do not assign cgLIN or HierCC codes; "
         "the reported HierCC groups above define the reader-facing group display. Thresholds are not biologically validated."
         if partition_kind == "hiercc" else
@@ -1143,6 +1149,7 @@ def write_profile_report(
         +
         '<div class="figures">' + pcoa_figures + '</div>'
         + genetic_group_summary(directory, analysis)
+        + reported_lineage_annotations(analysis)
         +
         '<details class="coverage-details" id="nearest"><summary>Closest relatives</summary>'
         f'<p>{escape(nearest_explanation)}</p>{_available_neighbours(nearest, directory, paths, public_context_count=public_context_count, direct_dna=direct_dna)}</details>'

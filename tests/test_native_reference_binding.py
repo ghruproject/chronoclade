@@ -296,7 +296,7 @@ def test_stable_directory_omits_only_known_sqlite_transients(tmp_path):
         m._directory_reference(directory)
 
 
-def test_caller_only_config_fails_with_explicit_full_readiness_error(tmp_path, monkeypatch):
+def test_explicit_full_reference_binding_requires_lineage_readiness(tmp_path, monkeypatch):
     from chronoclade.query_typing import QueryTypingError
 
     config = tmp_path / "caller-only.json"
@@ -308,7 +308,7 @@ def test_caller_only_config_fails_with_explicit_full_readiness_error(tmp_path, m
 
     monkeypatch.setattr(m, "load_typing_config", full_only)
     with pytest.raises(DatasetError, match="requires full caller and lineage readiness"):
-        m.reference_descriptor(config)
+        m.reference_descriptor(config, profiles_only=False)
 
 
 @pytest.mark.parametrize("legacy_binding", [True, False])

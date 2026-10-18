@@ -26,7 +26,8 @@ def input_scope(data, provenance):
     remaining = total - current
     kind = data.get('partition', {}).get('kind')
     name = ('cgLIN' if kind == 'cglin' else 'HierCC' if kind == 'hiercc'
-            else 'species/ST profile' if kind == 'st' else 'lineage')
+            else 'species/ST profile' if kind == 'st'
+            else 'species and compatible profile-scheme' if kind == 'profiles' else 'lineage')
     elsewhere = ('The remaining inputs are outside this block; check All groups for their assignment and status.'
                  if scope.get('assigned_inputs', total) < total else
                  f'The remaining {remaining} inputs are analysed in the other block reports, available through All groups.')
@@ -52,6 +53,8 @@ def selection_handoff(directory, data):
     retained = 'all ' if data.get('coverage', {}).get('total_inputs') == len(inputs) else ''
     text = (f'{pool} genomes in this block → {selected} selected for SNP-tree analysis: '
             f'{retained}{len(inputs)} inputs + {len(contexts)} public comparisons.')
+    if selected < 3:
+        text += ' Tree stage unavailable: at least three selected genomes are required.'
     return (f'<p class="handoff"><strong>{escape(text)}</strong> '
             '<a href="#subsamples">See selection and downloads</a>.</p>')
 
@@ -210,3 +213,37 @@ def grouping_rule(data):
     return ('<p class="group-rule"><strong>What defines the groups?</strong> ' + escape(rule)
             + 'Group numbers are local labels, not Pathogenwatch LIN codes. They are not inferred from the MDS plot '
               'and need not form single tree clades. Select a group in either figure to highlight its genomes in both.</p>')
+
+
+def reported_lineage_annotations(data):
+    """Show supplied nomenclature as annotations, separate from distance groups."""
+    evidence = data.get('reported_lineage_annotations') or []
+    if not evidence:
+        return ''
+    labels = data.get('sample_labels') or {}
+    rows = []
+    for row in evidence:
+        ident = row.get('sample_id', '')
+        hiercc = row.get('hiercc_codes') or {}
+        codes = '; '.join(f'{level}: {code}' for level, code in sorted(hiercc.items())) if isinstance(hiercc, dict) else str(hiercc)
+        rows.append({
+            'sample': display_label(labels.get(ident, ident)),
+            'cglin': row.get('cglin_raw') or 'Unavailable',
+            'cglin_scope': row.get('cglin_scheme') or 'Unreported',
+            'cglin_status': row.get('cglin_status') or 'Unreported',
+            'hiercc': codes or 'Unavailable',
+            'hiercc_scope': row.get('hiercc_scheme') or 'Unreported',
+            'hiercc_status': row.get('hiercc_status') or 'Unreported',
+        })
+    return (
+        '<details class="coverage-details"><summary>Optional reported cgLIN/HierCC labels</summary>'
+        '<p>These labels were supplied with the profiles. They do not define the distance groups or '
+        'establish cluster membership across incompatible schemes or reference versions. '
+        'Unreported, provisional or unresolved labels remain unverified; complete scope and provenance '
+        'are retained in the prepared dataset.</p>'
+        + _table(rows, [('sample', 'Genome'), ('cglin', 'Reported cgLIN'),
+                        ('cglin_scope', 'cgLIN scheme'), ('cglin_status', 'cgLIN status'),
+                        ('hiercc', 'Reported HierCC'), ('hiercc_scope', 'HierCC scheme'),
+                        ('hiercc_status', 'HierCC status')], empty='')
+        + '</details>'
+    )

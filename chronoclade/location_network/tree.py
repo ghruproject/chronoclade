@@ -16,6 +16,7 @@ def draw_country_tree(
     *,
     display_ids=None,
     nearest_ids=(),
+    nearest_label="Nearest public relatives (ties retained)",
     title="Country-coloured tree · same reconstruction as the weighted network",
     distance_label="Branch length; dashed branches have negative length",
     sample_kind="genomes",
@@ -37,7 +38,7 @@ def draw_country_tree(
     tips = [node for node in nodes.values() if node["is_tip"]]
     shown = set(display_ids) if display_ids is not None else {node["name"] for node in tips}
     shown &= {node["name"] for node in tips}
-    nearest_ids = set(nearest_ids)
+    nearest_ids = set(nearest_ids) & shown
     root_id = reconstruction["root_id"]
     included = set()
     for node in tips:
@@ -158,16 +159,17 @@ def draw_country_tree(
             linestyle="None",
             label="Hollow ancestors: multiple optimal countries",
         ),
-        Line2D(
+    ]
+    if nearest_ids:
+        handles.append(Line2D(
             [],
             [],
             marker="*",
             color="#e66101",
             markerfacecolor="none",
             linestyle="None",
-            label="Nearest public relatives (ties retained)",
-        ),
-    ]
+            label=nearest_label,
+        ))
     ax.legend(
         handles=handles,
         loc="lower left",

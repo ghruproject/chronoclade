@@ -16,7 +16,7 @@ from chronoclade.cgmlst.cli import cgmlst_command
 from chronoclade.cgmlst.refresh import refresh_command
 from chronoclade.cgmlst.clock_comparison import compare_clocks_command
 from chronoclade.cgmlst.calibration import calibrate_lin_command
-from chronoclade.execution.cli import job_command
+from chronoclade.execution.cli import job_command, slurm_ensemble_command, slurm_prepare_command
 from chronoclade.export_cli import export_command
 from chronoclade.scheme_cli import list_schemes_command, setup_scheme_command
 from chronoclade.pasteur_authorization import authorize_pasteur_command
@@ -35,6 +35,8 @@ app.command("prepare")(prepare_command)
 app.command("cgmlst")(cgmlst_command)
 app.command("refresh-cgmlst-report")(refresh_command)
 app.command("job")(job_command)
+app.command("slurm-ensemble")(slurm_ensemble_command)
+app.command("slurm-prepare")(slurm_prepare_command)
 app.command("export")(export_command)
 app.command("list-schemes")(list_schemes_command)
 app.command("setup-scheme")(setup_scheme_command)
@@ -114,7 +116,7 @@ def setup_typing_command(
     ] = Path("~/.local/share/chronoclade/typing"),
     species: Annotated[
         list[str] | None,
-        typer.Option("--species", help="klebsiella or ecoli; repeat to install both"),
+        typer.Option("--species", help="klebsiella, ecoli, or saureus (cgMLST caller only); repeat for several"),
     ] = None,
     prepare_db: Annotated[
         bool,

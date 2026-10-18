@@ -289,6 +289,7 @@ def test_ordinary_cli_offline_replay_invokes_current_normalizer(tmp_path, monkey
         [
             "cgmlst",
             str(prepared.dataset_manifest),
+            "--partition-by", "lineage",
             "--out",
             str(tmp_path / "run"),
             "--context-source",
@@ -323,6 +324,7 @@ def test_ordinary_cli_offline_replay_invokes_current_normalizer(tmp_path, monkey
         [
             "cgmlst",
             str(prepared.dataset_manifest),
+            "--partition-by", "lineage",
             "--out",
             str(tmp_path / "second"),
             "--context-source",

@@ -54,15 +54,53 @@ input assembly SHA256. Missing profiles and lineages remain separate checks.
 native assembly call needs `blastn` and `makeblastdb` on the executable path:
 run it with `pixi run --frozen --environment default chronoclade prepare ...`.
 The lean `-e prepare` environment handles existing profiles/provider typing
-and does not include those executables. A
-new assembly also needs a verified seven-gene MLST ST in its metadata for public
-species/ST context discovery. Native cgMLST/cgLIN/HierCC calling does not
-calculate that seven-gene ST; a cgMLST profile identifier is a different value.
-Missing ST must be resolved before claiming the public context search is ready.
-An existing compatible profile missing its lineage goes directly to the assigner,
-without assembly acquisition. Other incomplete inputs acquire **input** assemblies
-and run native typing. A missing/unready configuration publishes an incomplete
-bundle with an explicit reference-database reason, rather than inventing calls.
+and does not include those executables for native cgMLST calling.
+
+For public species/ST discovery, preparation reuses a supplied positive numeric
+classical MLST ST. When that ST is missing and an input assembly is available
+locally, it attempts an independent classical MLST call for supported species.
+Install the separate pinned environment once:
+
+```bash
+pixi install --frozen -e mlst
+```
+
+The normal default/prepare environment discovers the installed sibling `mlst`
+environment automatically. The separate environment keeps its BioPerl dependencies
+from changing the native inference environment. An unavailable caller is reported
+with its setup command. The bundled reference is a dated database snapshot;
+unknown recent alleles or profiles may remain unresolved.
+
+The supported primary mappings in the pinned `mlst` 2.32.2 package are:
+
+| Species | Local caller scheme | Pathogenwatch search namespace |
+| --- | --- | --- |
+| Klebsiella pneumoniae | `klebsiella` | Primary `mlst`, Pasteur seven-locus scheme |
+| Escherichia coli | `ecoli_achtman_4` | Primary `mlst`, Achtman seven-locus scheme |
+| Staphylococcus aureus | `saureus` | Primary `mlst`, PubMLST seven-locus scheme |
+
+The caller must return the exact expected scheme, seven expected loci, a numeric
+ST and complete unambiguous allele calls for the exact input assembly. The audit
+preserves caller/database and assembly hashes and raw result evidence. Novel,
+partial, missing or ambiguous calls do not receive an inferred ST. No local
+assembly means the missing-ST reason remains explicit. Supplied numeric STs are
+reused rather than overwritten; an explicitly incompatible supplied namespace
+cannot seed a primary public search. In particular, the local `ecoli` scheme is
+the alternative Pasteur eight-locus scheme, not the primary Achtman scheme.
+Alternative-scheme public discovery is not implemented by this workflow.
+
+Missing ST does not prevent compatible local profile analysis, but that input
+cannot seed its own public same-ST search until resolved. Classical ST, cgMLST
+profile IDs and LIN/HierCC assignments are different evidence.
+With a complete assignment configuration, an existing compatible profile missing
+its lineage can go directly to the assigner without acquiring an assembly.
+If the cgMLST caller and its reference are ready but optional LIN/HierCC resources
+are unavailable, preparation automatically falls back to profile-only calling.
+Its audit records the fallback and the unavailable assignment reason. Missing
+profiles are called from **input** assemblies; an existing profile is not recalled
+solely to obtain an optional lineage label. A missing/unready cgMLST configuration
+publishes an incomplete bundle with an explicit reference-database reason rather
+than inventing calls. This fallback does not make lineage-restricted analysis ready.
 Typing-tool installation and database readiness are separate audit fields. Existing
 frozen typing does not require a Pasteur key. Fresh Klebsiella lineage assignment
 requires its configured Pasteur reference database; E. coli assignment requires
@@ -91,6 +129,56 @@ catalogue is explicitly incomplete; no full-universe call fraction is claimed.
 Supply `--catalogues` with a matching full scheme catalogue to assess completeness.
 Native callers provide the ordered full locus universe. Source responses and exports
 are copied into the checksummed bundle after credential checks.
+
+## Prepare local assemblies in parallel on Slurm
+
+Use `slurm-prepare` to distribute an assembly CSV across bounded, independent
+workers. Each worker runs the ordinary `prepare` workflow, including missing
+classical ST and cgMLST calling. Configure the typing reference and install the
+separate classical MLST environment first; use shared paths visible to workers.
+
+```bash
+pixi run --frozen chronoclade slurm-prepare assemblies.csv \
+  --typing-config /shared/typing/query_config.json \
+  --out prepare-jobs --results prepared \
+  --account YOUR_ACCOUNT --partition YOUR_PARTITION \
+  --cpus 1 --memory-gb 4 --max-parallel 4 --walltime 01:00:00
+bash prepare-jobs/submit.sh
+```
+
+Generation writes scripts and a checksummed plan without submitting. The submit
+script schedules one array task per assembly and an `afterany` collector. Four
+active workers in this example reserve four CPUs and 16 GiB in total, excluding
+the collector. Metadata enrichment is disabled by default for this route; add
+`--enrich-metadata` deliberately if required. Collection/accession inputs use
+ordinary preparation; this parallel command accepts local assembly CSV input.
+
+The collector validates completed worker artifacts and preserves the full original
+cohort and input order. It does not run typing or assemble scientific intermediate
+files by hand. If any worker is missing or failed, the collector exits nonzero and
+does not publish a partial final dataset. Inspect task logs/status and
+`collection-status.json`; retry the saved submission to reuse checked successes,
+or submit only failed zero-based indices:
+
+```bash
+sbatch --array=0,2 prepare-jobs/array.slurm
+# After those retries finish:
+sbatch prepare-jobs/collect.slurm
+```
+
+For incomplete workers, the collector can make one read-only `sacct` query
+(five-second timeout, at most 1,000 job IDs). It trusts only task-start IDs bound
+to the saved plan or the submission ledger's plan checksum. Recognized scheduler
+states and exit codes are retained in the collection status, helping distinguish
+cancellation, timeout and out-of-memory termination. Missing or delayed accounting
+is explicit; it never substitutes for checked scientific outputs or changes which
+tasks require retry.
+
+Keep the saved plan, source assemblies, reference contents, software and shared
+paths unchanged when retrying. Changed inputs or resources require a fresh plan;
+verified successful task results are reused without retyping. After collection,
+continue with `prepared/dataset.json`, the normal context preflight and cgMLST
+commands. No manual profile JSON or dataset construction is required.
 
 ## Resume interrupted native preparation
 
@@ -187,8 +275,10 @@ audit marks available profiles, absent loci, incomplete catalogue universes and
 lineage assignment independently. Klebsiella readiness expects a resolved scoped
 cgLIN assignment, including the authentic provider status `complete`; partial and
 provisional assignments remain incomplete. E. coli expects resolved HierCC. Other species have lineage readiness
-explicitly unassessed. A profile with missing lineage is incomplete. Missing
-metadata is counted and retained; it does not exclude valid samples or by itself
+explicitly unassessed. The readiness audit can therefore describe a profile with
+missing lineage as incomplete for lineage assignment. That does not prevent
+default profile-mode analysis when the profile itself is comparable; inspect
+profile and lineage readiness separately. Missing metadata is counted and retained; it does not exclude valid samples or by itself
 make existing typing incomplete.
 
 Frozen-import audits say tools/databases were not checked because those imports
@@ -198,9 +288,11 @@ publication completion does not imply typing completeness.
 
 The cgMLST provider hook `discover_profile_context` consumes a prepared bundle and
 publishes a new prepared bundle for profile analysis. It searches the complete
-accessible public same-ST pool, records counts at LIN5/6/7, and applies the explicit
-chosen LIN level (default 5). E. coli requires an explicit HierCC level. Lineage
-scheme/version/database scope and profile scope must be compatible. The hook
+accessible public same-ST pool and checks species and profile scheme/version/database
+compatibility. The default profile mode does not require a cgLIN/HierCC label.
+Explicit lineage mode additionally records available LIN5/6/7 counts and restricts
+to the requested LIN depth (default 5) or explicit E. coli HierCC level; lineage
+scheme/version/database scope must then be compatible. The hook
 requests every matching profile, without a candidate limit or context assembly
 acquisition. It deduplicates source identity, preserving different samples with
 identical profiles; exact inputs are excluded. Unavailable or incompatible profiles

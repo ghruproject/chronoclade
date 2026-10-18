@@ -73,12 +73,13 @@ def test_setup_uses_public_registry_without_profile_or_auth_download(tmp_path, m
     assert typing_setup._cgmlst_access_scope(tmp_path, 'ecoli') == 'unverified'
 
 
-def test_native_index_log_is_opt_in_and_exception_remains_concise(tmp_path, monkeypatch):
-    import subprocess
-    monkeypatch.setattr(typing_setup.subprocess, 'run', lambda *a, **kw:
-        subprocess.CompletedProcess(a[0], 1, stdout='index progress', stderr='native detail'))
+def test_native_index_log_is_opt_in_and_exception_remains_concise(tmp_path):
+    import sys
     log = tmp_path / 'logs/index.log'
+    command = [sys.executable, '-c',
+               "import sys; print('index progress', flush=True); "
+               "print('native detail', file=sys.stderr, flush=True); sys.exit(1)"]
     with pytest.raises(typing_setup.TypingSetupError, match='exited with status 1') as error:
-        typing_setup._run(['index-command'], log_path=log)
+        typing_setup._run(command, log_path=log)
     assert 'native detail' not in str(error.value)
-    assert log.read_text() == 'index progress\nnative detail'
+    assert 'index progress' in log.read_text() and 'native detail' in log.read_text()

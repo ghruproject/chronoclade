@@ -228,6 +228,10 @@ def test_normal_fake_provider_prepare_context_and_portable_proof(
             return [{"fullName": "Escherichia coli", "organismId": "562"}]
         if endpoint == "/api/genomes/details":
             return details[params["id"]]
+        if endpoint == "/api/search/genomes":
+            assert method == 'POST' and body['mlst'] == ['131']
+            assert headers.get('X-API-Key') is None
+            return {'meta': {'count': 1}, 'genomes': []}
         assert method == "POST" and endpoint == "/api/genomes/group"
         return [
             {
@@ -263,7 +267,7 @@ def test_normal_fake_provider_prepare_context_and_portable_proof(
     client = PathogenwatchClient(api_key="synthetic-fixture", transport=transport)
 
     def catalogue(path, **kwargs):
-        assert kwargs == {"organism_id": "562", "st": "131"}
+        assert kwargs == {"organism_id": "562", "st": "131", "expected_count": 1}
         value = {
             "rows": [
                 {
@@ -277,6 +281,22 @@ def test_normal_fake_provider_prepare_context_and_portable_proof(
             ],
             "provenance": {"complete": True, "expected_count": 1},
         }
+        # Match the complete catalogue contract now also read by count preflight.
+        query = {"organismId": "562", "mlst": ["131"], "qc": [True, False]}
+        pages = [{"genomes": [{"uuid": other, "projectAccess": "PUBLIC"}], "meta": {"count": 1}}]
+        raw_details = {other: dict(details[other], id=108049, mlst="131")}
+        from chronoclade.pathogenwatch import normalize_record
+        value['rows'] = [normalize_record(pages[0]['genomes'][0], raw_details[other],
+                                          organism_id="562", st="131")]
+        value.update(schema_version=1, raw_search_pages=pages, raw_details=raw_details)
+        value['provenance'].update(
+            query=query, query_sha256=content_hash(query),
+            organism_capabilities={"fullName": "Escherichia coli", "organismId": "562"},
+            species="Escherichia coli", base_url=client.base_url,
+            retrieved_at="2026-10-18T00:00:00Z", public_only=True, raw_record_count=1,
+            rows_sha256=content_hash(value['rows']), raw_details_sha256=content_hash(raw_details),
+            raw_search_sha256=content_hash(pages))
+        value['snapshot_sha256'] = content_hash(value)
         path.write_text(json.dumps(value))
         return value
 
@@ -358,6 +378,7 @@ def test_normal_fake_provider_prepare_context_and_portable_proof(
     run_cgmlst(
         result.dataset_manifest,
         tmp_path / "analysis",
+        partition_by="lineage",
         hiercc_level="HC50",
         context_size=1,
         replicates=1,
@@ -388,6 +409,7 @@ def test_normal_fake_provider_prepare_context_and_portable_proof(
         run_cgmlst(
             result.dataset_manifest,
             tmp_path / "analysis",
+            partition_by="lineage",
             hiercc_level="HC50",
             context_size=1,
             replicates=1,
@@ -403,6 +425,7 @@ def test_normal_fake_provider_prepare_context_and_portable_proof(
         run_cgmlst(
             result.dataset_manifest,
             tmp_path / "analysis",
+            partition_by="lineage",
             hiercc_level="HC50",
             context_size=1,
             replicates=1,

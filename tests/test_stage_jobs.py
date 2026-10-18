@@ -31,3 +31,20 @@ def test_credentials_rejected(tmp_path):
 def test_api_key_environment_name_is_not_a_credential(tmp_path):
     spec = JobSpec('prepare', ('--api-key-env', 'PATHOGENWATCH_API_KEY'), tmp_path)
     assert '--api-key-env' in spec.argv
+
+
+def test_explicit_environment_executable_finds_sibling_native_tools(tmp_path):
+    binaries = tmp_path / 'environment with spaces' / 'bin'
+    binaries.mkdir(parents=True)
+    executable = binaries / 'chronoclade'
+    executable.write_text('#!/usr/bin/env bash\nexec chronoclade-test-native-helper\n')
+    executable.chmod(0o700)
+    native = binaries / 'chronoclade-test-native-helper'
+    native.write_text('#!/usr/bin/env bash\nprintf "native tool found\\n"\n')
+    native.chmod(0o700)
+    output = tmp_path / 'job'
+    write_job(JobSpec('tree', ('selection.json',), tmp_path, str(executable)), output,
+              resources=SlurmResources())
+    result = subprocess.run(['bash', str(output / 'run.slurm')], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == 'native tool found\n'

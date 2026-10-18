@@ -108,6 +108,7 @@ def refresh_clock_reports(manifest_path, *, recompute_diagnostics=False):
     index = write_partition_index(manifest['blocks'], partition,
         records_count=len(records), lin_level=manifest['parameters']['lin_level'],
         hiercc_level=manifest['parameters'].get('hiercc_level'), status=manifest['status'], output=root,
+        partition_by=manifest['parameters'].get('partition_by', 'lineage'),
         display_lin_level=manifest['parameters'].get('display_lin_level', 7),
         profile_context=dataset.parameters.get('profile_context'))
     manifest['report']['sha256'] = file_sha256(index)

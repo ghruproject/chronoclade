@@ -159,14 +159,6 @@ def combined_dataset_summary(data: object) -> str:
             output.append(_table(rows, [("value", field), ("input", "Inputs"), ("context", "Context"), ("total", "Total")], empty="No metadata breakdown is available."))
             output.append('</details>')
     output.append(_metadata_coverage(payload))
-    output.append(
-        '<h3>Continue with the selected genomes</h3>'
-        '<p>With the ChronoClade environment active, run these commands from this '
-        'analysis block’s output directory. The tree stage acquires selected assemblies; '
-        'the time stage dates only trees that pass its temporal assessment.</p>'
-        '<pre style="white-space:pre-wrap;overflow-wrap:anywhere"><code>chronoclade tree selection_bundle/ensemble.json --out tree --threads 4\n'
-        'chronoclade time tree/tree_ensemble.json --out time</code></pre>'
-    )
     output.append("</section>")
     return "".join(output)
 
@@ -324,7 +316,7 @@ def subsample_summary(directory: str | Path, data: object) -> str:
             "context": len(context_ids),
             "total": len(selected_ids) if selected_ids else len(query_ids) + len(context_ids),
             "nearest": len(set(_items(selection.get("required_nearest_context_ids")))),
-            "manifest": f'<a href="{escape(link, quote=True)}">Download manifest</a>',
+            "manifest": f'<a href="{escape(link, quote=True)}" download>Download manifest</a>',
         })
     columns = [("selection", "Selection"), ("inputs", "Inputs"), ("context", "Context"),
                ("total", "Total selected"), ("nearest", "Mandatory nearest"), ("manifest", "Manifest")]
@@ -361,13 +353,26 @@ def subsample_summary(directory: str | Path, data: object) -> str:
         output.append(f'<details class="coverage-details"><summary>{escape(_display(selection.get("selection_id")))} metadata comparison</summary>')
         output.append(_metadata_comparison(selection, pool_ids, metadata))
         output.append("</details>")
-    output.append(
-        '<h3>Continue with the selected genomes</h3>'
-        '<p>With the ChronoClade environment active, run these commands from this '
-        'analysis block’s output directory. The tree stage acquires selected assemblies; '
-        'the time stage dates only trees that pass its temporal assessment.</p>'
-        '<pre style="white-space:pre-wrap;overflow-wrap:anywhere"><code>chronoclade tree selection_bundle/ensemble.json --out tree --threads 4\n'
-        'chronoclade time tree/tree_ensemble.json --out time</code></pre>'
-    )
+    eligible = [len(set(_items(selection.get("selected_sample_ids"))) or
+                    (set(_items(selection.get("query_ids"))) |
+                     set(_items(selection.get("selected_context_ids"))))) >= 3
+                for selection, _ in selections]
+    if not all(eligible):
+        output.append(
+            '<h3>Tree-stage eligibility</h3><p class="caution">'
+            f'{eligible.count(False)} of {len(eligible)} saved selections contain fewer than three genomes. '
+            'The tree stage requires at least three selected genomes per selection. '
+            'Profiles, NJ relationships and downloads remain available. '
+            'Provide additional compatible genomes before running this selection ensemble.</p>'
+        )
+    else:
+        output.append(
+            '<h3>Continue with the selected genomes</h3>'
+            '<p>With the ChronoClade environment active, run these commands from this '
+            'analysis block’s output directory. The tree stage acquires selected assemblies; '
+            'the time stage dates only trees that pass its temporal assessment.</p>'
+            '<pre style="white-space:pre-wrap;overflow-wrap:anywhere"><code>chronoclade tree selection_bundle/ensemble.json --out tree --threads 4\n'
+            'chronoclade time tree/tree_ensemble.json --out time</code></pre>'
+        )
     output.append("</section>")
     return "".join(output)

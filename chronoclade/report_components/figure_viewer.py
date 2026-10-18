@@ -49,7 +49,7 @@ _VIEWER = r'''<style id="cc-figure-viewer-style">
   const source=link.getAttribute('data-source-asset');
   let name=source.split('/').pop().split(/[?#]/)[0];
   try{name=decodeURIComponent(name);}catch{}
-  const label=link.querySelector('img')?.alt || link.closest('figure')?.querySelector('img')?.alt || name;
+  const label=link.getAttribute('data-figure-title') || link.querySelector('img')?.alt || link.closest('figure')?.querySelector('img')?.alt || name;
   title.textContent=label;image.alt=label;image.src=link.href;
   const [header,encoded]=link.href.split(',',2);
   const bytes=Uint8Array.from(atob(encoded),letter=>letter.charCodeAt(0));

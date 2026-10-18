@@ -182,6 +182,7 @@ def test_dated_tree_seed_and_polytomy_flags(tmp_path, monkeypatch, seed, keep_po
     commands = []
     monkeypatch.setattr("chronoclade.native_pipeline._run_command", lambda command, **kwargs: commands.append(command))
     files = LineageFiles.in_directory(tmp_path)
+    files.metadata.write_text("sample_id,collection_date\nsample,2020\n")
     _run_dated_tree(files, 2000, False, seed=seed, keep_polytomies=keep_polytomies)
     command = commands[0]
     assert ("--keep-polytomies" in command) is keep_polytomies

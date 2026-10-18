@@ -21,7 +21,7 @@ def completed_run(tmp_path, *, display_lin_level=7):
         for i,name in enumerate(('q','c1','c2','c3'))]
     dataset = write_dataset(from_profile_records(rows,[LocusCatalogue('test','1',('a','b','c'),'test')]),tmp_path/'prepared')
     return run_cgmlst(dataset,tmp_path/'run',bootstrap_replicates=0,context_size=2,
-                      display_lin_level=display_lin_level).manifest_path
+                      display_lin_level=display_lin_level,partition_by='lineage').manifest_path
 
 
 def test_refresh_preserves_numeric_tree_and_selection(tmp_path):

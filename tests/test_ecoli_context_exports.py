@@ -49,6 +49,7 @@ class Client:
     def __init__(self, candidate):
         self.candidate = candidate
         self.requests = []
+        self.previews = []
 
     def supported_organisms(self):
         return [{"fullName": "Escherichia coli", "organismId": "562"}]
@@ -63,6 +64,10 @@ class Client:
         return value
 
     def request_json(self, method, path, **kwargs):
+        if path == "/api/search/genomes":
+            assert method == "POST" and kwargs['body']['mlst'] == ['131']
+            self.previews.append('131')
+            return {"meta": {"count": 1}, "genomes": []}
         self.requests.append((method, path, kwargs))
         assert method == "POST" and path == "/api/genomes/group"
         assert kwargs["body"] == {"ids": [108048]}
@@ -168,7 +173,8 @@ def test_explicit_synthetic_known_scope_context_uses_hiercc_partition(tmp_path, 
         prepared(tmp_path), tmp_path / "context", hiercc_level="HC50", client=client
     )
     assert calls[0] == {"hclink"} and {"klebsiella-lincodes"} not in calls
-    assert client.requests == []
+    assert client.requests == []  # No export-capability request for already typed data.
+    assert client.previews == ['131']
     dataset = load_dataset(result.dataset_manifest)
     blocks, audit = partition_records(provider.dataset_records(dataset), hiercc_level="HC50")
     assert len(blocks) == 1 and blocks[0]["kind"] == "hiercc" and blocks[0]["level"] == "HC50"

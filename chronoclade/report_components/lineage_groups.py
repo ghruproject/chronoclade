@@ -16,6 +16,33 @@ def assign_lineage_groups(analysis, records, *, level=7):
         raise ValueError("Display LIN level must be an integer between 5 and 10")
     partition = analysis.get('partition') or {}
     kind = partition.get('kind')
+    if kind == 'profiles':
+        # Numerical groups are descriptive distance cuts, never nomenclature
+        # assignments. Provider codes remain scoped optional annotations.
+        assignments = {}
+        groups = []
+        for group in analysis.get('genetic_groups', []):
+            ids = group.get('sample_ids', [])
+            label = 'Distance group ' + str(group['group_id'])
+            assignments.update({ident: label for ident in ids})
+            groups.append({**group, 'group_id': label, 'kind': 'profile_distance',
+                           'method': 'exploratory complete-linkage profile distance group'})
+        missing = [row['sample_id'] for row in records if row['sample_id'] not in assignments]
+        if missing:
+            label = 'Distance group unassigned'
+            assignments.update({ident: label for ident in missing})
+            groups.append({'group_id': label, 'sample_ids': missing, 'kind': 'profile_distance',
+                           'method': 'no comparable distance group'})
+        analysis['lineage_groups'] = groups
+        analysis['display_group_basis'] = 'exploratory_profile_distance'
+        analysis['display_group_level'] = None
+        analysis['reported_lineage_annotations'] = [
+            {'sample_id': row['sample_id'], 'role': row.get('role'),
+             **{key: value for key, value in row.items()
+                if key.startswith(('cglin_', 'hiercc_'))}}
+            for row in records if row.get('cglin_raw') or row.get('hiercc_codes')
+        ]
+        return assignments
     if kind == 'hiercc':
         hiercc_level = partition.get('level')
         if not isinstance(hiercc_level, str) or not hiercc_level.startswith('HC') or not hiercc_level[2:].isdigit():
@@ -110,6 +137,7 @@ def render_lineage_groups(analysis, records, directory, *, reuse_coordinates=Fal
         stem = cohort['cohort_id']
         cohort['tree_groups_html'] = write_group_tree(tree, rows, analysis['sample_labels'], assignments,
             directory / f'{stem}_tree_groups.html', distance_units=analysis.get('distance_units'),
-            group_basis=analysis.get('display_group_basis'))
+            group_basis=analysis.get('display_group_basis'),
+            group_threshold=analysis.get('distance_threshold'))
         cohort.update(write_ordination_views(directory, stem, coords, rows, groups=assignments,
             title='NJ-tree distance ordination', coordinate_views=bases, default_basis='nj_tree'))

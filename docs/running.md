@@ -26,8 +26,14 @@ suitable for the analysis.
 
 ```bash
 pixi run -e cgmlst chronoclade cgmlst prepared/dataset.json \
-  --fetch-context --lin-level 5 --subsamples 5 --context-size 50 --out cgmlst
+  --fetch-context --subsamples 1 --context-size 10 --out cgmlst
 ```
+
+The default profile mode needs compatible species/scheme/version/database scope,
+not LIN or HierCC assignments. Missing ST does not block local profile analysis,
+but prevents a same-ST public search for that input. All inputs and mandatory
+nearest-neighbour ties remain selected even when they exceed `--context-size`.
+The budget does not cap the number of public profiles retrieved or analysed.
 
 The cgMLST stage retrieves compatible public profiles and metadata when requested,
 analyses the full comparable block, and writes one or more saved selections. It

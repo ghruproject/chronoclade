@@ -193,6 +193,8 @@ def _add_state_networks(analysis, rows, directory):
 
 
 def _block_label(block):
+    if block["kind"] == "profiles":
+        return "Compatible cgMLST profiles · " + block["scheme"]
     label = "ST" + block["mlst_st"]
     if block["kind"] == "st":
         return label + " · supplied profiles (no lineage partition)"
@@ -204,7 +206,7 @@ def run_cgmlst(
     output,
     *,
     lin_level=5,
-    partition_by="lineage",
+    partition_by="profiles",
     display_lin_level=7,
     context_lin_level=None,
     backend="auto",
@@ -240,9 +242,14 @@ def run_cgmlst(
         raise ValueError("distance_threshold must be a mismatch fraction in [0,1]")
     dataset = load_dataset(dataset_manifest)
     records = profile_records(dataset, source_root=dataset_manifest)
-    if partition_by not in {"lineage", "st"}:
-        raise ValueError("partition_by must be lineage or st")
-    if partition_by == "st":
+    if partition_by not in {"profiles", "lineage", "st"}:
+        raise ValueError("partition_by must be profiles, lineage or st")
+    if partition_by == "profiles":
+        if context_lin_level is not None or hiercc_level is not None:
+            raise ValueError("Lineage-scope options require --partition-by lineage")
+        from chronoclade.profile_partitions import partition_profiles
+        blocks, audit = partition_profiles(records)
+    elif partition_by == "st":
         if context_lin_level is not None or hiercc_level is not None:
             raise ValueError("ST profile-only partition cannot be combined with lineage-scope options")
         from chronoclade.profile_partitions import partition_input_profiles
@@ -435,7 +442,8 @@ def run_cgmlst(
         from chronoclade.report_components.lineage_groups import assign_lineage_groups, render_lineage_groups
         # Presentation depth must not silently change representative selection strata.
         selection_groups = dict(analysis)
-        assign_lineage_groups(selection_groups, rows, level=7)
+        if partition_by == "lineage":
+            assign_lineage_groups(selection_groups, rows, level=7)
         render_lineage_groups(analysis, rows, directory, level=display_lin_level)
         _add_state_networks(analysis, rows, directory)
         block_include = [alias for alias, ident in requested.items()
@@ -463,7 +471,8 @@ def run_cgmlst(
                 ensemble_path = write_selection_ensemble(
                     queries,
                     contexts,
-                    {**analysis, 'genetic_groups': selection_groups.get('lineage_groups', analysis['genetic_groups'])},
+                    {**analysis, 'genetic_groups': (selection_groups.get('lineage_groups', analysis['genetic_groups'])
+                                                  if partition_by == 'lineage' else analysis['genetic_groups'])},
                     dataset_manifest=dataset_manifest,
                     output=directory / "selection_bundle",
                     replicates=replicates,
@@ -549,6 +558,7 @@ def run_cgmlst(
         audit,
         records_count=len(records),
         display_lin_level=display_lin_level,
+        partition_by=partition_by,
         profile_context={**(dataset.parameters.get("profile_context") or {}), "provider_reported_hiercc": parameters.get("provider_reported_hiercc")},
         lin_level=lin_level,
         hiercc_level=hiercc_level,

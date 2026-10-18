@@ -490,7 +490,7 @@ def test_context_resume_reuses_completed_scope_and_frozen_catalogues(tmp_path, m
         def supported_organisms(self):
             return [{"fullName": SPECIES, "organismId": "573"}]
 
-        def freeze_catalogue(self, path, *, organism_id, st):
+        def freeze_catalogue(self, path, *, organism_id, st, resume=False):
             self.freezes.append(st)
             row = record("PW_source" + st)
             row.update(source_genome_id="source" + st, origin="context", aliases=["source" + st])
@@ -592,7 +592,7 @@ def test_context_resume_reuses_source_copy_after_packaging_failure(tmp_path, mon
         def supported_organisms(self):
             return [{"fullName": SPECIES, "organismId": "573"}]
 
-        def freeze_catalogue(self, path, *, organism_id, st):
+        def freeze_catalogue(self, path, *, organism_id, st, resume=False):
             self.freezes += 1
             row = record("PW_source")
             row.update(source_genome_id="source", origin="context", aliases=["source"])
@@ -990,12 +990,17 @@ def test_real_batch_checkpoints_survive_interrupted_normalizer_and_reference_gua
                     "query": {"organismId": "573", "mlst": ["39"]},
                     "organism_capabilities": {"fullName": SPECIES, "organismId": "573"},
                     "base_url": self.base_url,
+                    "species": SPECIES,
+                    "retrieved_at": "2026-10-18T00:00:00Z",
                 },
             }
             path.write_text(json.dumps(envelope))
             return envelope
 
         def request_json(self, method, path, **kwargs):
+            if path == "/api/search/genomes":
+                events.append("preview")
+                return {"meta": {"count": len(public)}, "genomes": []}
             events.append("capability")
             return [
                 {
@@ -1017,6 +1022,7 @@ def test_real_batch_checkpoints_survive_interrupted_normalizer_and_reference_gua
 
     monkeypatch.setattr(inputs, "request_download", download)
     monkeypatch.setattr(provider, "load_catalogue", lambda path: json.loads(path.read_text()))
+    monkeypatch.setattr("chronoclade.context_preflight.load_catalogue", lambda path: json.loads(path.read_text()))
     output = tmp_path / "context"
     client = Client()
     with pytest.raises(RuntimeError, match="classifier interrupted"):

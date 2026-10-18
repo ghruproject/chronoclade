@@ -132,6 +132,8 @@ def enhance_report_tables(document: str) -> str:
 def write_report_html(path, document: str, *, encoding="utf-8"):
     """Write an offline report with the common table behaviour."""
     from chronoclade.report_components.portable import embed_report_assets
+    from chronoclade.report_components.downloads import enhance_report_downloads
 
+    document = enhance_report_downloads(document, Path(path).parent)
     document = embed_report_assets(document, Path(path).parent)
     return Path(path).write_text(enhance_report_tables(document), encoding=encoding)

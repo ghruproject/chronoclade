@@ -6,6 +6,7 @@ import json
 import shutil
 from contextlib import ExitStack, nullcontext
 from dataclasses import asdict
+from functools import wraps
 from pathlib import Path
 
 from chronoclade.artifacts import file_sha256
@@ -137,6 +138,18 @@ def _exports_complete(provenance):
     )
 
 
+def _exclusive_context_retrieval(function):
+    @wraps(function)
+    def locked(dataset_manifest, output, *args, **kwargs):
+        from chronoclade.prepare_recovery import DirectoryLock
+        target = Path(output).expanduser().resolve()
+        lock = target.with_name('.' + target.name + '.context-retrieval.lock')
+        with DirectoryLock(lock):
+            return function(dataset_manifest, output, *args, **kwargs)
+    return locked
+
+
+@_exclusive_context_retrieval
 def discover_profile_context(
     dataset_manifest,
     output,
@@ -150,6 +163,8 @@ def discover_profile_context(
     typing_config=None,
     context_source=None,
     resume=False,
+    lineage_filter=True,
+    max_candidates=None,
 ):
     """Publish all accessible compatible block profiles; never fetch context assemblies."""
     from chronoclade.prepare_stage import (
@@ -164,7 +179,8 @@ def discover_profile_context(
         PasteurProfileNormalizer, reference_descriptor, reference_rebinding, resolve_reference,
     )
     native_reference = resolve_reference(dataset, typing_config)
-    native_descriptor = reference_descriptor(native_reference) if native_reference else None
+    native_descriptor = (reference_descriptor(native_reference, profiles_only=True) if not lineage_filter
+                         else reference_descriptor(native_reference)) if native_reference else None
     rebinding = reference_rebinding(dataset.parameters.get("native_typing_reference"), native_descriptor,
                                    explicit=typing_config is not None) if native_descriptor else None
     try:
@@ -180,15 +196,34 @@ def discover_profile_context(
                 source_root = source_root.parent
             row["assembly_reference"] = str((source_root / reference).resolve())
     queries = [r for r in rows if r["role"] == "input"]
-    if any(
+    if lineage_filter and any(
         r.get("species", "").casefold() not in {"klebsiella pneumoniae", "escherichia coli"}
         for r in queries
     ):
         raise DatasetError(
             "Public lineage context supports Klebsiella pneumoniae and Escherichia coli"
         )
-    if any("coli" in r.get("species", "").casefold() for r in queries) and not hiercc_level:
+    if lineage_filter and any("coli" in r.get("species", "").casefold() for r in queries) and not hiercc_level:
         raise DatasetError("E. coli public context requires an explicit --hiercc-level")
+    if not lineage_filter:
+        from chronoclade.mlst_typing import numeric_st
+        alternate_ecoli = {'ecoli', 'ecoli_2', 'ecoli_pasteur', 'pasteur', 'pubmlst:ecoli',
+                           'escherichia.pasteur8genemlst'}
+        wrong_namespace = [r['sample_id'] for r in queries
+                           if r.get('species', '').casefold() == 'escherichia coli'
+                           and str(r.get('mlst_scheme') or '').casefold() in alternate_ecoli]
+        if wrong_namespace:
+            raise DatasetError('E. coli primary public context searches use Achtman MLST, not the '
+                               'alternative Pasteur namespace (mlst2). Reprepare assemblies without '
+                               'the alternative ST to call the primary scheme, or supply verified '
+                               'Achtman metadata. Inputs: ' + ', '.join(wrong_namespace))
+        missing_st = [r['sample_id'] for r in queries if not numeric_st(r.get('mlst_st'))]
+        if missing_st:
+            raise DatasetError('Public context discovery needs a verified numeric MLST ST for every input; '
+                               'local cgMLST analysis does not. Prepare input assemblies to call missing STs '
+                               'with classical MLST, or supply verified metadata. Missing ST: ' + ', '.join(missing_st))
+        if hiercc_level is not None:
+            raise DatasetError('HierCC filtering requires explicit lineage mode')
     raw_source = None
     if context_source is not None:
         from chronoclade.provider_sources import ProviderSource
@@ -203,6 +238,11 @@ def discover_profile_context(
             raw_source.for_scope(species, st)
     else:
         client = client or PathogenwatchClient()
+    if not lineage_filter and not raw_source and not client.api_key and not public_typing:
+        raise DatasetError('Public cgMLST profile downloads need protected Pathogenwatch credentials; '
+                           'local analysis of prepared profiles does not. Configure credentials before retrieval.')
+    if max_candidates is not None and (type(max_candidates) is not int or max_candidates < 1):
+        raise DatasetError('Maximum context candidates must be a positive integer')
     provider_base_url = raw_source.base_url if raw_source else getattr(client, "base_url", "https://pathogen.watch").rstrip("/")
     target = Path(output).resolve()
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -224,6 +264,8 @@ def discover_profile_context(
         "execution": execution_provenance("profile-context", "frozen-scope-export-v1"),
         "source_dataset_sha256": file_sha256(source_manifest),
         "lin_level": lin_level,
+        "lineage_filter": lineage_filter,
+        "candidate_limit_policy": "refuse_whole_pool_never_truncate",
         "hiercc_level": hiercc_level,
         "public_typing_sha256": input_sha256(public_typing),
         "cglin_export_sha256": input_sha256(cglin_export),
@@ -296,7 +338,18 @@ def discover_profile_context(
         work = Path(temporary)
         if raw_source:
             raw_source.snapshot(work / "raw_source")
-        normalizer = PasteurProfileNormalizer(native_reference, work / "normalization") if native_reference else None
+        preflight = None
+        if not raw_source and hasattr(client, 'request_json'):
+            from chronoclade.context_preflight import plan_context, require_allowed_pools, write_context_plan
+            preflight = plan_context(dataset_manifest, client=client,
+                                     max_candidates=max_candidates, cache_root=work)
+            write_context_plan(preflight, work / 'preflight', allow_existing=resume)
+            require_allowed_pools(preflight)
+        if native_reference and not lineage_filter:
+            from chronoclade.profile_dna_normalization import ProfileDNANormalizer
+            normalizer = ProfileDNANormalizer(native_reference, work / 'normalization')
+        else:
+            normalizer = PasteurProfileNormalizer(native_reference, work / "normalization") if native_reference else None
         if normalizer:
             rows = normalizer.normalize(rows)
             queries = [r for r in rows if r["role"] == "input"]
@@ -320,14 +373,17 @@ def discover_profile_context(
                     or not isinstance(checkpoint.get("matched"), list)
                 ):
                     raise DatasetError(f"Context scope checkpoint {index} failed validation")
-                from chronoclade.provider_hiercc import rebind_scope_exports
-                try:
-                    matched = rebind_scope_exports(
-                        checkpoint["matched"], checkpoint["pool_audit"].get("exports", {}),
-                        work / f"scope_{index}" / "lineages" / "export_capabilities.json",
-                    )
-                except (OSError, ValueError, KeyError, TypeError) as error:
-                    raise DatasetError(f"Context scope checkpoint {index} raw lineage proof failed validation") from error
+                if lineage_filter:
+                    from chronoclade.provider_hiercc import rebind_scope_exports
+                    try:
+                        matched = rebind_scope_exports(
+                            checkpoint["matched"], checkpoint["pool_audit"].get("exports", {}),
+                            work / f"scope_{index}" / "lineages" / "export_capabilities.json",
+                        )
+                    except (OSError, ValueError, KeyError, TypeError) as error:
+                        raise DatasetError(f"Context scope checkpoint {index} raw lineage proof failed validation") from error
+                else:
+                    matched = checkpoint["matched"]
                 for row in matched:
                     found[row["source_genome_id"]] = row
                 pools.append(checkpoint["pool_audit"])
@@ -374,8 +430,12 @@ def discover_profile_context(
                     )
                     continue
                 if not public_path.exists():
+                    freeze_options = {"resume": True} if resume else {}
+                    if preflight is not None and isinstance(client, PathogenwatchClient):
+                        freeze_options["expected_count"] = preflight['pools'][index]['candidate_count']
                     envelope = client.freeze_catalogue(
-                        public_path, organism_id=str(organism["organismId"]), st=st
+                        public_path, organism_id=str(organism["organismId"]), st=st,
+                        **freeze_options,
                     )
             pool = [
                 _canonical(
@@ -393,7 +453,7 @@ def discover_profile_context(
                 export["raw_provider_source"] = raw_source.identity
                 export["as_of"] = envelope["provenance"]["retrieved_at"]
                 export["analysis_exports"] = [{"download": "cgmlst", "status": "downloaded", "origin": "validated_raw_source_replay", "requested_count": len(pool)}]
-            else:
+            elif lineage_filter:
                 pool = _grouped_analysis_exports(
                     pool, client, scope_work / "lineages", export,
                     download_names={"hclink"} if species.casefold() == "escherichia coli"
@@ -410,59 +470,76 @@ def discover_profile_context(
             relevant = [
                 r for r in queries if r["species"] == species and str(r.get("mlst_st") or "") == st
             ]
-            kind = "cglin" if "klebsiella" in species.casefold() else "hiercc"
-            counts = {
-                str(level): sum(any(_matching(q, r, kind, level) for q in relevant) for r in pool)
-                for level in (LIN_LEVELS if kind == "cglin" else [hiercc_level])
-            }
-            matched = [
-                r
-                for r in pool
-                if any(
-                    _matching(q, r, kind, lin_level if kind == "cglin" else hiercc_level)
-                    for q in relevant
-                )
-            ]
-            selected_level = lin_level if kind == "cglin" else hiercc_level
-            rejected_lineages = []
-            for candidate in pool:
-                comparable = any(_matching(q, candidate, kind, selected_level) for q in relevant)
-                hinted_queries = [q for q in relevant if _numeric_lineage_match(
-                    q, candidate, kind, selected_level
-                )]
-                incompatible_scope = hinted_queries and all(
-                    _scope_evidence(q, kind) != _scope_evidence(candidate, kind)
-                    for q in hinted_queries
-                )
-                if incompatible_scope and not comparable:
-                    rejected_lineages.append({
-                        "source_genome_id": candidate.get("source_genome_id"),
-                        "candidate_scope": _scope_evidence(candidate, kind),
-                        "input_scopes": [_scope_evidence(q, kind) for q in hinted_queries],
-                        "reason": "numeric_lineage_match_not_verified_comparable",
-                    })
-            if rejected_lineages and not matched and not normalizer:
-                _fail_incompatible_context(
-                    work, kind=kind, candidates=rejected_lineages, scope=scope
-                )
-            if normalizer:
-                # Old public assignments cannot safely exclude candidates under
-                # the new reference. Acquire ST profiles, then reassign BEFORE
-                # applying the requested current-reference LIN prefix.
+            if not lineage_filter:
+                kind, selected_level = None, None
+                counts, rejected_lineages = {}, []
                 matched = pool
+            else:
+                kind = "cglin" if "klebsiella" in species.casefold() else "hiercc"
+                counts = {
+                    str(level): sum(any(_matching(q, r, kind, level) for q in relevant) for r in pool)
+                    for level in (LIN_LEVELS if kind == "cglin" else [hiercc_level])
+                }
+                matched = [
+                    r
+                    for r in pool
+                    if any(
+                        _matching(q, r, kind, lin_level if kind == "cglin" else hiercc_level)
+                        for q in relevant
+                    )
+                ]
+                selected_level = lin_level if kind == "cglin" else hiercc_level
+                rejected_lineages = []
+                for candidate in pool:
+                    comparable = any(_matching(q, candidate, kind, selected_level) for q in relevant)
+                    hinted_queries = [q for q in relevant if _numeric_lineage_match(
+                        q, candidate, kind, selected_level
+                    )]
+                    incompatible_scope = hinted_queries and all(
+                        _scope_evidence(q, kind) != _scope_evidence(candidate, kind)
+                        for q in hinted_queries
+                    )
+                    if incompatible_scope and not comparable:
+                        rejected_lineages.append({
+                            "source_genome_id": candidate.get("source_genome_id"),
+                            "candidate_scope": _scope_evidence(candidate, kind),
+                            "input_scopes": [_scope_evidence(q, kind) for q in hinted_queries],
+                            "reason": "numeric_lineage_match_not_verified_comparable",
+                        })
+                if rejected_lineages and not matched and not normalizer:
+                    _fail_incompatible_context(
+                        work, kind=kind, candidates=rejected_lineages, scope=scope
+                    )
+                if normalizer:
+                    # Old public assignments cannot safely exclude candidates under
+                    # the new reference. Acquire ST profiles, then reassign BEFORE
+                    # applying the requested current-reference LIN prefix.
+                    matched = pool
             requested = len(matched)
             if not raw_source:
-                matched = _grouped_analysis_exports(matched, client, scope_work / "profiles", export, resume=resume)
+                matched = _grouped_analysis_exports(
+                    matched, client, scope_work / "profiles", export, resume=resume,
+                    download_names=None if lineage_filter else {"cgmlst"},
+                )
+                if not lineage_filter:
+                    names = ({"klebsiella-lincodes"} if "klebsiella" in species.casefold()
+                             else {"hclink"} if species.casefold() == "escherichia coli" else set())
+                    if names:
+                        annotations = export.setdefault("optional_lineage_annotations", {})
+                        matched = _grouped_analysis_exports(
+                            matched, client, scope_work / "annotations", annotations,
+                            download_names=names, resume=resume,
+                        )
             reassignment_exclusions = []
             if normalizer:
                 available = [r for r in matched if _has_profile(r)]
                 normalized = normalizer.normalize(available)
-                counts = {str(level): sum(any(_matching(q, r, kind, level) for q in relevant)
-                                         for r in normalized)
-                          for level in LIN_LEVELS}
+                counts = ({str(level): sum(any(_matching(q, r, kind, level) for q in relevant)
+                                          for r in normalized) for level in LIN_LEVELS}
+                          if lineage_filter else {})
                 matches_after_assignment = []
                 for candidate in normalized:
-                    if any(_matching(q, candidate, kind, selected_level) for q in relevant):
+                    if not lineage_filter or any(_matching(q, candidate, kind, selected_level) for q in relevant):
                         matches_after_assignment.append(candidate)
                     else:
                         reassignment_exclusions.append({
@@ -489,7 +566,8 @@ def discover_profile_context(
                 "incompatible_numeric_lineage_candidates": rejected_lineages,
                 "current_reference_reassignment": {
                     "enabled": normalizer is not None,
-                    "prefilter": "all_ST_profiles_before_current_LIN_scope" if normalizer else "reported_compatible_lineage",
+                    "prefilter": ("all_ST_profiles_no_lineage_filter" if not lineage_filter else
+                                  "all_ST_profiles_before_current_LIN_scope" if normalizer else "reported_compatible_lineage"),
                     "retained": len(matched), "exclusions": reassignment_exclusions,
                     "profiles_before_lineage_scope": len(available) if normalizer else None,
                 },
@@ -509,7 +587,8 @@ def discover_profile_context(
                 temporary_checkpoint.replace(checkpoint_path)
         phases.enter_context(progress_task(
             "context", "Preparing combined input and public-context profiles",
-            details=f"{len(rows)} existing records; {len(found)} retrieved lineage matches",
+            details=(f"{len(rows)} existing records; {len(found)} retrieved "
+                     + ("lineage matches" if lineage_filter else "public profile candidates")),
         ))
         aliases = set()
         for row in rows:
@@ -561,7 +640,9 @@ def discover_profile_context(
         )
         catalogue_values = catalogues_for_records(all_rows, explicit)
         audit = {
-            "policy": {"lin_level": lin_level, "hiercc_level": hiercc_level},
+            "policy": {"lin_level": lin_level if lineage_filter else None,
+                       "hiercc_level": hiercc_level, "lineage_filter": lineage_filter,
+                       "candidate_scope": "species/ST then compatible profile scope" if not lineage_filter else "species/ST then compatible lineage"},
             "provider_reported_hiercc": reported_evidence,
             "resume_fingerprint": fingerprint,
             "raw_provider_source": raw_source.identity if raw_source else None,

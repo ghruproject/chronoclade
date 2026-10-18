@@ -2,14 +2,41 @@
 
 Prepare the input assemblies first, then use the cgMLST module to discover
 public comparisons. Species and seven-locus MLST ST identify the candidate
-Pathogenwatch pool; compatible cgMLST profiles and LIN groups refine it. The
+Pathogenwatch pool; compatible cgMLST profiles define the comparisons. LIN and
+HierCC labels are optional in default profile mode. The
 cgMLST report analyses the retained profiles and selects representatives for
 the tree module. Context assemblies are acquired for the selected SNP-tree
 analysis. A LIN code alone does not establish how close two genomes are.
 
-The walkthrough below targets Klebsiella. E. coli HierCC requires a compatible assignment reference database.
+The main walkthrough below targets Klebsiella. S. aureus also supports native
+cgMLST calling without a lineage assignment, as described below. E. coli HierCC
+requires a compatible assignment reference database.
 
-## Install the tools
+## Classical MLST for public discovery
+
+`prepare` reuses supplied positive numeric STs and attempts missing classical
+STs from local input assemblies independently of cgMLST or LIN/HierCC. Install
+the pinned classical caller and bundled schemes in their separate environment:
+
+```bash
+pixi install --frozen -e mlst
+```
+
+The ordinary `prepare` command finds the installed sibling environment; no
+manual intermediate typing file is needed. The pinned `mlst` 2.32.2 mappings
+are `klebsiella` for K. pneumoniae, `ecoli_achtman_4` for E. coli and `saureus`
+for S. aureus. All target Pathogenwatch's primary `mlst` field. The local scheme
+named `ecoli` is Pasteur eight-locus MLST and must not be used as the primary
+Achtman ST. Explicit alternative-scheme input cannot be silently relabelled for
+primary discovery; alternative-scheme searches are not implemented here.
+
+Only complete, exact, unambiguous calls assign an ST. Missing tools, references,
+assemblies or unresolved calls stay explicit in the preparation audit. Compatible
+local cgMLST profiles remain usable without an ST; public same-ST discovery for
+that input waits for a resolved primary ST. See [preparation](prepare.md#live-query-preparation)
+for the separate evidence and requirements.
+
+## Install the cgMLST and lineage tools
 
 Install [uv](https://docs.astral.sh/uv/getting-started/installation/) first, then run:
 
@@ -59,6 +86,38 @@ them for each query. Install the native tools separately on each operating syste
 the completed reference files can be shared with a SLURM cluster. Credentials are not included in the
 query configuration or analysis outputs.
 
+## S. aureus cgMLST without a lineage reference
+
+Install the classical MLST environment above, then prepare the native cgMLST
+caller and its public reference through the normal setup command:
+
+```bash
+pixi run chronoclade setup-typing --species saureus --prepare-db \
+  --destination /shared/chronoclade/saureus-typing
+```
+
+This uses Pathogenwatch's pinned native `saureus_1` caller and PubMLST S. aureus
+scheme 2, with 2,208 declared loci. It does not require or install plincer or
+HierCC. The generated query configuration is caller-only (`profiles-only`).
+The setup report distinguishes a ready cgMLST reference from lineage assignment,
+which is not required and remains unassigned.
+
+Unauthenticated PubMLST access includes records submitted on or before
+2024-12-31. Download receipts retain this restriction and the downloader-recorded reference
+version. If the server omits `last_updated`, the upstream downloader uses the
+retrieval date; that date does not imply current allele completeness. Content
+hashes identify the actual reference. A reference can be ready to call those known alleles without including
+every current allele; novel or missing calls remain explicit. Reference setup
+requires network access and can take substantial time. Preserve the full declared
+locus universe rather than restricting it to columns observed in provider exports.
+
+Provide local assemblies and declared species in the ordinary assembly input
+CSV; omit ST to exercise automatic classical MLST. Pass the generated
+`/shared/chronoclade/saureus-typing/query_config.json` to `prepare --typing-config`,
+then use the normal profile-mode cgMLST command. Compatible public comparison
+requires checked scheme/locus and allele nomenclature correspondence; neither a
+species name nor matching locus counts establishes it alone.
+
 ## Call and refine
 
 Use the query configuration written by setup, once its readiness checks pass:
@@ -75,9 +134,11 @@ pixi run --frozen --environment default chronoclade cgmlst prepared/dataset.json
   --out cgmlst
 ```
 
-The input CSV needs the species and a verified seven-locus MLST ST for public
-context discovery. Native cgMLST typing does not calculate that ST. Preparation
-types new input assemblies using the configured caller and lineage reference.
+The input CSV needs the species. A supplied positive numeric classical ST is
+reused; a missing ST is called from an available local input assembly using the
+separate classical caller above. Native cgMLST typing does not calculate that ST.
+Preparation types new cgMLST profiles with the configured caller and reference;
+LIN/HierCC assignment remains optional for default profile analysis.
 During context discovery, the same reference configuration normalises compatible
 public typing where required. Public profiles and metadata are retrieved at this
 stage; representative SNP-tree selection is a separate step. See the
@@ -102,7 +163,9 @@ selection still requires compatible public typing.
 ## Profiles without a lineage reference
 
 When the cgMLST caller index is ready but the LIN/HierCC background is unavailable,
-request only the allele profiles explicitly:
+normal `prepare --typing-config CONFIG` automatically uses profile-only calling
+and records why lineage assignment was unavailable. No separate intermediate file
+is required. To retain a standalone typing artifact, explicitly request profiles:
 
 ```bash
 pixi run chronoclade type-queries focal.csv --profiles-only \
@@ -110,8 +173,7 @@ pixi run chronoclade type-queries focal.csv --profiles-only \
   --output focal-profiles
 pixi run chronoclade prepare focal.csv --input-kind assemblies \
   --query-typing focal-profiles/query_typing.json --out prepared
-pixi run chronoclade cgmlst prepared/dataset.json --partition-by st \
-  --out input-only-cgmlst
+pixi run chronoclade cgmlst prepared/dataset.json --out profile-cgmlst
 ```
 
 This uses the same pinned caller, parser, assembly identity checks and database
@@ -120,9 +182,29 @@ The saved mode is `profiles-only`; lineage assignment is `not_requested`, and
 no LIN/HierCC group is inferred. Full typing still requires a verified assignment
 reference. Results from the two modes cannot silently reuse each other's cache.
 
-`--partition-by st` is an explicit analysis of supplied inputs grouped by species,
-ST and compatible profile scope. It does not discover public context or replace
-an HC/LIN assignment. Standard lineage partitioning remains the default.
+Default `--partition-by profiles` groups compatible profiles by species and
+profile scope, independently of ST or lineage labels. Add `--fetch-context` when
+known species/ST and provider access allow compatible public profiles to be
+retrieved. The legacy `--partition-by st` route remains an explicit input-only
+analysis. Choose `--partition-by lineage` only when verified HC/LIN assignments
+are available and you intend those labels to restrict analysis.
+
+## Comparing native calls with provider profiles
+
+Pass the same ready native configuration to `cgmlst --fetch-context
+--typing-config CONFIG` when comparing newly called inputs with provider exports.
+For the explicitly supported Klebsiella, E. coli and S. aureus routes, ChronoClade
+checks the biological scheme identity and translates locus-specific allele IDs
+through the installed reference's DNA hashes. This produces a shared categorical
+comparison namespace; it does not align alleles or turn allele mismatches into
+SNP distances. The raw source profiles and normalization audit remain preserved.
+
+Every declared reference locus stays in the panel. Provider allele numbers absent
+from the verified reference remain unsupported/missing calls with explicit audit
+reasons; they are never treated as matches. Coverage requirements still apply.
+A matching species name, locus count or database date cannot substitute for this
+compatibility check. The reference's actual contents are bound to resume evidence.
+Lineage labels remain optional annotations in default profile mode.
 
 ## Klebsiella LIN
 

@@ -112,6 +112,17 @@ def test_profiles_publish_full_catalogue_missing_samples_and_lineage(frozen, tmp
     assert "sources/input.json" in {item["path"] for item in stage["artifacts"]}
 
 
+def test_provider_identity_does_not_claim_assembly_retrieval_is_unavailable(frozen, tmp_path):
+    source, catalogues, records = frozen
+    records[0].update(source_genome_id='public-query', numeric_source_id=123)
+    source.write_text(json.dumps(records))
+    result = run_prepare(source, tmp_path / 'prepared', catalogues=catalogues)
+    audit = json.loads(result.audit_path.read_text())
+    assert audit['samples'][0]['assembly_status'] == 'retrieval_not_assessed'
+    assert audit['samples'][1]['assembly_status'] == 'unavailable'
+    assert 'Not bundled; retrieval not assessed' in result.report_path.read_text()
+
+
 def test_explicit_metadata_provenance_conflicts_and_retrieval_preserved(frozen, tmp_path):
     source, catalogues, records = frozen
     evidence = {
@@ -485,6 +496,9 @@ def test_frozen_metadata_overlay_preserves_typing_and_records_field_provenance(f
     assert any(r['field'] == 'collection_date' for r in after.conflicts)
     assert (result.dataset_manifest.parent / 'sources/metadata.csv').read_text() == overrides.read_text()
     overrides.write_text('sample_id,mlst_st\nquery,258\n')
+    typed = run_prepare(baseline.dataset_manifest, tmp_path / 'with-st', metadata=overrides)
+    assert load_dataset(typed.dataset_manifest).samples[0]['mlst_st'] == '258'
+    overrides.write_text('sample_id,cgmlst_scheme\nquery,unverified\n')
     with pytest.raises(DatasetError, match='Unsupported metadata'):
         run_prepare(baseline.dataset_manifest, tmp_path / 'invalid', metadata=overrides)
 

@@ -632,7 +632,8 @@ class PathogenwatchClient:
         return response
 
     def search(
-        self, organism_id: str, st: str, mlst_scheme: str = "mlst", *, page_size: int = 100
+        self, organism_id: str, st: str, mlst_scheme: str = "mlst", *, page_size: int = 100,
+        _capture=None, expected_count: int | None = None,
     ) -> dict:
         if mlst_scheme not in {"mlst", "mlst2"}:
             raise PathogenwatchError(
@@ -647,7 +648,11 @@ class PathogenwatchClient:
             params = {"limit": page_size, "sort": "id"}
             if cursor:
                 params["after"] = cursor
-            page = self.request_json("POST", "/api/search/genomes", body=query, params=params)
+            request = {"query": query, "params": params}
+            page = _capture.read("pages", request) if _capture else None
+            cached = page is not None
+            if not cached:
+                page = self.request_json("POST", "/api/search/genomes", body=query, params=params)
             if (
                 not isinstance(page, dict)
                 or not isinstance(page.get("genomes"), list)
@@ -658,6 +663,10 @@ class PathogenwatchClient:
             count = meta.get("count")
             if type(count) is not int or count < 0 or (total is not None and total != count):
                 raise PathogenwatchError("Search count missing or changed during pagination")
+            if expected_count is not None and count != expected_count:
+                raise PathogenwatchError(
+                    "Search count changed since context preflight; rerun preflight before retrieval"
+                )
             total = count
             pages.append(page)
             for row in page["genomes"]:
@@ -669,6 +678,8 @@ class PathogenwatchClient:
                     )
                 ids.add(row["uuid"])
                 genomes.append(row)
+            if _capture and not cached:
+                _capture.write("pages", request, page)
             if len(genomes) == total:
                 break
             if len(genomes) > total or not page["genomes"]:
@@ -695,7 +706,32 @@ class PathogenwatchClient:
         mlst_scheme: str = "mlst",
         *,
         page_size: int = 100,
+        resume: bool = False,
+        expected_count: int | None = None,
     ) -> dict:
+        """Capture complete public metadata, retaining checked progress on interruption."""
+        from chronoclade.catalogue_recovery import CatalogueCapture
+        from chronoclade.prepare_recovery import DirectoryLock, RecoveryError
+
+        destination = Path(path)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        work = destination.with_name(destination.name + ".retrieval")
+        binding = {"base_url": self.base_url, "organism_id": str(organism_id),
+                   "st": str(st), "mlst_scheme": mlst_scheme, "page_size": page_size,
+                   "expected_count": expected_count}
+        try:
+            with DirectoryLock(destination.with_name(destination.name + ".retrieval.lock")):
+                capture = CatalogueCapture(work, binding, resume=resume)
+                return self._freeze_catalogue(
+                    destination, organism_id, st, mlst_scheme,
+                    page_size=page_size, capture=capture, expected_count=expected_count,
+                )
+        except RecoveryError as error:
+            raise PathogenwatchError(str(error)) from error
+
+    def _freeze_catalogue(
+        self, path, organism_id, st, mlst_scheme, *, page_size, capture, expected_count,
+    ):
         started = time.monotonic()
         organisms = self.supported_organisms()
         organism = next(
@@ -704,15 +740,22 @@ class PathogenwatchClient:
         if organism is None or "MLST" not in (organism.get("typing") or []):
             raise PathogenwatchError("Unsupported Pathogenwatch organism/MLST capability")
         with progress_task("context", "Search public catalogue", details=f"ST{st}"):
-            result = self.search(organism_id, st, mlst_scheme, page_size=page_size)
+            result = self.search(organism_id, st, mlst_scheme, page_size=page_size,
+                                 _capture=capture, expected_count=expected_count)
 
         def fetch(search):
-            detail = self.request_json("GET", "/api/genomes/details", params={"id": search["uuid"]})
+            request = {"id": search["uuid"]}
+            detail = capture.read("details", request)
+            cached = detail is not None
+            if not cached:
+                detail = self.request_json("GET", "/api/genomes/details", params=request)
             if not isinstance(detail, dict):
                 raise PathogenwatchError("Unsupported details response shape")
             row = normalize_record(
                 search, detail, organism_id=organism_id, st=st, mlst_scheme=mlst_scheme
             )
+            if not cached:
+                capture.write("details", request, detail)
             return search["uuid"], detail, row
 
         total = len(result["genomes"])
@@ -745,6 +788,10 @@ class PathogenwatchClient:
             "search_page_count": len(result["raw_search_pages"]),
             "details_count": len(details),
             "elapsed_seconds": round(time.monotonic() - started, 3),
+            "capture_started_at": capture.started_at,
+            "reused_search_pages": capture.reused["pages"],
+            "reused_details": capture.reused["details"],
+            "capture_semantics": "paginated public capture; upstream does not provide a transactional snapshot",
             "raw_search_sha256": content_hash(result["raw_search_pages"]),
             "raw_details_sha256": content_hash(details),
             "rows_sha256": content_hash(rows),

@@ -87,7 +87,7 @@ larger.
 pixi run --frozen --environment default chronoclade cgmlst \
   "$RUN/prepare/dataset.json" --fetch-context \
   --typing-config "$TYPING_CONFIG" \
-  --lin-level 5 --context-lin-level 8 --display-lin-level 8 \
+  --partition-by lineage --lin-level 5 --context-lin-level 8 --display-lin-level 8 \
   --context-size 50 --nearest-per-query 3 --subsamples 1 \
   --seed 20261018 --out "$RUN/cgmlst"
 ```

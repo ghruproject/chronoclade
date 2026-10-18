@@ -76,6 +76,7 @@ def test_real_stage_has_full_tree_and_validated_selections_without_assembly_retr
         context_size=1,
         nearest_per_query=1,
         bootstrap_replicates=0,
+        partition_by="lineage",
     )
     record = json.loads(result.manifest_path.read_text())
     assert record["status"] == "partial"
@@ -203,7 +204,7 @@ def test_native_resume_reuses_completed_numerical_analysis(tmp_path, monkeypatch
         monkeypatch.setattr("chronoclade.profile_analysis.MAX_RECORDS", 2)
     _, source = fixture_dataset(tmp_path)
     output = tmp_path / "interrupted"
-    arguments = dict(bootstrap_replicates=0, context_size=1, nearest_per_query=1)
+    arguments = dict(bootstrap_replicates=0, context_size=1, nearest_per_query=1, partition_by="lineage")
     original = getattr(workflow, packager)
 
     def interrupted(*args, **kwargs):
@@ -308,7 +309,7 @@ def test_resume_rejects_injected_valid_selection_bundle_from_other_parameters(tm
 
     monkeypatch.setattr(workflow, "write_profile_report", interrupted)
     with pytest.raises(OSError):
-        workflow.run_cgmlst(source, output, bootstrap_replicates=0, context_size=1)
+        workflow.run_cgmlst(source, output, bootstrap_replicates=0, context_size=1, partition_by="lineage")
     checkpoint = next(output.glob("*/numerical_analysis.json"))
     directory = checkpoint.parent
     analysis = workflow._restore_artifact_paths(json.loads(checkpoint.read_text())["analysis"], directory)
@@ -325,7 +326,7 @@ def test_resume_rejects_injected_valid_selection_bundle_from_other_parameters(tm
     ensemble = directory / "selection_bundle" / "ensemble.json"
     assert load_selection_ensemble(ensemble)["parameters"]["seed"] == 99
     with pytest.raises(ValueError, match="selection bundle differs"):
-        workflow.run_cgmlst(source, output, bootstrap_replicates=0, context_size=1, resume=True)
+        workflow.run_cgmlst(source, output, bootstrap_replicates=0, context_size=1, partition_by="lineage", resume=True)
     assert not (output / "cgmlst.json").exists()
 
 
@@ -373,9 +374,9 @@ def test_cli_finer_scope_and_display_are_explicit_and_selection_independent(tmp_
     for display in (7, 10):
         output = tmp_path / f"display-{display}"
         result = runner.invoke(app, ["cgmlst", str(source), "--out", str(output),
-            "--lin-level", "8", "--display-lin-level", str(display),
+            "--partition-by", "lineage", "--lin-level", "8", "--display-lin-level", str(display),
             "--bootstrap-replicates", "0", "--nearest-per-query", "1"])
-        assert result.exit_code == 0, result.output
+        assert result.exit_code == 2, result.output  # Unresolved input remains audited.
         manifest = json.loads((output / "cgmlst.json").read_text())
         assert manifest["parameters"]["lin_level"] == 8
         assert manifest["parameters"]["display_lin_level"] == display
@@ -406,7 +407,7 @@ def test_context_prefix_union_preserves_cross_prefix_neighbours_in_wider_analysi
         [LocusCatalogue("test", "1", ("a", "b"), "fixture")]), tmp_path / "union-prepared")
     output = tmp_path / "union"
     result = CliRunner().invoke(app, ["cgmlst", str(source), "--out", str(output),
-        "--lin-level", "5", "--context-lin-level", "8", "--display-lin-level", "8",
+        "--partition-by", "lineage", "--lin-level", "5", "--context-lin-level", "8", "--display-lin-level", "8",
         "--bootstrap-replicates", "0", "--nearest-per-query", "1"])
     assert result.exit_code == 0, result.output
     manifest = json.loads((output / "cgmlst.json").read_text())

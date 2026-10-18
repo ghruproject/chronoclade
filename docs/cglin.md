@@ -3,7 +3,12 @@
 ChronoClade supports the **Klebsiella pneumoniae species complex
 scgMLST629_S** nomenclature mirrored by Pathogenwatch from BIGSdb-Pasteur.
 An available genome or an MLST ST does not establish cgLIN capability.
-Other organisms and schemes receive an explicit unsupported status.
+Other organisms and schemes receive an explicit unsupported cgLIN status.
+That status does not prevent compatible cgMLST profile analysis: the default
+profile workflow does not require cgLIN or HierCC. Use these labels as optional,
+reference-scoped annotations; explicit lineage partitioning requires verified
+assignments. Never transfer a context genome's label to an input from proximity
+in an NJ tree.
 
 ## Meaning and indexing
 

@@ -8,6 +8,21 @@ from datetime import date
 from typing import Any
 
 
+def treetime_date(value: Any) -> str:
+    """Serialize partial calendar dates as explicit TreeTime uncertainty ranges.
+
+    TreeTime reads bare years as numeric points and year-month strings as the
+    first day of the month. Keep original metadata unchanged and use this only
+    at the external clock-input boundary, including permuted date assignments.
+    """
+    text = str(value or "").strip()
+    if re.fullmatch(r"\d{4}", text):
+        return f"{text}-XX-XX"
+    if re.fullmatch(r"\d{4}-\d{2}", text):
+        return f"{text}-XX"
+    return text
+
+
 def date_interval(row, *, allow_future=False):
     value = str(row.get("collection_date") or row.get("collection_year") or "").strip()
     try:

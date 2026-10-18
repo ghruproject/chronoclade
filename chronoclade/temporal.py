@@ -56,10 +56,12 @@ def parse_clock_with_uncertainty(path: Path) -> dict[str, float]:
 
 
 def _write_dates(path: Path, samples: list[Sample], dates: list[str] | None = None) -> None:
+    from chronoclade.metadata_dates import treetime_date
+
     values = dates if dates is not None else [sample.collection_date for sample in samples]
     rows = ["sample_id,collection_date"]
     rows.extend(
-        f"{sample.sample_id},{value}" for sample, value in zip(samples, values, strict=True)
+        f"{sample.sample_id},{treetime_date(value)}" for sample, value in zip(samples, values, strict=True)
     )
     path.write_text("\n".join(rows) + "\n", encoding="utf-8")
 

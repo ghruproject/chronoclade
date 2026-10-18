@@ -71,6 +71,8 @@ def samples_from_records(records: Sequence[Mapping]) -> tuple[dict, ...]:
             "identity_conflict",
             "patient_id",
             "location",
+            "mlst_status", "mlst_source", "mlst_reason", "mlst_alleles",
+            "mlst_database_sha256", "mlst_tool_version", "mlst_assembly_sha256",
         ):
             if key in record:
                 row[key] = record[key]

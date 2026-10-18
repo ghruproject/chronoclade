@@ -76,7 +76,15 @@ def write_job(spec: JobSpec, output: Path, *, resources=None):
         if resources.gpus:
             directives.append(f"#SBATCH --gpus={resources.gpus}")
     script = output / ("run.slurm" if resources else "run.sh")
+    environment = ""
+    executable = Path(spec.executable)
+    if executable.is_absolute() or executable.parent != Path("."):
+        binary_directory = executable.parent
+        if not binary_directory.is_absolute():
+            binary_directory = spec.working_directory / binary_directory
+        environment = "export PATH=" + shlex.quote(str(binary_directory.resolve())) + ':"$PATH"\n'
     script.write_text("#!/usr/bin/env bash\n" + "\n".join(directives) + "\nset -euo pipefail\n"
+                      + environment
                       + "cd -- " + shlex.quote(str(spec.working_directory.resolve())) + "\n"
                       + "exec " + shlex.join(spec.argv) + "\n")
     script.chmod(0o700)

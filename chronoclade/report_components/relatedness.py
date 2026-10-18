@@ -15,7 +15,12 @@ def scope_summary(parameters, audit, *, provider=None, records=(), analysis=None
     context = parameters.get('context_lin_level', audit.get('context_lin_level'))
     display = parameters.get('display_lin_level', 7)
     policy = provider.get('policy') or {}
-    if st_only:
+    if partition == 'profiles':
+        scopes = ('Saved search: available provider species/ST categories' if provider.get('pools')
+                  else 'Search: not run in this stage')
+        scopes += (' · Analysis: species and compatible cgMLST scheme'
+                   ' · Groups: measured profile distances; provider labels optional.')
+    elif st_only:
         scopes = 'Search: not run · Analysis: supplied profiles by species/ST · Colours: lineage unassigned.'
     elif hc:
         scopes = f'Saved search: {hc}' if provider.get('pools') else 'Search: not run in this stage'
@@ -33,7 +38,8 @@ def scope_summary(parameters, audit, *, provider=None, records=(), analysis=None
         discovered = sum(p.get('discovered', 0) for p in provider['pools'])
         chain.append(f'{discovered:,} ST candidate records')
         if provider.get('accessible_matches') is not None:
-            chain.append(f"{provider['accessible_matches']:,} prefix-matching source records")
+            label = 'compatible source records' if partition == 'profiles' else 'prefix-matching source records'
+            chain.append(f"{provider['accessible_matches']:,} {label}")
     stages = [(counts.get('prepared_context'), 'prepared public comparisons'),
               (counts.get('scope_context'), 'within context scope')]
     if records:
@@ -69,6 +75,11 @@ def scope_summary(parameters, audit, *, provider=None, records=(), analysis=None
               'a tight pairwise cluster; nearest neighbours use actual distances within this scope.')
     if st_only:
         caveat = 'Only supplied profiles are analysed; no lineage assignment required. No public search or lineage groups are inferred.'
+    elif partition == 'profiles':
+        caveat = ('cgLIN/HierCC codes and ST assignments are not required for local profile analysis. '
+                  'Nearest neighbours use measured cgMLST distances within the available compatible pool. '
+                  'Public retrieval depends on provider categories and credentials; '
+                  'zero retrieved context does not establish that no relatives exist.')
     return ('<div class="comparison-scope"><p><strong>Comparison scope.</strong> ' + escape(scopes) + '</p>'
             + ('<p>' + escape(count_text) + '</p>' if count_text else '')
             + disclosure + '<p class="muted">' + escape(caveat) + '</p></div>')

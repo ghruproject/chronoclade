@@ -346,6 +346,8 @@ def run_tree(
             network,
             rows,
             job / "corrected_tree.svg",
+            nearest_ids=selection.get("required_nearest_context_ids", ()),
+            nearest_label="Mandatory cgMLST-guide neighbours (ties retained)",
             title="Recombination-adjusted selected-sample tree",
             distance_label="Substitutions/site",
             dating_note="Collection dates are metadata; this tree is not time scaled.",

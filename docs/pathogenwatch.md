@@ -16,9 +16,11 @@ Klebsiella pneumoniae capability.
 
 The provider also supports *E. coli* (organism `562`), whose advertised analyses
 include `HierCC`. Public genome details do not expose allele profiles or HierCC
-codes directly. Use a frozen `--public-typing` import or native typing of the
-bounded downloaded pool, rather than assuming an undocumented HierCC download
-job. `--scheme ecoli` queries the primary `mlst` field. See
+codes directly. The context workflow uses the separately advertised analysis
+exports for cgMLST and any optional lineage annotations; it validates the
+provider's capabilities before requesting an export. A frozen `--public-typing`
+import or native typing can also supply evidence. The primary ST search uses
+the `mlst` field. See
 [new assembly typing and HierCC](query-typing.md) for refinement.
 
 `POST /api/search/genomes` takes an explicit `organismId`, the ST array in the
@@ -69,8 +71,32 @@ and explicit completeness. `freeze_catalogue()` fetches all detailed records
 with bounded concurrent requests, retries transient HTTP/transport failures and
 writes the completed JSON atomically. Non-transient failures, access denial and
 contract mismatches raise `PathogenwatchError`; a partial acquisition is never
-written as a complete catalogue. Failed freezes must be retried, since upstream
-search does not promise a transactionally stable snapshot.
+written as a complete catalogue.
+
+An interrupted freeze retains a sibling `st147_catalogue.json.retrieval/`
+directory with atomic, checksummed search-page and genome-detail receipts.
+Continue the exact capture with:
+
+```python
+snapshot = client.freeze_catalogue(
+    "st147_catalogue.json", organism_id="573", st="147",
+    mlst_scheme="mlst", resume=True,
+)
+```
+
+Resume validates the base URL, species/ST query, page size and any expected
+preflight count, then checks every reused response and normalizes raw details
+again. Changed settings, corrupt receipts and concurrent writers are refused.
+The complete catalogue is published only after every page and detail reconciles.
+An optional `expected_count` binds retrieval to the count observed during
+preflight and refuses a changed count before fetching details.
+
+Upstream search does not promise a transactionally stable snapshot. A resumed
+capture can span multiple times even when the total remains unchanged; provenance
+records its start time, completion time and reused-page/detail counts. The
+receipts make the capture auditable, not transactionally isolated. Use a fresh
+destination for an independent current capture and preserve the interrupted
+evidence when investigating upstream changes.
 
 The envelope has `schema_version=1`, `rows`, `raw_search_pages`, `raw_details`
 keyed by UUID, `raw_supported_organisms`, `deduplication_audit` and `provenance`.

@@ -1,8 +1,31 @@
 """The existing report shell presents saved profile partitions and selections."""
 
 import html
+from pathlib import Path
 from chronoclade.report_components.tables import write_report_html
 from chronoclade.report_components.styles import report_styles
+from chronoclade.report_components.profile_summary import _read_json, _selection_path
+
+
+def _tree_eligibility(row, output):
+    """Read the exact saved selections rather than assuming the pool was selected."""
+    path = Path(output) / row["ensemble"]
+    ensemble = _read_json(path) or {}
+    counts = []
+    for run in ensemble.get("selections", []):
+        selection_path = _selection_path(path.parent, run)
+        selection = _read_json(selection_path) if selection_path else None
+        if selection is None:
+            return "Unknown: inspect selection manifests"
+        selected = set(selection.get("selected_sample_ids") or [])
+        if not selected:
+            selected = set(selection.get("query_ids") or []) | set(selection.get("selected_context_ids") or [])
+        counts.append(len(selected))
+    if not counts:
+        return "Unknown: no readable selections"
+    eligible = sum(count >= 3 for count in counts)
+    return (f"Eligible: {eligible}/{len(counts)} selections (minimum 3 genomes)" if eligible == len(counts)
+            else f"Blocked: {len(counts) - eligible}/{len(counts)} selections have fewer than 3 genomes")
 
 
 def write_partition_index(
@@ -11,7 +34,8 @@ def write_partition_index(
 ):
     items = "".join(
         f"<tr><td>{html.escape(row['label'])}</td><td>{row['input_count']}</td>"
-        f'<td>{row["context_count"]}</td><td><a href="{html.escape(row["report"])}">Report</a> · '
+        f'<td>{row["context_count"]}</td><td>{html.escape(_tree_eligibility(row, output))}</td>'
+        f'<td><a href="{html.escape(row["report"])}">Report</a> · '
         f'<a href="{html.escape(row["ensemble"])}">Selections</a></td></tr>'
         for row in products
     )
@@ -63,6 +87,12 @@ def write_partition_index(
         context_description = html.escape(
             audit.get("context_scope", "Supplied inputs only; no public context retrieval or lineage refinement")
         )
+    elif partition_by == "profiles":
+        context_description = (
+            "Inputs are grouped by species and compatible cgMLST scheme. "
+            "cgLIN/HierCC codes are optional annotations; nearest neighbours use measured profile distances. "
+            "Context counts describe compatible prepared profiles before assembly subsampling."
+        )
     else:
         context_description = (
             "Context counts describe compatible profiles in the prepared dataset, before assembly subsampling. "
@@ -78,7 +108,7 @@ def write_partition_index(
         f"<p>{records_count} samples; {len(products)} disjoint blocks. Status: {status}.</p>"
         f"<p>{context_description}</p>"
         f"{rendered_scope}{scope_notice}"
-        "<table><thead><tr><th>Block</th><th>Input</th><th>Context</th><th>Outputs</th></tr></thead>"
+        "<table><thead><tr><th>Block</th><th>Input</th><th>Context</th><th>Tree eligibility</th><th>Outputs</th></tr></thead>"
         f"<tbody>{items}</tbody></table>{count_table}<h2>Unresolved inputs</h2><ul>{unresolved or '<li>None</li>'}</ul>"
         '<p><a href="files/index.html">Browse output files by block</a> · '
         '<a href="README.md">Output folder guide</a> · '

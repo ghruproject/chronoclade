@@ -4,6 +4,7 @@ from collections import Counter
 from html import escape
 from pathlib import Path
 import json
+from math import isfinite
 from os.path import relpath
 from urllib.parse import quote
 
@@ -13,6 +14,73 @@ from chronoclade.location_network.widget import interactive_network_html, widget
 from chronoclade.location_network.state_selector import state_network_selector, state_network_panel
 from chronoclade.report_components.profile_summary import _reported
 from chronoclade.sample_labels import sample_label
+
+
+def _root_to_tip_annotation(assessment):
+    rate = ((assessment.get("temporal") or {}).get("observed") or {}).get("rate")
+    nonpositive = isinstance(rate, (int, float)) and not isinstance(rate, bool) and rate <= 0
+    return (assessment.get("supported") is not True or nonpositive,
+            'The plotted "root date" is an extrapolated regression intercept, '
+            'not an accepted MRCA estimate.')
+
+
+def _figure_title(name, label, assessment):
+    if Path(name).name != "root_to_tip_regression.svg":
+        return label
+    unsupported, explanation = _root_to_tip_annotation(assessment)
+    return label + ". " + ("Dating unsupported. " if unsupported else "") + explanation
+
+
+def _figure_html(name, label, assessment):
+    """Distinguish a raw regression intercept from a supported dating result."""
+    caption = escape(label)
+    alternative = _figure_title(name, label, assessment)
+    if Path(name).name == "root_to_tip_regression.svg":
+        unsupported, explanation = _root_to_tip_annotation(assessment)
+        if unsupported:
+            caption += (
+                '<p class="diagnostic-warning" role="alert"><strong>Diagnostic only: '
+                'dating unsupported.</strong> ' + escape(explanation)
+                + ' Do not use it as an ancestor date or compare it with published '
+                'dating results.</p>'
+            )
+        else:
+            caption += '<p>' + escape(explanation) + ' Final dating results are reported separately.</p>'
+    image = f'<img src="{escape(name, quote=True)}" alt="{escape(alternative, quote=True)}">'
+    if Path(name).name == "root_to_tip_regression.svg":
+        image = (f'<a href="{escape(name, quote=True)}" '
+                 f'data-figure-title="{escape(alternative, quote=True)}">{image}</a>')
+    return f'<figure>{image}<figcaption>{caption}</figcaption></figure>'
+
+
+def _temporal_screen_summary(assessment):
+    """Display saved permutation evidence without changing the dating decision."""
+    temporal = assessment.get("temporal") or {}
+    successful = temporal.get("successful_randomisations")
+    requested = temporal.get("requested_randomisations")
+    p_value = temporal.get("p_value_r_squared")
+    threshold = assessment.get("p_value_threshold")
+    def count(value):
+        return type(value) is int and value >= 0
+
+    def number(value):
+        return type(value) in (int, float) and isfinite(value)
+    parts = []
+    if number(p_value) and 0 <= p_value <= 1:
+        value = format(p_value, ".6g")
+        if count(successful):
+            denominator = successful + 1
+            numerator = p_value * denominator
+            if float(numerator).is_integer():
+                value += f" ({int(numerator)}/{denominator})"
+        parts.append("Empirical root-to-tip p: " + value)
+    if number(threshold):
+        parts.append("threshold: " + format(threshold, ".6g"))
+    if count(successful) and count(requested):
+        parts.append(f"successful permutations: {successful}/{requested}")
+    if not parts:
+        return ""
+    return '<p class="temporal-screen-summary">' + escape("; ".join(parts)) + '.</p>'
 
 
 def write_report(
@@ -49,8 +117,9 @@ def write_report(
         )
         + "</tbody></table>"
     )
+    assessment = result["temporal_assessment"]
     plots = "".join(
-        f'<figure><img src="{escape(name, quote=True)}" alt="{escape(label, quote=True)}"><figcaption>{escape(label)}</figcaption></figure>'
+        _figure_html(name, label, assessment)
         for name, label in figures
         if (path.parent / name).is_file()
     )
@@ -74,11 +143,13 @@ def write_report(
             )
         plots += "</tbody></table></div>"
     downloads = "".join(
-        f'<li><a href="{escape(p.relative_to(path.parent).as_posix(), quote=True)}">{escape(p.name)}</a></li>'
+        f'<li><a href="{escape(p.relative_to(path.parent).as_posix(), quote=True)}"'
+        + (f' data-figure-title="{escape(_figure_title(p.name, "Root-to-tip temporal diagnostic", assessment), quote=True)}"'
+           if p.name == "root_to_tip_regression.svg" else "")
+        + f' download>{escape(p.name)}</a></li>'
         for p in sorted(path.parent.rglob("*"))
         if p.is_file() and p != path and p.name != "job.json"
     )
-    assessment = result["temporal_assessment"]
     coherence = result.get("coherence_screening") or {}
     coherence_warning = (
         '<p role="alert"><strong>Coherence warning:</strong> '
@@ -163,7 +234,8 @@ def write_report(
         verdict_title = assessment_title
     verdict = (
         f'<div class="verdict {verdict_class}">'
-        f"<strong>{escape(verdict_title)}</strong><p>{escape(assessment['reason'])}</p></div>"
+        f"<strong>{escape(verdict_title)}</strong><p>{escape(assessment['reason'])}</p>"
+        + _temporal_screen_summary(assessment) + "</div>"
     )
     report_links = "".join(
         f'<a href="{escape(quote(relpath(target, path.parent), safe="/"), quote=True)}">{escape(label)}</a>'

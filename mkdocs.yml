@@ -49,6 +49,7 @@ nav:
       - Independent time stage: time-stage.md
       - Pasteur reference authorisation: pasteur-auth.md
   - Apple Silicon Klebsiella walkthrough: mac-klebsiella-walkthrough.md
+  - Linux and SLURM Klebsiella walkthrough: linux-klebsiella-walkthrough.md
   - Pathogenwatch context:
       - Frozen metadata: pathogenwatch.md
       - cgLIN assignments: cglin.md
