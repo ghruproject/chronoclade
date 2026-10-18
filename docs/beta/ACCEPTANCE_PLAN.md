@@ -59,7 +59,6 @@ Do not combine different source snapshots into one purported run.
   Earlier Linux ARM64 fixture checks do not establish either.
 - Dynamic, time-aware cluster cutoffs require independent epidemiological
   benchmarks. No validated automatic cutoff or geographic origin is claimed.
-- Protein/DNA embeddings remain parked research, outside the supported workflow.
 - Historical typing-reference differences, sampling bias and conditional dating
   uncertainty remain limitations of scientific interpretation.
 - Real human usability feedback is a follow-up, not a blocker for this beta.
