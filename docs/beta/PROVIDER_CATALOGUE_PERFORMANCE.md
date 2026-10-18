@@ -38,9 +38,8 @@ profile-context provider reuses `public_0.json` through `--resume` **within its
 own matching retrieval workspace**. Its execution fingerprint correctly prevents
 reusing completed numerical context after a package/source change.
 
-The older `prepare-context` command already exposes `--catalogue` and
-`--refresh-catalogue`, using the same validator. However, modern `cgmlst
---fetch-context` does not expose a supplied catalogue or shared metadata cache.
+The supported `cgmlst --fetch-context` command does not expose a supplied
+catalogue or shared metadata cache.
 Its `--public-typing` accepts allele/lineage annotations, not an entire catalogue.
 There is no normal flag to seed this run with the earlier complete frozen ST258
 catalogue without modifying internal workspace files. The current acceptance

@@ -115,9 +115,9 @@ model uncertainty from variation between alternative selections; whole-selection
 roots can describe different ancestors. See [tree](tree-stage.md) and
 [time](time-stage.md) for the recorded checks and comparison policies.
 
-## Older reports
+## Historical reports
 
-The older `run --mode fast|full|finish` interface uses different stage paths and
-may retain older report sections. See [the staged workflow](staged-workflow.md).
-Preserved PhiPack results belong to the earlier assembly-screen workflow, not the
-current independent cgMLST module.
+Preserved reports may include PhiPack and earlier assembly-screen sections.
+Those sections describe their original run and are not produced by the current
+independent cgMLST module. Interpret saved results using the methods and evidence
+bundled with that run.

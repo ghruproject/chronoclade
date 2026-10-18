@@ -2,9 +2,11 @@
 
 Reviewed 10 October 2026 in the `codex/shared-suite-foundations` checkout.
 Updated 11 October 2026 to reflect the parked embedding work and four active stages.
-This is a strict source-level architecture audit and implementation guide. The
-four-stage design is in [tool-suite-design.md](tool-suite-design.md); this review
-does not certify that those commands or their scientific workflows are complete.
+This is a historical strict source-level architecture audit. Current usage is
+documented in [the independent workflow](independent-suite.md); this review
+records design rationale and does not serve as a command guide or certify that
+every earlier acceptance item passed. The four-stage design is in
+[tool-suite-design.md](tool-suite-design.md).
 
 ## Verdict and scope
 
@@ -49,11 +51,12 @@ and full modes, then snapshots reports. `_run_lineage` in `lineage.py` branches
 between corrected, fast and full behaviour and owns both tree construction and
 dating. The CLI exposes the legacy runner rather than independent stage contracts.
 
-The simplification is to publish `dataset.json`, partition/selection manifests,
-`tree.json` plus its temporal assessment, and an independent time result.
-Tree reads a saved selection; time reads a saved tree. Reports are written once
-inside the owning stage's namespace. This removes orchestration-level scientific
-mode checks rather than moving them into a new dispatcher.
+The intended simplification was to publish `dataset.json`, partition/selection
+manifests, `tree.json` plus its temporal assessment, and an independent time
+result. The current user workflow is documented in
+[independent-suite.md](independent-suite.md). This review records the design
+rationale and historical source audit; it is not a command guide or a statement
+that every implementation acceptance item has passed.
 
 `_snapshot_stage` is concrete deletion potential: recursive extension filters,
 suffix/date exclusions, path relocation, HTML regex rewriting and copied bundles

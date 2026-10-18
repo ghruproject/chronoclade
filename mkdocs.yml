@@ -47,7 +47,6 @@ nav:
       - Large cgMLST blocks: cgmlst-scale.md
       - Independent tree stage: tree-stage.md
       - Independent time stage: time-stage.md
-      - Profile-first stages: staged-workflow.md
   - Worked example: worked-example.md
   - Apple Silicon Klebsiella walkthrough: mac-klebsiella-walkthrough.md
   - Klebsiella beta example: beta/WORKED_EXAMPLE.md

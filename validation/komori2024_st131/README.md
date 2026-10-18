@@ -1,5 +1,9 @@
 # Komori 2024 ST131-H30 validation
 
+> Historical execution record. Commands below describe a retired interface and
+> are preserved as evidence, not current instructions. For new analyses, use
+> [the supported four-stage workflow](../../docs/independent-suite.md).
+
 This validation uses the 96 *Escherichia coli* ST131-H30 clade C0/C1
 chromosomes analysed in Figure 3 of Komori et al. (2024),
 doi:[10.1128/aac.00817-24](https://doi.org/10.1128/aac.00817-24). The paper
