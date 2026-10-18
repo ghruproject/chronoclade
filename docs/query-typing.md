@@ -1,18 +1,21 @@
 # Typing new query assemblies
 
-Context discovery starts with the species and seven-locus MLST ST, because these
-can be queried in Pathogenwatch. The resulting same-ST catalogue is the possible
-comparison pool. Compatible cgMLST profiles and genetic-group assignments then
-prioritise a bounded pool, with 25% of its budget reserved for country/year-balanced
-background. SKA screens the resulting genomes before the final corrected tree is
-built. A code alone is not a substitute for the final genetic comparison.
+Prepare the input assemblies first, then use the cgMLST module to discover
+public comparisons. Species and seven-locus MLST ST identify the candidate
+Pathogenwatch pool; compatible cgMLST profiles and LIN groups refine it. The
+cgMLST report analyses the retained profiles and selects representatives for
+the tree module. Context assemblies are acquired for the selected SNP-tree
+analysis. A LIN code alone does not establish how close two genomes are.
+
+The walkthrough below targets Klebsiella. E. coli/HierCC acceptance is deferred
+while its assignment-reference source is being resolved.
 
 ## Install the tools
 
 Install [uv](https://docs.astral.sh/uv/getting-started/installation/) first, then run:
 
 ```bash
-pixi run chronoclade setup-typing --species klebsiella --species ecoli
+pixi run chronoclade setup-typing --species klebsiella
 ```
 
 This installs pinned releases of Pathogenwatch's own tools in an isolated local
@@ -29,18 +32,25 @@ those resources are ready. The default directory is
 To download and index publicly available cgMLST alleles as well:
 
 ```bash
-pixi run chronoclade setup-typing --species klebsiella --species ecoli --prepare-db
+pixi run chronoclade setup-typing --species klebsiella --prepare-db
 ```
 
-Database downloads and indexing can be substantial. Without database credentials,
-the upstream downloader restricts PubMLST/Pasteur data to publicly redistributable
-records through 31 December 2024. Current LIN and HierCC reference builds need
-their own upstream credentials; a Pathogenwatch API token does not grant this
-access. Supply protected files when building the references:
+Database downloads and indexing can be substantial. Without cached Pasteur
+authorization, Klebsiella cgMLST downloads use the upstream public,
+redistributable route. To use authenticated Pasteur cgMLST records, supply the
+protected client-key file and first place a valid `klebsiella:access` or
+`klebsiella:session` token in the setup's existing private
+`credential-cache/plincer.json`. `setup-typing` copies that cache to a separate
+private downloader cache and does not start browser authorization or pass account
+passwords. The setup report records the route used and the actual downloaded
+scheme/version; it does not infer a current cutoff from the downloader's public
+mode. Current LIN and HierCC reference builds need their own upstream
+credentials; a PathogenWatch API token does not grant this access. Supply
+protected files when building the references:
 
 ```bash
 pixi run chronoclade setup-typing --species klebsiella --prepare-db \
-  --pasteur-secrets /protected/pasteur-secrets.json
+  --pasteur-secrets /protected/pasteur-client-key.txt
 pixi run chronoclade setup-typing --species ecoli --prepare-db \
   --enterobase-key-file /protected/ecoli-api.key
 ```
@@ -55,28 +65,65 @@ query configuration or analysis outputs.
 Use the query configuration written by setup, once its readiness checks pass:
 
 ```bash
-pixi run chronoclade type-queries focal.csv \
+pixi run --frozen --environment default chronoclade prepare focal.csv \
+  --input-kind assemblies \
   --typing-config ~/.local/share/chronoclade/typing/query_config.json \
-  --output query_typing
+  --out prepared
 
-pixi run chronoclade prepare-context focal.csv --scheme klebsiella \
+pixi run --frozen --environment default chronoclade cgmlst prepared/dataset.json \
+  --fetch-context \
   --typing-config ~/.local/share/chronoclade/typing/query_config.json \
-  --cglin-depth 7 --output context
+  --out cgmlst
 ```
 
-`--typing-config` types both the focal assemblies and the bounded downloaded
-public pool with the same frozen databases. This supports new assemblies whose
-identifiers are absent from Pathogenwatch. After download, lineage/profile
-refinement selects at most `--max-context` genomes for SKA, preserving its
-background budget. It does not type every genome in the full public database.
+The input CSV needs the species and a verified seven-locus MLST ST for public
+context discovery. Native cgMLST typing does not calculate that ST. Preparation
+types new input assemblies using the configured caller and lineage reference.
+During context discovery, the same reference configuration normalises compatible
+public typing where required. Public profiles and metadata are retrieved at this
+stage; representative SNP-tree selection is a separate step. See the
+[cgMLST module](cgmlst.md) for explicit context scope and selection controls.
+
+`type-queries` remains available when a separate native-typing output is useful:
+
+```bash
+pixi run --frozen --environment default chronoclade type-queries focal.csv \
+  --typing-config ~/.local/share/chronoclade/typing/query_config.json \
+  --output query_typing
+```
 
 Alternatively, use `--query-typing query_typing/query_typing.json` to import
 existing results whose sample identifiers, species and assembly SHA256 hashes
 match the focal files. `--public-typing` imports a frozen JSON list or an
 `assignments` envelope keyed by exact Pathogenwatch `source_genome_id`. It can
 contain cgMLST profiles, cgLIN assignments or HierCC assignments. Importing a
-query file alone does not type public assemblies; only compatible public
-annotations can refine the pre-download pool in that mode.
+query file alone does not make public profiles reference-compatible; context
+selection still requires compatible public typing.
+
+## Profiles without a lineage reference
+
+When the cgMLST caller index is ready but the LIN/HierCC background is unavailable,
+request only the allele profiles explicitly:
+
+```bash
+pixi run chronoclade type-queries focal.csv --profiles-only \
+  --typing-config ~/.local/share/chronoclade/typing/query_config.json \
+  --output focal-profiles
+pixi run chronoclade prepare focal.csv --input-kind assemblies \
+  --query-typing focal-profiles/query_typing.json --out prepared
+pixi run chronoclade cgmlst prepared/dataset.json --partition-by st \
+  --out input-only-cgmlst
+```
+
+This uses the same pinned caller, parser, assembly identity checks and database
+provenance as full typing. Missing, novel and ambiguous calls stay distinct.
+The saved mode is `profiles-only`; lineage assignment is `not_requested`, and
+no LIN/HierCC group is inferred. Full typing still requires a verified assignment
+reference. Results from the two modes cannot silently reuse each other's cache.
+
+`--partition-by st` is an explicit analysis of supplied inputs grouped by species,
+ST and compatible profile scope. It does not discover public context or replace
+an HC/LIN assignment. Standard lineage partitioning remains the default.
 
 ## Klebsiella LIN
 
@@ -94,6 +141,28 @@ identified as export provenance rather than a database release. Independent
 unversioned exports are not silently combined.
 
 ## E. coli HierCC
+
+`setup-typing --species ecoli --prepare-db` now installs the public
+[EnteroBase Escherichia.cgMLSTv1 allele catalogue](https://enterobase.warwick.ac.uk/schemes/Escherichia.cgMLSTv1/)
+through a frozen, resumable directory index. See the
+[public scheme inventory](beta/ENTEROBASE_SUPPORT.md) for the distinction between
+available allele definitions and validated native organism support. The current inspected catalogue has
+2,513 loci; setup derives the count from the snapshot rather than assuming a
+fixed count. It does not download the large profile table merely to read its
+header. The original compressed allele files remain unchanged; a separate caller
+view records numeric-header normalization, excluded non-ACGT alleles and hashes.
+The caller database version is `snapshot:<reference SHA256>`, not an inferred
+release date.
+
+This installs **allele definitions and the cgMLST caller index**, not a HierCC
+background. The public profile table has no HierCC columns, and the advertised
+`hierBG` files returned access denied during testing. Upstream hclink database
+builds still require their documented EnteroBase API access. Setup reports caller
+and lineage readiness separately. Full native E. coli typing remains blocked
+until a compatible HierCC reference and verified caller/reference compatibility
+are available; a freshly downloaded caller snapshot is not silently declared
+compatible with an older dated hclink database.
+
 
 ```bash
 pixi run chronoclade prepare-context ecoli-focal.csv --scheme ecoli \

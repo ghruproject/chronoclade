@@ -59,6 +59,26 @@ def test_normalization_nested_country_qc_accessions():
     assert row["date_end"] == "2019-12-31"
     assert row["source_qc"] is True
     assert "completeness" not in row
+    assert row["city"] is None and row["region"] is None
+
+
+def test_normalization_preserves_only_explicit_city_and_region_metadata():
+    record = detail()
+    record["metadata"] = {
+        "Country": "IN",
+        "City": "Oxford",
+        "Region": "Oxfordshire",
+        "NUTS2": "UKJ1",
+    }
+    row = normalize_record(search_row(), record, organism_id="573", st="147")
+    assert row["city"] == "Oxford"
+    assert row["region"] == "Oxfordshire"
+    record["metadata"] = {"Country": "IN", "NUTS2": "UKJ1"}
+    row = normalize_record(search_row(), record, organism_id="573", st="147")
+    assert row["city"] is None and row["region"] is None
+    record["metadata"] = {"Country": "IN", "City": "not provided", "Region": "Unknown"}
+    row = normalize_record(search_row(), record, organism_id="573", st="147")
+    assert row["city"] is None and row["region"] is None
 
 
 @pytest.mark.parametrize(

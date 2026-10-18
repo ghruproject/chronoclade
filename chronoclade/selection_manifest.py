@@ -152,6 +152,16 @@ def _sources(manifest, base):
             source.get("partition_block_id"),
             pool,
         )
+    policy = manifest.get("selection_policy")
+    if policy == "fixed_all_inputs":
+        if manifest.get("schema") != SELECTION_SCHEMA:
+            raise WorkflowError("Fixed input policy requires an individual selection manifest")
+        from chronoclade.fixed_input_selection import validate_source
+
+        validate_source(manifest, base, dataset)
+        return dataset, None
+    if policy is not None:
+        raise WorkflowError("Unsupported selection_policy")
     evidence = _resolve(
         base, source.get("distance_evidence"), "source.distance_evidence", external=True
     )
@@ -160,11 +170,15 @@ def _sources(manifest, base):
     if not isinstance(source.get("distance_definition"), str) or not source["distance_definition"]:
         raise WorkflowError("source.distance_definition is required")
     distance_data = _read(evidence)
-    if distance_data.get("method") != source["method"] or distance_data.get("distance_definition") != source["distance_definition"]:
+    if (
+        distance_data.get("method") != source["method"]
+        or distance_data.get("distance_definition") != source["distance_definition"]
+    ):
         raise WorkflowError("source.distance_evidence must preserve its method and definition")
     dataset_ids = set(dataset.sample_ids)
     if distance_data.get("schema") == "chronoclade.binary_distances":
         from chronoclade.matrix_distances import BinaryDistanceEvidence
+
         try:
             matrix = BinaryDistanceEvidence(evidence)
         except (ValueError, OSError, KeyError, TypeError, AttributeError) as error:
@@ -179,7 +193,9 @@ def _sources(manifest, base):
                 not isinstance(row.get(field), str) or row[field] not in dataset_ids
                 for field in ("sample_id_1", "sample_id_2")
             ):
-                raise WorkflowError("source.distance_evidence contains identifiers outside source.dataset")
+                raise WorkflowError(
+                    "source.distance_evidence contains identifiers outside source.dataset"
+                )
     return dataset, evidence
 
 
@@ -193,6 +209,11 @@ def load_selection_manifest(path: str | Path) -> dict:
     manifest = _read(path)
     _header(manifest, SELECTION_SCHEMA)
     dataset, _ = _sources(manifest, path.parent)
+    if manifest.get("selection_policy") == "fixed_all_inputs":
+        from chronoclade.fixed_input_selection import validate_selection
+
+        validate_selection(manifest, dataset)
+        return manifest
     query = _ids(manifest, "query_ids")
     contexts = _ids(manifest, "selected_context_ids")
     selected = _ids(manifest, "selected_sample_ids")
@@ -270,7 +291,9 @@ def load_selection_manifest(path: str | Path) -> dict:
         raise WorkflowError("representative_reserve must be a non-negative integer")
     effective_budget = max(budget, len(set(mandatory) - set(query)) + reserve)
     if manifest.get("effective_context_budget", budget + expected_overrun) != effective_budget:
-        raise WorkflowError("effective_context_budget disagrees with the explicit representative reserve")
+        raise WorkflowError(
+            "effective_context_budget disagrees with the explicit representative reserve"
+        )
     if len(contexts) > effective_budget:
         raise WorkflowError("Selected optional contexts exceed context_budget")
     if manifest.get("selected_contexts") != len(contexts) or manifest.get(
@@ -296,33 +319,57 @@ def load_selection_manifest(path: str | Path) -> dict:
             or coverage.get("selected_sample_ids") != selected
             or coverage.get("selected_count") != len(selected)
         ):
-            raise WorkflowError("representative_coverage provenance disagrees with the full selection pool")
-        coverage_path = _resolve(path.parent, coverage.get("artifact"), "representative_coverage.artifact")
+            raise WorkflowError(
+                "representative_coverage provenance disagrees with the full selection pool"
+            )
+        coverage_path = _resolve(
+            path.parent, coverage.get("artifact"), "representative_coverage.artifact"
+        )
         try:
             with coverage_path.open(encoding="utf-8", newline="") as stream:
                 reader = csv.DictReader(stream)
                 if reader.fieldnames != [
-                    "sample_id", "selected", "candidate_representatives", "comparable_representatives",
-                    "coverage_status", "ranking_metric", "nearest_value", "nearest_tie_count",
-                    "nearest_selected_ids", "nearest_tie_evidence", "nearest_distance",
+                    "sample_id",
+                    "selected",
+                    "candidate_representatives",
+                    "comparable_representatives",
+                    "coverage_status",
+                    "ranking_metric",
+                    "nearest_value",
+                    "nearest_tie_count",
+                    "nearest_selected_ids",
+                    "nearest_tie_evidence",
+                    "nearest_distance",
                 ]:
-                    raise WorkflowError("representative_coverage artifact has an unsupported column schema")
+                    raise WorkflowError(
+                        "representative_coverage artifact has an unsupported column schema"
+                    )
                 coverage_rows = list(reader)
         except OSError as error:
             raise WorkflowError(f"Cannot read representative_coverage artifact: {error}") from error
         row_ids = [row["sample_id"] for row in coverage_rows]
         if row_ids != expected_ids:
-            raise WorkflowError("representative_coverage artifact must cover every pool ID exactly once in sorted order")
+            raise WorkflowError(
+                "representative_coverage artifact must cover every pool ID exactly once in sorted order"
+            )
         for row in coverage_rows:
             if row["selected"] not in {"True", "False"} or (row["selected"] == "True") != (
                 row["sample_id"] in selected
             ):
-                raise WorkflowError("representative_coverage selected labels disagree with the manifest")
-        status_counts = dict(sorted(Counter(row["coverage_status"] for row in coverage_rows).items()))
+                raise WorkflowError(
+                    "representative_coverage selected labels disagree with the manifest"
+                )
+        status_counts = dict(
+            sorted(Counter(row["coverage_status"] for row in coverage_rows).items())
+        )
         if coverage.get("coverage_status_counts") != status_counts:
             raise WorkflowError("representative_coverage status counts disagree with its artifact")
-        if coverage.get("comparable_sample_count") != sum(row["nearest_value"] != "" for row in coverage_rows):
-            raise WorkflowError("representative_coverage comparable count disagrees with its artifact")
+        if coverage.get("comparable_sample_count") != sum(
+            row["nearest_value"] != "" for row in coverage_rows
+        ):
+            raise WorkflowError(
+                "representative_coverage comparable count disagrees with its artifact"
+            )
     return manifest
 
 
@@ -394,12 +441,16 @@ def write_selection_ensemble(
     evidence = read_distance_evidence(analysis)
     dataset_ids = set(dataset.sample_ids)
     from chronoclade.matrix_distances import BinaryDistanceEvidence
+
     binary = isinstance(evidence, BinaryDistanceEvidence)
     if binary:
         invalid_ids = not set(evidence.sample_ids).issubset(dataset_ids)
     else:
-        invalid_ids = any(row.get(field) not in dataset_ids for row in evidence.records
-                          for field in ("sample_id_1", "sample_id_2"))
+        invalid_ids = any(
+            row.get(field) not in dataset_ids
+            for row in evidence.records
+            for field in ("sample_id_1", "sample_id_2")
+        )
     if invalid_ids:
         raise WorkflowError("Distance evidence contains identifiers outside source.dataset")
     selections, ensemble = select_context_ensemble(
@@ -441,14 +492,21 @@ def write_selection_ensemble(
             copied_paths = {}
             for kind, spec in evidence.paths.items():
                 filename = kind + ".npy"
-                copy_evidence_snapshot(evidence.manifest_path.parent / spec["path"], staging / filename)
+                copy_evidence_snapshot(
+                    evidence.manifest_path.parent / spec["path"], staging / filename
+                )
                 copied_paths[kind] = {"path": filename, "sha256": file_sha256(staging / filename)}
             descriptor["paths"] = copied_paths
             write_json(evidence_path, descriptor)
         else:
-            write_json(evidence_path, {"method": evidence.method,
-                       "distance_definition": evidence.distance_definition,
-                       "records": list(evidence.records)})
+            write_json(
+                evidence_path,
+                {
+                    "method": evidence.method,
+                    "distance_definition": evidence.distance_definition,
+                    "records": list(evidence.records),
+                },
+            )
         header = {
             "schema_version": SCHEMA_VERSION,
             "software": {"name": "chronoclade", "version": __version__},
@@ -490,19 +548,33 @@ def write_selection_ensemble(
             coverage_path = staging / relative.parent / coverage_filename
             coverage_path.parent.mkdir(parents=True, exist_ok=True)
             coverage_fields = [
-                "sample_id", "selected", "candidate_representatives", "comparable_representatives",
-                "coverage_status", "ranking_metric", "nearest_value", "nearest_tie_count",
-                "nearest_selected_ids", "nearest_tie_evidence", "nearest_distance",
+                "sample_id",
+                "selected",
+                "candidate_representatives",
+                "comparable_representatives",
+                "coverage_status",
+                "ranking_metric",
+                "nearest_value",
+                "nearest_tie_count",
+                "nearest_selected_ids",
+                "nearest_tie_evidence",
+                "nearest_distance",
             ]
             with coverage_path.open("w", encoding="utf-8", newline="") as stream:
                 writer = csv.DictWriter(stream, fieldnames=coverage_fields)
                 writer.writeheader()
                 for row in coverage_rows:
-                    writer.writerow({
-                        **row,
-                        "nearest_selected_ids": json.dumps(row["nearest_selected_ids"], separators=(",", ":")),
-                        "nearest_tie_evidence": json.dumps(row["nearest_tie_evidence"], separators=(",", ":")),
-                    })
+                    writer.writerow(
+                        {
+                            **row,
+                            "nearest_selected_ids": json.dumps(
+                                row["nearest_selected_ids"], separators=(",", ":")
+                            ),
+                            "nearest_tie_evidence": json.dumps(
+                                row["nearest_tie_evidence"], separators=(",", ":")
+                            ),
+                        }
+                    )
             coverage_summary["artifact"] = {
                 "path": coverage_filename,
                 "sha256": file_sha256(coverage_path),
@@ -541,3 +613,14 @@ def write_selection_ensemble(
         shutil.rmtree(staging, ignore_errors=True)
         raise
     return output / "ensemble.json"
+
+
+def write_fixed_input_selection(
+    dataset_manifest, inclusion_evidence, *, output, selection_id="all-inputs", seed=42
+):
+    """Bind all prepared inputs to independent inclusion evidence without ranking."""
+    from chronoclade.fixed_input_selection import write_fixed_input_selection as write
+
+    return write(
+        dataset_manifest, inclusion_evidence, output=output, selection_id=selection_id, seed=seed
+    )

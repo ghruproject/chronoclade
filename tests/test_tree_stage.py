@@ -14,7 +14,10 @@ from chronoclade.stage_artifacts import load_tree_result
 from chronoclade.tree_stage.workflow import run_tree
 
 
-def selection_fixture(tmp_path, *, dates=("2018", "2019", "2020")):
+def selection_fixture(
+    tmp_path, *, dates=("2018", "2019", "2020"), hosts=None,
+    countries=None, regions=None, cities=None,
+):
     rows = []
     for index, ident in enumerate(("q", "c", "d")):
         assembly = tmp_path / (ident + ".fasta")
@@ -25,8 +28,13 @@ def selection_fixture(tmp_path, *, dates=("2018", "2019", "2020")):
                 "origin": "local" if ident == "q" else "context",
                 "species": "Klebsiella pneumoniae",
                 "collection_date": dates[index],
-                "country": "Greece" if ident != "d" else "UK",
+                "country": countries[index] if countries is not None else (
+                    "Greece" if ident != "d" else "UK"
+                ),
                 "assembly_reference": str(assembly),
+                **({"host": hosts[index]} if hosts is not None else {}),
+                **({"region": regions[index]} if regions is not None else {}),
+                **({"city": cities[index]} if cities is not None else {}),
             }
         )
     dataset = PreparedDataset(samples=samples_from_records(rows))
@@ -196,7 +204,12 @@ def test_clustered_assessment_requires_complete_null_refits(tmp_path, monkeypatc
 @pytest.mark.parametrize("flag_stage", ["raw", "corrected", "both"])
 @pytest.mark.parametrize("policy", ["strict", "diagnostic"])
 def test_real_coherence_checks_preserve_flagged_cohort(tmp_path, monkeypatch, flag_stage, policy):
-    """Exercise both real screens with a divergent member and stub only native binaries."""
+    """Raw recombinant-like divergence must reach correction; persistent divergence fails.
+
+    Mirrors the observed Bowers101 raw-only flag without pretending that this
+    synthetic alignment reproduces the historical biology. Both screens use
+    actual pairwise SNP counts; only external binaries are stubbed.
+    """
     from chronoclade.lineage import LineageFiles, _run_core_phylogeny
     from chronoclade.metadata import Sample
     from chronoclade.evidence import read_alignment
@@ -217,15 +230,13 @@ def test_real_coherence_checks_preserve_flagged_cohort(tmp_path, monkeypatch, fl
             files.tree.write_text(files.starting_tree.read_text())
             alignment(files.filtered_alignment, flag_stage in {"corrected", "both"})
     monkeypatch.setattr("chronoclade.lineage._run_command", command)
-    if policy == "strict":
+    if policy == "strict" and flag_stage in {"corrected", "both"}:
         with pytest.raises(WorkflowError, match="outlier"):
             _run_core_phylogeny(files, members, members[0], 1, False, "corrected", coherence_policy=policy)
-        if flag_stage != "corrected":
-            assert "iqtree" not in calls
-        else:
-            assert "ClonalFrameML" in calls
+        assert "ClonalFrameML" in calls
     else:
         tree, alignment, _ = _run_core_phylogeny(files, members, members[0], 1, False, "corrected", coherence_policy=policy)
+        assert "ClonalFrameML" in calls
         assert set(read_alignment(alignment)) == set(ids)
         assert {tip.name for tip in Phylo.read(tree, "newick").get_terminals()} == set(ids)
         for label, path in (("raw", files.coherence_screen), ("corrected", files.clonal_coherence_screen)):
@@ -344,3 +355,33 @@ def test_native_tree_requires_input_for_reference(tmp_path, native_stubs, monkey
     with pytest.raises(WorkflowError, match="requires input genomes"):
         run_tree(selection, output=tmp_path / "tree")
     assert native_stubs == []
+
+
+def test_strict_raw_review_warning_and_policy_version(tmp_path, native_stubs, monkeypatch):
+    """A recombinant raw outlier can pass the unchanged corrected gate, as in Bowers101."""
+    import chronoclade.lineage as lineage
+    import chronoclade.tree_stage.workflow as workflow
+
+    core = lineage._run_core_phylogeny
+
+    def raw_flagged(*args, **kwargs):
+        result = core(*args, **kwargs)
+        audit_path = args[0].coherence_screen.with_suffix(".json")
+        audit = json.loads(audit_path.read_text())
+        audit["flagged_samples"] = ["d"]
+        audit_path.write_text(json.dumps(audit))
+        return result
+
+    monkeypatch.setattr(lineage, "_run_core_phylogeny", raw_flagged)
+    selection, _ = selection_fixture(tmp_path, dates=("", "", ""))
+    first = run_tree(selection, output=tmp_path / "tree")
+    assert first["selected_sample_ids"] == ["q", "c", "d"]
+    assert first["coherence_screening"]["corrected"]["flagged_samples"] == []
+    warning = first["coherence_screening"]["warning"]
+    assert "recombination-filtered screen passed" in warning
+    assert "Diagnostic policy" not in warning
+    assert first["parameters"]["coherence_screen_policy_version"] == "raw_review_corrected_gate_v2"
+    monkeypatch.setattr(workflow, "COHERENCE_SCREEN_POLICY_VERSION", "future_policy")
+    changed = run_tree(selection, output=tmp_path / "tree")
+    assert first["fingerprint"] != changed["fingerprint"]
+    assert len(native_stubs) == 2

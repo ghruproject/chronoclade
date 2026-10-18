@@ -30,6 +30,8 @@ class ContextCandidate:
     mlst_st: str
     collection_date: str = ""
     country: str = ""
+    region: str = ""
+    city: str = ""
     host: str = ""
     isolation_source: str = ""
     genome_size: str = ""
@@ -104,6 +106,8 @@ MANIFEST_FIELDS = [
     "mlst_st",
     "collection_date",
     "country",
+    "region",
+    "city",
     "host",
     "isolation_source",
     "genome_size",
@@ -425,6 +429,9 @@ def write_combined_metadata(
         "assembly",
         "collection_date",
         "location",
+        "country",
+        "region",
+        "city",
         "species",
         "lineage",
         "origin",
@@ -441,6 +448,9 @@ def write_combined_metadata(
                     "assembly": os.path.relpath(sample.assembly, path.parent),
                     "collection_date": sample.collection_date,
                     "location": sample.location,
+                    "country": sample.country,
+                    "region": sample.region,
+                    "city": sample.city,
                     "species": sample.species,
                     "lineage": sample.lineage,
                     "origin": sample.origin,
@@ -455,6 +465,9 @@ def write_combined_metadata(
                     "assembly": os.path.relpath(candidate.assembly, path.parent),
                     "collection_date": candidate.collection_date,
                     "location": candidate.country or "Public_context",
+                    "country": candidate.country,
+                    "region": candidate.region,
+                    "city": candidate.city,
                     "species": candidate.species,
                     "lineage": candidate.lineage,
                     "origin": "context",

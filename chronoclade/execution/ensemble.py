@@ -102,6 +102,10 @@ def _execute(manifest, result, jobs, worker):
     result["completed_runs"] = sum(row["status"] == "complete" for row in result["runs"])
     result["failed_runs"] = sum(row["status"] == "failed" for row in result["runs"])
     write_json(manifest, result)
+    from chronoclade.stage_readme import write_stage_readme
+    stage = 'tree' if manifest.name == 'tree_ensemble.json' else 'time'
+    write_stage_readme(manifest.parent, stage, ensemble=True,
+                       completed_runs=result['completed_runs'])
     return result
 
 
@@ -247,4 +251,6 @@ def run_time_ensemble(tree_ensemble, *, output, ensemble_jobs=1, force=False,
     result["comparison"] = reference(output, comparison_output / "comparison.json")
     result["report"] = reference(output, comparison_output / "report.html")
     write_json(manifest, result)
+    from chronoclade.stage_readme import write_stage_readme
+    write_stage_readme(output, 'time', ensemble=True, report=result['report']['path'])
     return result

@@ -473,6 +473,57 @@ def observed_host(value):
     return value.casefold().capitalize()
 
 
+STATE_FIELDS = ("country", "host", "region", "city")
+_STATE_PLURALS = {"country": "countries", "host": "hosts", "region": "regions", "city": "cities"}
+
+
+def _state_text(value):
+    if isinstance(value, (dict, list, tuple, set)):
+        raise ValueError("A reconstructed state must be a scalar metadata value")
+    text = " ".join(str(value if value is not None else "").split())
+    return None if text.casefold() in {
+        "", "unknown", "none", "na", "n/a", "not provided", "not available", "null", "nan"
+    } else text
+
+
+def observed_state(row, state_field):
+    """Observed categorical value; geographic parents disambiguate place names."""
+    if state_field == "host":
+        return observed_host(row.get(state_field))
+    value = _state_text(row.get(state_field))
+    if value is None or state_field not in {"region", "city"}:
+        return value
+    parents = [_state_text(row.get("country")) or "Unknown country"]
+    if state_field == "city" and (region := _state_text(row.get("region"))):
+        parents.append(region)
+    return " / ".join([*parents, value])
+
+
+def build_optional_state_networks(
+    tree, rows, *, tree_basis, nearest_neighbours=None, provenance=None
+):
+    """Build only observed optional fields, using the same supplied tree/root."""
+    by_id = {row["sample_id"]: row for row in rows}
+    rows = [by_id.get(tip.name, {"sample_id": tip.name}) for tip in tree.get_terminals()]
+    comparisons = [
+        dict(item, query_id=item["focal_sample"], context_id=item["context_sample"],
+             status="matched", snp_differences=item.get("clonal_snps"),
+             shared_called_sites=item.get("callable_sites"))
+        if "focal_sample" in item and "context_sample" in item else item
+        for item in nearest_neighbours or []
+    ]
+    networks = {}
+    for field in STATE_FIELDS[1:]:
+        if not any(observed_state(row, field) is not None for row in rows):
+            continue
+        network = build_state_network(
+            tree, rows, comparisons, state_field=field, tree_basis=tree_basis
+        )
+        network.update(provenance or {})
+        networks[field] = network
+    return networks
+
+
 def build_state_network(tree, rows, nearest_neighbours=None, *, state_field="country", tree_basis):
     """Run the same categorical reconstruction using the requested observed metadata.
 
@@ -481,19 +532,18 @@ def build_state_network(tree, rows, nearest_neighbours=None, *, state_field="cou
     input here changes observations before reconstruction, rather than relabelling
     a location network after it has been inferred.
     """
-    if state_field not in {"country", "host"}:
-        raise ValueError("state_field must be country or host")
-    rows = list(rows)
-    observed = [dict(row, country=observed_host(row.get("host")) if state_field == "host"
-                     else row.get("country")) for row in rows]
+    if not isinstance(state_field, str) or not state_field.strip():
+        raise ValueError("state_field must name a categorical metadata field")
+    by_id = {row["sample_id"]: row for row in rows}
+    rows = [by_id.get(tip.name, {"sample_id": tip.name}) for tip in tree.get_terminals()]
+    observed = [dict(row, country=observed_state(row, state_field)) for row in rows]
     comparisons = nearest_neighbours
-    if state_field == "host":
-        by_id = {row["sample_id"]: row for row in rows}
-        comparisons = [dict(item, country=observed_host(
-            by_id.get(item.get("context_id"), item).get("host")))
+    if state_field != "country":
+        comparisons = [dict(item, country=observed_state(
+            by_id.get(item.get("context_id"), item), state_field))
             for item in nearest_neighbours or []]
     result = build_location_network(tree, observed, comparisons, tree_basis=tree_basis)
-    if state_field == "host":
+    if state_field != "country":
         def generic(value):
             if isinstance(value, dict):
                 return {key.replace("country", "state").replace("countries", "states"): generic(item)
@@ -502,12 +552,19 @@ def build_state_network(tree, rows, nearest_neighbours=None, *, state_field="cou
                 return [generic(item) for item in value]
             return value
         result = generic(result)
-        result["method"] = result["method"].replace("country-state", "host-state")
-        result["interpretation"] = result["interpretation"].replace("country-state", "host-state").replace("Location changes", "Host changes")
-        result["root_selection"] = result["root_selection"].replace("country diversity", "host diversity")
+        result["method"] = result["method"].replace("country-state", f"{state_field}-state")
+        result["interpretation"] = result["interpretation"].replace("country-state", f"{state_field}-state").replace("Location changes", f"{state_field.capitalize()} changes")
+        result["root_selection"] = result["root_selection"].replace("country diversity", f"{state_field} diversity")
     result["state_field"] = state_field
     result["state_label"] = state_field
-    result["state_plural"] = "countries" if state_field == "country" else "hosts"
+    result["state_plural"] = _STATE_PLURALS.get(state_field, f"{state_field} values")
+    if state_field in {"region", "city"}:
+        result["state_label_policy"] = "Known country/region parents included; missing target values remain unknown"
+        result["state_definitions"] = [
+            dict(state=label, **{key: row.get(key) for key in ("country", "region", "city")})
+            for label, row in sorted({observed_state(row, state_field): row for row in rows
+                                      if observed_state(row, state_field) is not None}.items())
+        ]
     result["unknown_state_count"] = result.get("unknown_state_count", result.get("unknown_country_count", 0))
     result["known_state_count"] = len(result["nodes"])
     result["status"] = "available" if len(result["nodes"]) >= 2 else "insufficient_metadata"

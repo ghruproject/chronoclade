@@ -19,12 +19,22 @@ from chronoclade.report_components.forest import date_forest
 from chronoclade.time_stage.comparison_coverage import selection_coverage
 from chronoclade.time_stage.comparison_evidence import (
     anchor_date_evidence,
+    input_target_date_evidence,
     tree_audit,
     shared_anchor_splits,
     split_occurrence,
 )
 from chronoclade.time_stage.comparison_report import write_comparison_report
 from chronoclade.sample_labels import sample_labels
+
+
+def _comparison_computed_with():
+    from chronoclade.execution_provenance import execution_provenance
+
+    return execution_provenance(
+        'time-comparison', 'independent-selection-comparison-v1',
+        software_version=header('time-comparison')['software']['version'],
+    )
 
 
 def _spread(values):
@@ -158,6 +168,9 @@ def compare_time_runs(
             continue
         confidence = result.get("clock_confidence") or {}
         ancestor = anchor_date_evidence(path, result, anchors, output=output)
+        input_ancestor = input_target_date_evidence(
+            path, result, targets, anchors, ancestor, output=output
+        )
         runs.append(
             {
                 **base,
@@ -168,6 +181,8 @@ def compare_time_runs(
                 "root_date": confidence.get("root_numeric_date"),
                 "common_anchor_mrca_date": ancestor["estimate"],
                 "common_anchor_mrca": ancestor,
+                "input_target_mrca": input_ancestor,
+                "input_target_mrca_date": input_ancestor.get("estimate"),
                 "dating_override": result["dating_override"],
             }
         )
@@ -192,9 +207,13 @@ def compare_time_runs(
     )
     result = {
         **header("time-comparison"),
+        "computed_with": _comparison_computed_with(),
         "source": {"ensemble": reference(output, ensemble_path)},
         "common_anchor_ids": anchors,
+        "common_anchor_count": len(anchors),
         "target_ids": targets,
+        "input_target_ids": list(targets),
+        "input_target_count": len(targets),
         "sample_labels": labels,
         "requested_runs": len(runs),
         "dated_runs": len(assessable),
@@ -203,12 +222,12 @@ def compare_time_runs(
         "shared_anchor_splits": split_occurrence(splits_by_run, len(runs), anchors),
         "sensitivity": {
             field: _spread([run.get(field) for run in assessable])
-            for field in ("rate", "root_date", "common_anchor_mrca_date")
+            for field in ("rate", "root_date", "common_anchor_mrca_date", "input_target_mrca_date")
         },
         "cluster_policy": {
             "method": "single-linkage corrected SNP distances",
             "snp_cutoff": cluster_snp_cutoff,
-            "calibration": "user-declared descriptive sensitivity threshold; no universal biological cutoff",
+            "calibration": "configured descriptive sensitivity threshold; no universal biological cutoff",
         },
         "target_pair_agreement": agreements,
         "interpretation": "Between-selection spread measures selection sensitivity, not confidence intervals. Shared-anchor MRCA dates are comparable; whole-selection roots may represent different ancestors. Cluster comparison uses exact target pairs, never run-local cluster numbers.",

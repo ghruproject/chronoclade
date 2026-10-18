@@ -23,6 +23,8 @@ def test_context_candidate_adapter_retains_download_verification_metadata(tmp_pa
             "source_checksum": checksum,
             "source_length": 9876,
             "qc_pass": True,
+            "region": "Oxfordshire",
+            "city": "Oxford",
         },
         species="Klebsiella pneumoniae",
         lineage="ST147",
@@ -36,6 +38,7 @@ def test_context_candidate_adapter_retains_download_verification_metadata(tmp_pa
     assert candidate.source_checksum == checksum
     assert candidate.source_length == "9876"
     assert candidate.pathogenwatch_qc == "True"
+    assert candidate.region == "Oxfordshire" and candidate.city == "Oxford"
 
 
 def make_fixture(tmp_path):

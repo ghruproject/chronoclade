@@ -73,3 +73,58 @@ def test_group_rule_exposes_saved_threshold_and_correct_denominator():
                          'genetic_groups': [{}]})
     assert '0.0005% of jointly compared nucleotide sites' in dna
     assert grouping_rule({}) == ''
+
+
+def test_group_summary_hides_unknown_only_hosts_and_optional_locations(tmp_path):
+    data = {'sample_metadata':[
+        {'sample_id':'a','role':'input','country':'Greece','host':'Unknown'},
+        {'sample_id':'b','role':'context','country':'Italy','host':'not provided','region':'Unknown'}],
+        'lineage_groups':[{'group_id':'cgLIN 8: 0.0.105.6.0.0.0.5','sample_ids':['a','b']}],
+        'display_group_basis':'reported_cglin'}
+    html = genetic_group_summary(tmp_path, data)
+    assert 'Hosts (counts)' not in html and 'Regions (counts)' not in html and 'Cities (counts)' not in html
+    data['sample_metadata'][0].update(region='Attica',city='Athens')
+    html = genetic_group_summary(tmp_path, data)
+    assert 'Regions (counts)' in html and 'Cities (counts)' in html
+    assert 'Attica 1' in html and 'Athens 1' in html and 'Unknown 1' in html
+    assert 'Hosts (counts)' not in html
+
+
+def test_distance_group_note_does_not_assume_cglin_partition(tmp_path):
+    data = {
+        'partition': {'kind': 'hiercc', 'level': 'HC10'},
+        'sample_metadata': [{'sample_id': 'a', 'role': 'input', 'country': 'Australia'}],
+        'genetic_groups': [{'group_id': 'cohort_1_group_1', 'sample_ids': ['a']}],
+        'distance_threshold': 0.02,
+    }
+    html = genetic_group_summary(tmp_path, data)
+    assert 'distinct from the selected analysis partition' in html
+    assert 'LIN blocks used to retrieve context' not in html
+
+
+def test_reported_hiercc_is_the_reader_facing_group_basis(tmp_path):
+    data = {
+        'partition': {'kind': 'hiercc', 'level': 'HC10'},
+        'sample_metadata': [{'sample_id': 'a', 'role': 'input', 'country': 'Australia'}],
+        'lineage_groups': [{'group_id': 'HierCC HC10: 23', 'sample_ids': ['a'], 'kind': 'hiercc'}],
+        'genetic_groups': [{'group_id': 'cohort_1_group_99', 'sample_ids': ['a']}],
+        'display_group_basis': 'reported_hiercc',
+        'display_group_level': 'HC10',
+    }
+    html = genetic_group_summary(tmp_path, data)
+    assert 'HierCC groups at a glance' in html
+    assert 'reported HierCC assignment at HC10' in html
+    assert 'profile-distance cutoff defines membership' in html
+    assert 'HierCC HC10: 23' in html and 'Group 99' not in html
+
+
+def test_st_mode_explains_single_unassigned_lineage_category(tmp_path):
+    data = {
+        'partition': {'kind': 'st'},
+        'sample_metadata': [{'sample_id': 'a', 'role': 'input', 'country': 'Australia'}],
+        'lineage_groups': [{'group_id': 'Lineage unassigned', 'sample_ids': ['a']}],
+        'display_group_basis': 'unassigned_lineage',
+    }
+    html = genetic_group_summary(tmp_path, data)
+    assert 'Lineage status at a glance' in html
+    assert 'not an inferred lineage or genetic cluster' in html

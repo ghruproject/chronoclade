@@ -5,10 +5,12 @@ import shutil
 
 from Bio import Phylo
 
-from chronoclade.artifacts import write_json
+from chronoclade.artifacts import file_sha256, write_json
 from chronoclade.errors import WorkflowError
+from chronoclade.execution_provenance import execution_provenance
 from chronoclade.selection_manifest import _resolve
 from chronoclade.stage_artifacts import (
+    header,
     load_tree_result,
     load_result,
     reference,
@@ -72,9 +74,14 @@ def run_time(tree_manifest, *, output, force=False, allow_unsupported=False):
     seed = parameters["dating_seed"]
     output = Path(output).expanduser().resolve()
     tool_evidence = tools(["treetime"])
+    computed_with = execution_provenance(
+        "time", "saved-rooted-tree-dating-v1",
+        software_version=header("time")["software"]["version"],
+    )
     digest = fingerprint(
         {
             "tree": reference(output, tree_path)["sha256"],
+            "computed_with": computed_with,
             "tools": tool_evidence,
             "parameters": parameters,
         }
@@ -109,6 +116,8 @@ def run_time(tree_manifest, *, output, force=False, allow_unsupported=False):
             "fingerprint": digest,
             "source": {"tree": reference(output, frozen_tree)},
             "input_tree_sha256": reference(output, tree_path)["sha256"],
+            "computed_with": computed_with,
+            "rendered_with": computed_with,
             "selection_id": tree["selection_id"],
             "selected_sample_ids": tree["selected_sample_ids"],
             "temporal_assessment": assessment,
@@ -124,6 +133,8 @@ def run_time(tree_manifest, *, output, force=False, allow_unsupported=False):
         }
         figures = []
         network = None
+        host_network = None
+        state_networks = None
         if assessment["supported"] or allow_unsupported:
             if len(tree["dated_sample_ids"]) < 3:
                 raise WorkflowError(
@@ -162,7 +173,10 @@ def run_time(tree_manifest, *, output, force=False, allow_unsupported=False):
                 tree["selected_sample_ids"]
             ):
                 raise WorkflowError("Dated tree does not retain exact selected sample identifiers")
-            from chronoclade.location_network.reconstruction import build_location_network
+            from chronoclade.location_network.reconstruction import (
+                build_location_network,
+                build_optional_state_networks,
+            )
             from chronoclade.location_network.tree import draw_country_tree
 
             biological = read_dated_tree(files.time_tree)
@@ -170,8 +184,36 @@ def run_time(tree_manifest, *, output, force=False, allow_unsupported=False):
                 Phylo.read(rooted, "newick"), biological,
             )
             network = build_location_network(biological, rows, tree_basis="sequence")
-            network.update(branch_units="years", root_policy="saved corrected tree root retained")
+            network.update(
+                branch_units="years",
+                tree_sha256=file_sha256(files.time_tree),
+                root_policy="saved corrected tree root retained",
+            )
             write_json(job / "location_network.json", network)
+            optional_networks = build_optional_state_networks(
+                biological,
+                rows,
+                tree_basis="sequence",
+                nearest_neighbours=tree.get("nearest_contexts_by_corrected_snps"),
+                provenance={
+                    "branch_units": network["branch_units"],
+                    "tree_sha256": network["tree_sha256"],
+                    "root_policy": network["root_policy"],
+                },
+            )
+            state_networks = {"country": network}
+            state_network_descriptors = {
+                "country": reference(output, job / "location_network.json")
+            }
+            for field, state_network in optional_networks.items():
+                path = job / f"{field}_state_network.json"
+                write_json(path, state_network)
+                state_networks[field] = state_network
+                state_network_descriptors[field] = reference(output, path)
+            result["state_networks"] = state_network_descriptors
+            host_network = optional_networks.get("host")
+            if host_network is not None:
+                result["host_state_network"] = state_network_descriptors["host"]
             draw_country_tree(
                 network,
                 rows,
@@ -205,9 +247,12 @@ def run_time(tree_manifest, *, output, force=False, allow_unsupported=False):
                 job / "report.html",
                 title="Time-scaled phylogeny" if result["dated_tree"] else "Dating assessment",
                 report_label="TIME TREE ANALYSIS REPORT",
+                navigation=(("SNP-tree report", tree_path.parent / tree["report"]["path"]),),
                 result=result,
                 rows=rows,
                 network=network,
+                host_network=host_network,
+                state_networks=state_networks,
                 figures=figures,
                 extra=note,
             ),

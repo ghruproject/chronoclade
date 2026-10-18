@@ -3,12 +3,22 @@
 import hashlib
 import json
 
-from chronoclade.cglin import parse_code
+from chronoclade.cglin import resolved_prefix
 from chronoclade.datasets import PreparedDataset
 from chronoclade.typing_scopes import typing_scope
+from chronoclade.provider_hiercc import reported_metadata
+
+LIN_LEVELS = tuple(range(5, 11))
 
 
-def profile_records(dataset: PreparedDataset) -> list[dict]:
+def validate_lin_level(level, *, label="LIN level"):
+    """Require an explicit supported reported-prefix depth, excluding booleans."""
+    if isinstance(level, bool) or not isinstance(level, int) or level not in LIN_LEVELS:
+        raise ValueError(f"{label} must be an integer between 5 and 10")
+    return level
+
+
+def profile_records(dataset: PreparedDataset, *, source_root=None) -> list[dict]:
     """Adapt a validated bundle to the existing categorical scientific engine."""
     records = {
         row["sample_id"]: dict(row, origin="local" if row["role"] == "input" else "context")
@@ -56,7 +66,8 @@ def profile_records(dataset: PreparedDataset) -> list[dict]:
                 kind + ("_raw" if kind == "cglin" else "_codes"): assignment["assignment"],
             }
         )
-    return list(records.values())
+    from chronoclade.provider_hiercc import bind_dataset
+    return bind_dataset(list(records.values()), dataset, source_root)
 
 
 def _group_key(row, level, hiercc_level):
@@ -72,7 +83,9 @@ def _group_key(row, level, hiercc_level):
         "malformed",
     }:
         return None
-    scope = typing_scope(row, kind)
+    from chronoclade.provider_hiercc import grouping_scope
+    scope = grouping_scope(row) if kind == "hiercc" else None
+    scope = scope or typing_scope(row, kind)
     if scope is None or not row.get("mlst_st") or not row.get("species"):
         return None
     scheme, version = scope
@@ -82,10 +95,9 @@ def _group_key(row, level, hiercc_level):
             return None
         prefix = (str(code),)
     else:
-        parts, status = parse_code(row.get("cglin_raw"))
-        if status not in {"complete", "partial"} or len(parts) < level:
+        prefix = resolved_prefix(row, level)
+        if prefix is None:
             return None
-        prefix = tuple(parts[:level])
     species = " ".join(row["species"].replace("_", " ").casefold().split())
     # A known fingerprint and an unknown fingerprint do not share a block.
     return (
@@ -101,14 +113,8 @@ def _group_key(row, level, hiercc_level):
     )
 
 
-def partition_records(records, *, lin_level=5, hiercc_level=None):
-    """Match every frozen context record inside an explicit input lineage block."""
-    if lin_level not in {5, 6, 7}:
-        raise ValueError("LIN level must be 5, 6 or 7")
-    if hiercc_level is not None and (
-        not hiercc_level.startswith("HC") or not hiercc_level[2:].isdigit()
-    ):
-        raise ValueError("HierCC level must be an explicit HC code, such as HC10")
+def mlst_comparison_records(records):
+    """Retain raw ST metadata while resolving only unambiguous comparison namespaces."""
     # Missing scheme metadata is not a new scheme. Use the only declared comparison
     # namespace when unambiguous, while retaining the sample's actual null metadata.
     known = {}
@@ -130,7 +136,35 @@ def partition_records(records, *, lin_level=5, hiercc_level=None):
                 _ambiguous_mlst_namespace=not scheme and len(choices) > 1,
             )
         )
-    records = prepared
+    return prepared
+
+
+def partition_records(records, *, lin_level=5, context_lin_level=None, hiercc_level=None):
+    """Match every frozen context record inside an explicit input lineage block."""
+    validate_lin_level(lin_level)
+    if context_lin_level is not None:
+        validate_lin_level(context_lin_level, label="Context LIN level")
+        if hiercc_level is not None:
+            raise ValueError("Context LIN scope cannot be combined with HierCC")
+    if hiercc_level is not None and (
+        not hiercc_level.startswith("HC") or not hiercc_level[2:].isdigit()
+    ):
+        raise ValueError("HierCC level must be an explicit HC code, such as HC10")
+    prepared = mlst_comparison_records(records)
+    original_records = prepared
+    scope_keys = {
+        _group_key(row, context_lin_level, None)
+        for row in prepared if row["role"] == "input"
+    } - {None} if context_lin_level is not None else None
+    records = [row for row in prepared if row["role"] == "input" or scope_keys is None
+               or _group_key(row, context_lin_level, None) in scope_keys]
+    unresolved_scope = [
+        {"sample_id": row["sample_id"], "reason": "missing_or_unresolved_context_scope_typing"}
+        for row in prepared if row["role"] == "input" and context_lin_level is not None
+        and _group_key(row, context_lin_level, None) is None
+    ]
+    scoped_ids = {row["sample_id"] for row in records}
+    scope_excluded = sorted(row["sample_id"] for row in prepared if row["sample_id"] not in scoped_ids)
     groups, unresolved = {}, []
     for row in records:
         if row["role"] != "input":
@@ -150,6 +184,7 @@ def partition_records(records, *, lin_level=5, hiercc_level=None):
     for key, rows in sorted(groups.items(), key=lambda item: repr(item[0])):
         digest = hashlib.sha256(json.dumps(key, sort_keys=True).encode()).hexdigest()[:12]
         prefix = list(key[-1])
+        reported = reported_metadata(rows[0]) if key[2] == "hiercc" else {}
         blocks.append(
             {
                 "block_id": f"{key[2]}_{digest}",
@@ -158,7 +193,8 @@ def partition_records(records, *, lin_level=5, hiercc_level=None):
                 "mlst_scheme": key[7],
                 "kind": key[2],
                 "scheme": key[3],
-                "scheme_version": key[4],
+                "scheme_version": rows[0].get("hiercc_scheme_version") if reported else key[4],
+                **reported,
                 "database_version": key[5],
                 "database_sha256": key[6],
                 "prefix": prefix,
@@ -168,12 +204,12 @@ def partition_records(records, *, lin_level=5, hiercc_level=None):
         )
     counts = []
     if not hiercc_level:
-        for level in (5, 6, 7):
-            keys = {_group_key(row, level, None) for row in records if row["role"] == "input"} - {
+        for level in LIN_LEVELS:
+            keys = {_group_key(row, level, None) for row in original_records if row["role"] == "input"} - {
                 None
             }
             for key in sorted(keys, key=repr):
-                matches = [row for row in records if _group_key(row, level, None) == key]
+                matches = [row for row in original_records if _group_key(row, level, None) == key]
                 counts.append(
                     {
                         "level": level,
@@ -195,14 +231,27 @@ def partition_records(records, *, lin_level=5, hiercc_level=None):
             row["sample_id"] for row in records if row.get("_ambiguous_mlst_namespace")
         ),
         "lin_level": lin_level,
+        "context_lin_level": context_lin_level,
+        "context_scope_counts": {
+            "prepared_context": sum(row["role"] == "context" for row in original_records),
+            "scope_context": sum(row["role"] == "context" for row in records),
+            "outside_scope_context": len(scope_excluded),
+        },
+        "outside_context_scope_ids": scope_excluded,
+        "unresolved_context_scope_inputs": unresolved_scope,
         "hiercc_level": hiercc_level,
         "unresolved_inputs": unresolved,
         "available_level_counts": counts,
         "unmatched_context_ids": sorted(
             row["sample_id"]
-            for row in records
+            for row in original_records
             if row["role"] == "context" and row["sample_id"] not in used
         ),
-        "context_scope": "all matching context already present in the frozen bundle",
+        "context_scope": (
+            f"Union of input-associated reported LIN{context_lin_level} prefixes in the frozen bundle; "
+            f"analysed in LIN{lin_level} blocks"
+            if context_lin_level is not None else
+            "all matching context already present in the frozen bundle"
+        ),
         "live_context_retrieval": "not_requested",
     }

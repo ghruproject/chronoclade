@@ -16,6 +16,9 @@ A dated product saves NEXUS, node dates, rate uncertainty, TreeTime confidence
 outputs, time-tree figures and the established geographic network reconstructed
 on the dated biological tree. Rates are substitutions/site/year; branches are
 years. Node-date intervals use TreeTime's reported 90% max-posterior regions.
+With usable host metadata, the same network selector also offers host-state
+changes on the dated tree. Location remains the default; missing host data does
+not create an empty host section, and one known host state cannot create links.
 Native tools and site counts follow the established engine, rather than implying
 that permutation spread supplies dating uncertainty.
 

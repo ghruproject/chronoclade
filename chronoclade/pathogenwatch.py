@@ -20,6 +20,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 
+from chronoclade.progress import progress, progress_task
 from chronoclade.metadata_dates import normalize_dates
 
 
@@ -343,6 +344,18 @@ def normalize_country(value: Any) -> str:
     )
 
 
+def _optional_place(metadata: dict, *keys: str) -> str | None:
+    """Return explicitly supplied city/region metadata without inferring it."""
+    for key in keys:
+        value = metadata.get(key)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text and text.casefold() not in _MISSING:
+            return text
+    return None
+
+
 def _metadata(detail: dict) -> dict[str, Any]:
     metadata = detail.get("metadata") or {}
     if isinstance(metadata, list):
@@ -420,6 +433,8 @@ def normalize_record(
         "country_raw": countries,
         "country_provenance": known[0][0]["field"] if known else "missing",
         "country_conflict": len({v for _, v in known}) > 1,
+        "region": _optional_place(metadata, "Region", "region"),
+        "city": _optional_place(metadata, "City", "city"),
         "host": str(metadata.get("Host") or metadata.get("host") or ""),
         "isolation_source": str(
             metadata.get("Isolation source") or metadata.get("isolation_source") or ""
@@ -688,7 +703,8 @@ class PathogenwatchClient:
         )
         if organism is None or "MLST" not in (organism.get("typing") or []):
             raise PathogenwatchError("Unsupported Pathogenwatch organism/MLST capability")
-        result = self.search(organism_id, st, mlst_scheme, page_size=page_size)
+        with progress_task("context", "Search public catalogue", details=f"ST{st}"):
+            result = self.search(organism_id, st, mlst_scheme, page_size=page_size)
 
         def fetch(search):
             detail = self.request_json("GET", "/api/genomes/details", params={"id": search["uuid"]})
@@ -699,8 +715,14 @@ class PathogenwatchClient:
             )
             return search["uuid"], detail, row
 
-        with ThreadPoolExecutor(max_workers=max(1, min(self.workers, 16))) as pool:
-            fetched = list(pool.map(fetch, result["genomes"]))
+        total = len(result["genomes"])
+        fetched = []
+        with progress_task("context", "Retrieve public metadata", details=f"{total} genomes"):
+            with ThreadPoolExecutor(max_workers=max(1, min(self.workers, 16))) as pool:
+                for completed, item in enumerate(pool.map(fetch, result["genomes"]), 1):
+                    fetched.append(item)
+                    if completed % 100 == 0 or completed == total:
+                        progress("context", f"Processed public metadata: {completed}/{total} genomes")
         rows = sorted([row for _, _, row in fetched], key=lambda r: r["source_genome_id"])
         details = {source_id: detail for source_id, detail, _ in fetched}
         retrieved_at = datetime.now(timezone.utc).isoformat()
@@ -765,8 +787,8 @@ def catalogue_summary(rows: list[dict]) -> dict:
     }
 
 
-def load_catalogue(path: Path | str) -> dict:
-    """Read a complete snapshot, verify hashes, and re-normalise the raw records."""
+def load_raw_catalogue(path: Path | str) -> dict:
+    """Validate raw capture integrity without adopting its normalized rows."""
     try:
         envelope = json.loads(Path(path).read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
@@ -794,10 +816,31 @@ def load_catalogue(path: Path | str) -> dict:
         or content_hash(envelope["raw_search_pages"]) != provenance.get("raw_search_sha256")
     ):
         raise PathogenwatchError("Frozen catalogue section hash mismatch")
+    pages = envelope["raw_search_pages"]
+    if (not isinstance(pages, list) or not pages
+            or any(not isinstance(page, dict) or not isinstance(page.get("genomes"), list)
+                   or not isinstance(page.get("meta"), dict)
+                   or type(page["meta"].get("count")) is not int
+                   or page["meta"]["count"] != provenance["expected_count"] for page in pages)):
+        raise PathogenwatchError("Frozen raw search page counts do not reconcile with the whole catalogue")
+    search_ids = [r["uuid"] for page in pages for r in page["genomes"]]
+    row_ids = [r["source_genome_id"] for r in rows]
+    if (len(search_ids) != len(set(search_ids)) or len(row_ids) != len(set(row_ids))
+            or set(search_ids) != set(details) or set(row_ids) != set(details)):
+        raise PathogenwatchError("Frozen catalogue raw source identities do not reconcile")
+    if content_hash(provenance["query"]) != provenance.get("query_sha256"):
+        raise PathogenwatchError("Frozen catalogue query hash mismatch")
+    return envelope
+
+
+def replay_catalogue(envelope: dict) -> list[dict]:
+    """Normalize independently verified raw records with the current method."""
+    provenance = envelope["provenance"]
+    details = envelope["raw_details"]
     query = provenance["query"]
     scheme = "mlst" if "mlst" in query else "mlst2"
     search_rows = [r for page in envelope["raw_search_pages"] for r in page["genomes"]]
-    replay = sorted(
+    return sorted(
         [
             normalize_record(
                 r,
@@ -810,6 +853,11 @@ def load_catalogue(path: Path | str) -> dict:
         ],
         key=lambda r: r["source_genome_id"],
     )
-    if replay != rows:
+
+
+def load_catalogue(path: Path | str) -> dict:
+    """Read the frozen normalized contract; retain its raw replay equality gate."""
+    envelope = load_raw_catalogue(path)
+    if replay_catalogue(envelope) != envelope["rows"]:
         raise PathogenwatchError("Frozen normalised rows differ from raw replay")
     return envelope

@@ -47,6 +47,7 @@ def samples_from_records(records: Sequence[Mapping]) -> tuple[dict, ...]:
             "metadata_status",
             "country_raw",
             "geography_raw",
+            "city",
             "accession",
             "run_accession",
             "runAccession",

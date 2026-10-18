@@ -44,6 +44,8 @@ def records():
             "mlst_st": "39",
             "collection_date": "2024-02",
             "country": "Greece",
+            "region": "Attica",
+            "city": "Athens",
             "cgmlst_scheme": "example:cgmlst",
             "cgmlst_scheme_version": "v1",
             "cgmlst_profile": {"a": "001"},
@@ -134,6 +136,8 @@ def test_round_trip_preserves_categories_dates_and_evidence(tmp_path, catalogue,
     assert restored.sample_ids == ("query", "PW_source")
     assert restored.samples[1]["label"] == "ERR123"
     assert restored.samples[0]["date_end"] == "2024-02-29"
+    assert restored.samples[0]["city"] == "Athens"
+    assert restored.samples[0]["region"] == "Attica"
     assert restored.samples[1]["date_precision"] == "invalid"
     assert restored.samples[1]["date_raw"] == "invalid-date"
     assert restored.crosswalk[1]["resolution_status"] == "ambiguous"

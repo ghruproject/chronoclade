@@ -19,10 +19,15 @@ from chronoclade.errors import WorkflowError
 from chronoclade.matrix_distances import BinaryDistanceEvidence
 from chronoclade.report_components.root_comparison import _nonnegative_diagnostic_copy
 from chronoclade.report_components.stage import write_report
-from chronoclade.sample_labels import sample_label
 from chronoclade.selection_manifest import _read, _resolve, load_selection_ensemble
+from chronoclade.cgmlst.clock_evidence import (
+    _dense_distance_matrix, _distance_sample_ids, _read_clock_distance_evidence,
+)
+from chronoclade.selections import DistanceEvidence
 from chronoclade.stage_artifacts import header, load_result, reference
-from chronoclade.temporal_diagnostics import allele_unit_diagnostic, date_regression
+from chronoclade.temporal_diagnostics import (
+    allele_unit_diagnostic, date_regression, date_distance_point, diagnostic_display_units,
+)
 from chronoclade.cgmlst.scale_tree import IndexedTree
 
 NOTE = ('Each selection uses identical dated genomes in both panels. The clock-compatible root '
@@ -32,8 +37,26 @@ NOTE = ('Each selection uses identical dated genomes in both panels. The clock-c
         'or significance tests are performed here; original SNP files remain unchanged.')
 
 
-def exact_panel_nj(evidence, ids):
+
+def _comparison_computed_with():
+    from chronoclade.execution_provenance import execution_provenance
+
+    return execution_provenance(
+        'matched-clock-comparison', 'matched-root-diagnostics-v1',
+        software_version=header('matched-clock-comparison')['software']['version'],
+    )
+
+
+def _report_slope_units(fitted):
+    return fitted.get('display_slope_units') or fitted.get('slope_units') or 'Unavailable'
+
+
+def exact_panel_nj(evidence, ids, *, expected_loci=None):
     """Reconstruct NJ from this exact selected submatrix, never prune the pool NJ."""
+    if isinstance(evidence, DistanceEvidence):
+        if expected_loci is None:
+            raise WorkflowError('Dense distance evidence requires its prepared locus count')
+        evidence = _dense_distance_matrix(evidence, ids, expected_loci)
     if len(ids) != len(set(ids)) or not set(ids).issubset(evidence.sample_ids):
         raise WorkflowError('Selected identifiers must be unique and present in full-pool distances')
     position = {name: i for i, name in enumerate(evidence.sample_ids)}
@@ -44,6 +67,8 @@ def exact_panel_nj(evidence, ids):
     loci = np.unique(evidence.arrays['scheme_loci'][np.ix_(indices, indices)])
     if len(loci) != 1 or loci[0] < 1:
         raise WorkflowError('Exact selected cgMLST panel needs one recorded locus universe')
+    if expected_loci is not None and int(loci[0]) != expected_loci:
+        raise WorkflowError('Exact selected panel locus count disagrees with its prepared catalogue')
     tree = DistanceTreeConstructor().nj(DistanceMatrix(list(ids),
         [matrix[i, :i + 1].tolist() for i in range(len(ids))]))
     return tree, int(loci[0])
@@ -53,7 +78,7 @@ def matched_dates(rows, ids):
     """Declare one date panel before either fit, using the shared >=1900 policy."""
     if [row['sample_id'] for row in rows] != ids:
         raise WorkflowError('Metadata does not preserve the exact ordered selected identifiers')
-    eligibility = date_regression([dict(row, root_to_tip=0) for row in rows],
+    eligibility = date_regression([date_distance_point(row, 0) for row in rows],
         distance_field='root_to_tip', distance_units='', label='Matched date eligibility')
     names = {point['sample_id'] for point in eligibility['points']}
     return [row for row in rows if row['sample_id'] in names], eligibility
@@ -61,8 +86,8 @@ def matched_dates(rows, ids):
 
 def _fit(tree, rows, units, loci=None, *, catalogue_complete=True):
     tree = IndexedTree.from_tree(tree)
-    value = date_regression([dict(row, label=sample_label(row),
-        root_to_tip=tree.distance(row['sample_id'])) for row in rows],
+    value = date_regression([date_distance_point(row, tree.distance(row['sample_id']))
+        for row in rows],
         distance_field='root_to_tip', distance_units=units, label='Matched root-to-tip regression')
     if loci:
         value = allele_unit_diagnostic(value, loci, fixed_callable=False, catalogue_complete=catalogue_complete)
@@ -104,7 +129,7 @@ def _figure(run, path):
             ax.plot(ends, fit['centered_intercept'] + fit['slope'] * (ends-fit['reference_year']), color='#27212e')
             r2 = 'undefined' if fit['r_squared'] is None else f"{fit['r_squared']:.3f}"
             ax.set(title=f'{name.replace("_", " ")} · {title}\nR² {r2} · n={fit["n_points"]}',
-                xlabel='Collection-date midpoint year', ylabel=fit['distance_units'])
+                xlabel='Collection-date midpoint year', ylabel=diagnostic_display_units(fit))
             ax.spines[['top', 'right']].set_visible(False)
     fig.tight_layout()
     fig.savefig(path)
@@ -137,9 +162,10 @@ def compare_clocks(tree_ensemble, *, output):
     dataset = load_dataset(dataset_path)
     dataset_rows = {row['sample_id']: dict(row) for row in dataset.samples}
     evidence_path = _resolve(ensemble_path.parent, ensemble['source']['distance_evidence'], 'distance_evidence', external=True)
-    evidence = BinaryDistanceEvidence(evidence_path)
+    evidence = _read_clock_distance_evidence(evidence_path, ensemble["source"])
     output.mkdir(parents=True, exist_ok=True)
-    result = {**header('matched-clock-comparison'), 'status': 'running', 'source': {'tree_ensemble': reference(output, source),
+    result = {**header('matched-clock-comparison'), 'status': 'running',
+        'computed_with': _comparison_computed_with(), 'source': {'tree_ensemble': reference(output, source),
         'selection_ensemble': reference(output, ensemble_path), 'dataset': reference(output, dataset_path),
         'distance_evidence': reference(output, evidence_path)}, 'note': NOTE, 'runs': [],
         'parameters': {'minimum_collection_year': 1900, 'date_randomisations': 0,
@@ -169,9 +195,19 @@ def compare_clocks(tree_ensemble, *, output):
         eligible_rows, date_audit = matched_dates(rows, ids)
         directory = output / run['selection_id']
         directory.mkdir()
-        nj, loci = exact_panel_nj(evidence, ids)
-        catalogues = [matrix.catalogue for matrix in dataset.profiles
-            if set(ids).issubset(matrix.sample_ids) and len(matrix.catalogue.loci) == loci]
+        evidence_ids = _distance_sample_ids(evidence)
+        if not evidence_ids.issubset(dataset_rows):
+            raise WorkflowError('Distance evidence identifiers are outside the prepared dataset')
+        if isinstance(evidence, BinaryDistanceEvidence):
+            nj, loci = exact_panel_nj(evidence, ids)
+            catalogues = [matrix.catalogue for matrix in dataset.profiles
+                if set(ids).issubset(matrix.sample_ids) and len(matrix.catalogue.loci) == loci]
+        else:
+            catalogues = [matrix.catalogue for matrix in dataset.profiles
+                if set(ids).issubset(matrix.sample_ids)]
+            if len(catalogues) != 1:
+                raise WorkflowError('Exact selected panel must bind one prepared profile locus catalogue')
+            nj, loci = exact_panel_nj(evidence, ids, expected_loci=len(catalogues[0].loci))
         if len(catalogues) != 1:
             raise WorkflowError('Exact selected panel must bind one prepared profile locus catalogue')
         catalogue_complete = catalogues[0].complete
@@ -211,8 +247,7 @@ def compare_clocks(tree_ensemble, *, output):
             cells = [row['selection'], 'cgMLST' if name == 'cgmlst' else 'Corrected SNP', row['n_dates']]
             cells += [f'{row[k]:.4f}' if row[k] is not None else 'Unavailable'
                       for k in ('r2_existing', 'r2_nonnegative_existing', 'r2_clock_compatible')]
-            units = (f"allele-distance units/year ({run['normalization_loci']} observed loci)"
-                     if name == 'cgmlst' else 'substitutions/site/year')
+            units = _report_slope_units(fitted)
             slope = f"{row['slope']:.4g}" if row['slope'] is not None else 'Unavailable'
             cells += [f"{slope} {units}", f"{row['negative_edge_count']} ({row['negative_edge_total_magnitude']:.5g})"]
             html.append('<tr>' + ''.join('<td>' + escape(str(v)) + '</td>' for v in cells) + '</tr>')

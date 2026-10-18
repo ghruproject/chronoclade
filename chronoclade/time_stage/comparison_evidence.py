@@ -56,6 +56,31 @@ def anchor_date_evidence(path, result, anchors, *, output=None):
     }
 
 
+def input_target_date_evidence(path, result, targets, anchors, common_evidence, *, output=None):
+    """Reuse saved dates for the declared input target, separately from shared contexts."""
+    same = set(targets) == set(anchors)
+    if not targets:
+        evidence = {
+            "status": "unavailable", "estimate": None,
+            "lower_bound": None, "upper_bound": None,
+            "interval_level": "90% max-posterior region",
+            "reason": "No input targets declared",
+        }
+    elif same:
+        evidence = common_evidence
+    else:
+        evidence = anchor_date_evidence(path, result, targets, output=output)
+    return {
+        **evidence,
+        "target_sample_ids": list(targets),
+        "target_count": len(targets),
+        "extra_descendant_sample_ids": sorted(
+            set(evidence.get("descendant_sample_ids", [])) - set(targets)
+        ),
+        "same_target_as_common_anchors": same,
+    }
+
+
 def read_node_dates(path):
     """Fail on malformed saved evidence rather than silently inventing intervals."""
     try:

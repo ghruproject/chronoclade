@@ -31,6 +31,18 @@ pixi run chronoclade preflight
 Large cgMLST blocks require RapidNJ. On supported macOS hosts, run
 `pixi run chronoclade setup-scale`; Apple Silicon currently requires Rosetta.
 See [installation](docs/installation.md) and [large-block analysis](docs/cgmlst-scale.md).
+The current Apple Silicon acceptance includes a small new-assembly Klebsiella
+run through all four commands, plus separate supported and unsupported dating
+examples. Typing references and provider/assembly caches were reused. Linux
+x86_64, physical HPC and E. coli/HierCC validation remain deferred. Start with the
+[Mac walkthrough](docs/mac-klebsiella-walkthrough.md), the
+[worked Klebsiella example](docs/beta/WORKED_EXAMPLE.md), and the concise
+[acceptance checklist](docs/beta/ACCEPTANCE_PLAN.md).
+
+The beta closeout branch is `codex/klebsiella-beta-closeout` until its pull
+request is merged. The worked example distinguishes recorded native runs from
+the lightweight synthetic example.
+
 Separate Pixi environments are available for each stage.
 
 ## Prepare your input genomes
@@ -53,7 +65,8 @@ pixi run chronoclade prepare \
 
 Preparation retrieves available typing and metadata for the input genomes. New
 assemblies require a declared species, configured typing tools and ready reference
-databases. Installation and reference access are separate requirements. Use
+databases. Supply a verified seven-gene MLST ST in their metadata for public
+context discovery; native cgMLST calling does not calculate it. Installation and reference access are separate requirements. Use
 `setup-typing` to install the upstream cgMLST/LIN/HierCC tools; see
 [input preparation](docs/prepare.md) and [query typing](docs/query-typing.md).
 
@@ -71,13 +84,18 @@ pixi run chronoclade cgmlst prepared/dataset.json --fetch-context \
 
 Species and MLST ST define the public candidate pool; compatible LIN prefixes or
 an explicit HierCC level refine it. The requested LIN depth is fixed: 5 by default,
-with 6 and 7 available. The command retrieves matching context profiles and metadata;
+with explicit levels 5–10 available. For a finer context union while retaining
+cross-prefix comparisons within a wider block, add `--context-lin-level 8` and
+keep `--lin-level 5`; use `--display-lin-level 8` for independent report colours.
+These prefix depths are not validated close-relative cutoffs. See
+[context and display scopes](docs/cgmlst.md#narrower-context-with-independent-display-groups).
+The command retrieves matching context profiles and metadata;
 context assemblies are acquired by the later tree stage. Omit `--fetch-context`
 when the prepared bundle already contains the desired public comparisons.
 
 Open `cgmlst/index.html` for the partition summary and links to each block report.
 The report presents the combined input/context dataset, nearest relatives, the full
-NJ tree, NJ-distance MDS, exploratory date regression, location/host state-change
+NJ tree, NJ-distance MDS, exploratory date regression, country/host/region/city state-change
 networks, and the selections for SNP-tree analysis. It retains the existing report
 style and uses accessions where available.
 
@@ -124,9 +142,36 @@ See the [complete workflow](docs/independent-suite.md), [tree stage](docs/tree-s
 and [time stage](docs/time-stage.md). The same commands run locally or through
 [generated SLURM job scripts](docs/independent-suite.md#local-and-slurm-jobs).
 
+Try the [small offline profile example](examples/beta/README.md) to check
+preparation, cgMLST reports and exports without credentials or assemblies.
+It uses invented data and does not validate biological inference.
+For the real local Apple Silicon assembly-to-report route, see the
+[Klebsiella walkthrough](docs/mac-klebsiella-walkthrough.md). It records which
+references, context data and assemblies the accepted run reused.
+
+## Species references and beta status
+
+Klebsiella has a native cgMLST/cgLIN reference setup route. The local E. coli
+beta also builds the public EnteroBase caller reference and supports explicit
+`type-queries --profiles-only` calling followed by `cgmlst --partition-by st`.
+That input-only route does not retrieve public context or assign HierCC codes.
+Compatible HierCC reference setup and assignment remain under verification;
+public cgMLST profiles alone do not contain the HC group labels.
+
+`chronoclade list-schemes` lists the registered EnteroBase catalogues, and
+`chronoclade setup-scheme Escherichia.cgMLSTv1 --destination refs/ecoli` installs
+one frozen allele catalogue. A downloaded catalogue is separate from a caller
+index and a lineage-assignment reference. Catalogue availability for additional
+organisms does not establish fully tested native or public-context support.
+See [EnteroBase references](docs/beta/ENTEROBASE_SUPPORT.md),
+[E. coli evidence](docs/beta/ECOLI_NATIVE_ACCEPTANCE.md), and the
+[local beta acceptance matrix](docs/beta/ACCEPTANCE_PLAN.md).
+
 ## Reports and output folders
 
-Each module writes its own report and machine-readable stage result. cgMLST runs
+Each module writes its own report, machine-readable stage result and output guide.
+New prepare, tree and time outputs include `README.md` with the next command and
+recovery notes. cgMLST runs
 also include root/block `README.md` files and a `files/index.html` browser grouping
 tables, trees, figures, networks, subsamples and methods. Original evidence stays
 at its recorded paths so hashes and downstream manifests remain valid.
@@ -136,6 +181,12 @@ without a server. Keep the output folder for downloads and subsequent stages.
 Large distance matrices can occupy several gigabytes; avoid retaining unnecessary
 copies of complete runs. See [output files](docs/outputs.md) and
 [reading the reports](docs/report.md).
+
+Use `chronoclade export SOURCE --viewer grapetree --out DIRECTORY`
+to create checked local GrapeTree files, or choose `--viewer microreact` for a
+saved tree and metadata. The command does not upload data. See
+[export commands](docs/cli.md#viewer-exports) and
+[export file descriptions](docs/outputs.md#viewer-export-files).
 
 ## Older run interface
 

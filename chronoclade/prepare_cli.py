@@ -47,6 +47,10 @@ def prepare_command(
             help="Fill missing metadata from exact ENA links",
         ),
     ] = True,
+    resume: Annotated[
+        bool,
+        typer.Option("--resume", help="Resume an interrupted live/local native preparation"),
+    ] = False,
 ) -> None:
     """Resolve input typing and publish a portable dataset with a readiness audit."""
     from chronoclade.prepare_stage import run_prepare
@@ -65,9 +69,11 @@ def prepare_command(
             public_typing=public_typing,
             cglin_export=cglin_export,
             enrich_metadata=enrich_metadata,
+            resume=resume,
         )
     except (OSError, ValueError) as error:
         console.print(f"Error: {error}", style="bold red", markup=False)
         raise typer.Exit(code=2) from error
     console.print(f"Dataset manifest: {result.dataset_manifest}", markup=False)
     console.print(f"Preparation audit: {result.report_path}", markup=False)
+    console.print("Preparation readiness describes frozen typing and metadata; tree assembly availability and temporal signal are assessed in later stages.", markup=False)

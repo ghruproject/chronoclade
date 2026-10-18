@@ -18,7 +18,9 @@ from chronoclade.report import (
 )
 from chronoclade.report_components.styles import report_styles
 from chronoclade.report_components.tables import write_report_html
+from chronoclade.temporal_diagnostics import diagnostic_display_units
 from chronoclade.sample_labels import label_analysis, read_sample_labels
+from chronoclade.report_components.profile_summary import _reported, location_columns
 
 
 def _profile_styles() -> str:
@@ -165,7 +167,7 @@ def _root_to_tip(value: object) -> str:
             "<tr>"
             f"<th scope=\"row\">{escape(_text(row.get('cohort_id')))}</th>"
             f"<td>{escape(_text(row.get('root')))}</td>"
-            f"<td>{escape(_number(row.get('midpoint_date_slope')))}<br><small>{escape(_text(row.get('slope_units')))}</small></td>"
+            f"<td>{escape(_number(row.get('midpoint_date_slope')))}<br><small>{escape(_text(diagnostic_display_units(row, slope=True)))}</small></td>"
             f"<td>{escape(_number(row.get('midpoint_date_pearson_r')))}</td>"
             f"<td>{escape(_text(row.get('interpretation')))}</td></tr>"
         )
@@ -264,6 +266,10 @@ def _edge_countries(edge: dict[str, Any]) -> tuple[object, object]:
 
 
 def _network_view(row: dict[str, Any], directory: Path, *, focus_inputs: bool) -> str:
+    if (row.get("state_field", "country") != "country"
+            and row.get("status") == "insufficient_metadata"):
+        from chronoclade.location_network.state_selector import state_network_panel
+        return state_network_panel(row, basis="cgMLST")
     reconstruction = _mapping(row.get("reconstruction"))
     nodes = _records(reconstruction.get("nodes"))
     ambiguous = row.get("ambiguous_internal_node_count")
@@ -314,20 +320,25 @@ def _location_network(value: object, directory: Path, cohorts: object = None, *,
             "all": _network_view(view, directory, focus_inputs=False)} for view in options]
         payload = json.dumps(rendered, ensure_ascii=True).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
         identifier = f"network-viewer-{state_field}-{index}"
+        state_plural = _text(row.get("state_plural", "countries"))
+        link_state = state_field
         subgroup_options = "".join(f'<option value="{number}">{escape(view["label"])}</option>' for number, view in enumerate(rendered))
         panels.append(
             f'<div id="{identifier}" class="network-viewer">'
             + '<div class="network-controls" hidden>'
             f'<label for="{identifier}-group">Input subgroup </label>'
             f'<select id="{identifier}-group" data-network-group>{subgroup_options}</select> '
-            f'<label for="{identifier}-scope">Country links </label>'
-            f'<select id="{identifier}-scope" data-network-scope><option value="all">All country links</option>'
-            '<option value="input">Input-country links</option></select> '
+            f'<label for="{identifier}-scope">{escape(state_field.title())} links </label>'
+            f'<select id="{identifier}-scope" data-network-scope>'
+            f'<option value="all">All {escape(link_state)} links</option>'
+            f'<option value="input">Input-{escape(state_field)} links</option></select> '
             f'<label for="{identifier}-reconstruction">Reconstruction </label>'
             f'<select id="{identifier}-reconstruction" data-network-reconstruction><option value="representative">Representative reconstruction</option>'
             '<option value="possible">Include alternative possible links</option></select></div>'
-            + '<p>The complete country network is shown by default. Select a country to highlight its neighbours, '
-            'drag countries to separate them, or zoom and pan. Node colours show country states; dark outlines mark countries with input genomes. '
+            + f'<p>The complete {escape(state_field)} network is shown by default. '
+            f'Select a {escape(state_field)} to highlight its neighbours, drag '
+            f'{escape(state_plural)} to separate them, or zoom and pan. '
+            f'Node colours show {escape(state_field)} states; dark outlines mark states with input genomes. '
             'Arrows follow ancestral-to-descendant state changes on the displayed rooted tree. '
             'Link thickness counts these changes; dashed links mark variation across optimal assignments.</p>'
             + '<div data-network-output>' + rendered[0]["all"] + '</div>'
@@ -344,41 +355,49 @@ function update(){var chosen=data[Number(group.value)];if(chosen&&(scope.value==
 group.addEventListener('change',update);scope.addEventListener('change',update);reconstruction.addEventListener('change',update);viewer.querySelector('.network-controls').hidden=false;
 });})();</script>"""
     output = "".join(panels)
-    if state_field == "host":
-        for old, new in (("Country links", "Host links"), ("All country links", "All host links"),
-                         ("Input-country links", "Input-host links"),
-                         ("The complete country network", "The complete host network"),
-                         ("Select a country to", "Select a host to"),
-                         ("drag countries to", "drag hosts to"),
-                         ("Node colours show country states", "Node colours show host states"),
-                         ("mark countries with input genomes", "mark hosts with input genomes"),
-                         ("country-state changes on", "host-state changes on")):
-            output = output.replace(old, new)
+    if state_field in {"region", "city"}:
+        parent_note = (
+            "Region labels include country; city labels include known country and region "
+            "to distinguish places with the same name. Missing parent locations are not inferred."
+        )
+        output = f'<p class="muted">{escape(parent_note)}</p>' + output
     return output + (widget_assets() if include_assets else "") + script
 
 
 def _state_network_views(data, directory):
+    from chronoclade.location_network.state_selector import state_network_selector
+
     states = _mapping(data.get("state_networks"))
     country = states.get("country", data.get("location_network"))
-    hosts = _records(states.get("host"))
-    country_panel = _location_network(country, directory, data.get("cohorts"))
-    if not hosts:
-        host_panel = '<p class="empty">Host-state reconstruction is unavailable for this saved analysis. Host metadata coverage is shown in the dataset summary when available.</p>'
-    elif all(row.get("status") == "insufficient_metadata" for row in hosts):
-        total = sum(row.get("sample_count", 0) for row in hosts)
-        missing = sum(row.get("unknown_state_count", 0) for row in hosts)
-        host_panel = (f'<p class="empty">Host metadata is recorded for {total - missing} of {total} genomes. '
-                      f'This analysis has {hosts[0].get("known_state_count", 0)} distinct known host state(s). '
-                      'At least two distinct known hosts are required to reconstruct host changes.</p>')
-    else:
-        host_panel = _location_network(hosts, directory, state_field="host", include_assets=False)
-    return (
-        '<label for="network-state-field">Reconstruct state </label>'
-        '<select id="network-state-field" data-network-state><option value="country">Location (country)</option><option value="host">Host</option></select>'
-        '<div data-state-panel="country">' + country_panel + '</div>'
-        '<div data-state-panel="host" hidden>' + host_panel + '</div>'
-        '<script data-state-network-switch>(function(){const select=document.querySelector("[data-network-state]");select.addEventListener("change",()=>{document.querySelectorAll("[data-state-panel]").forEach(panel=>{panel.hidden=panel.dataset.statePanel!==select.value;});if(window.ChronoCladeNetworks)window.ChronoCladeNetworks.mount(document);});})();</script>'
+    country_rows = _records(country)
+    country_available = any(row.get("nodes") or row.get("edges") for row in country_rows)
+    country_panel = (
+        _location_network(country_rows, directory, data.get("cohorts"))
+        if country_available else None
     )
+    optional_panels = {}
+    summaries = _mapping(data.get("metadata_summary"))
+    for field in ("host", "region", "city"):
+        networks = _records(states.get(field))
+        summary = _mapping(summaries.get(field))
+        observed = summary.get("reported", 0) > 0 or any(
+            row.get("known_state_count", 0) > 0 for row in networks
+        )
+        if not observed:
+            continue
+        fragments = []
+        for index, network in enumerate(networks):
+            cohort_label = network.get("label")
+            if cohort_label:
+                fragments.append(f'<h3>{escape(_text(cohort_label))}</h3>')
+            fragments.append(_location_network(
+                [network], directory, state_field=field, include_assets=False,
+            ))
+        if fragments:
+            optional_panels[field] = "".join(fragments)
+    if not optional_panels and country_panel:
+        return country_panel
+    return state_network_selector(country_panel, panels=optional_panels)
 
 
 def _download_links(directory: Path, paths: dict[str, Any]) -> str:
@@ -648,37 +667,42 @@ def _geography_table(value: object, *, label: str, include_origin: bool) -> str:
             count = 0
         totals[origin] = totals.get(origin, 0) + count
         parsed.append((row, origin, count))
-    normalized = []
+    combined = {}
     for row, origin, count in parsed:
+        key = (origin, str(row.get("country") or "Unknown"),
+               str(row["region"]).strip() if _reported(row.get("region")) else "",
+               str(row["city"]).strip() if _reported(row.get("city")) else "")
+        combined[key] = combined.get(key, 0) + count
+    normalized = []
+    for (origin, country, region, city), count in sorted(combined.items()):
         normalized.append({
             "origin": {"local": "Your input genomes", "query": "Your input genomes", "focal": "Your input genomes"}.get(origin, "Public comparison genomes" if origin == "context" else origin),
-            "country": row.get("country", "Unknown"),
-            "region": row.get("region", "Unknown"),
-            "nuts2": row.get("nuts2", "Unknown"),
+            "country": country,
+            "region": region,
+            "city": city,
             "count": count,
             "denominator": totals[origin],
         })
     columns = []
     if include_origin:
         columns.append(("origin", "Dataset"))
-    columns.extend([
-        ("country", "Country"), ("region", "Region"), ("nuts2", "NUTS2 region"),
-        ("count", "Records"), ("denominator", "Dataset denominator"),
-    ])
+    columns.extend(location_columns(normalized))
+    columns.extend([("count", "Records"), ("denominator", "Dataset denominator")])
     scope_note = (
-        "Rows are country/region/NUTS2 combinations. Counts include records with missing profiles because this table uses input metadata."
+        "Rows combine the supplied country, region and city metadata. Counts include records with missing profiles because this table uses input metadata."
         if include_origin else
-        "Rows are country/region/NUTS2 combinations from the frozen public catalogue, before the profile-analysis cap."
+        "Rows combine supplied locations from the frozen public catalogue, before the profile-analysis cap."
     )
     table = _table(normalized, columns, empty=f"{label} breakdown was not available.")
     country_count = len({str(row.get("country")) for row in rows if row.get("country") not in {None, "", "Unknown"}})
-    region_count = len({str(row.get("region")) for row in rows if row.get("region") not in {None, "", "Unknown"}})
     record_count = sum(count for _, _, count in parsed)
     if not include_origin or len(rows) > 10:
-        summary = (
-            f"{label}: {record_count:,} records · {country_count} countries · "
-            f"{region_count} regions · {len(rows)} country/region rows"
-        )
+        parts = [f"{label}: {record_count:,} records", f"{country_count} countries"]
+        for field, name in (("region", "regions"), ("city", "cities")):
+            values = {str(row.get(field)) for row in rows if _reported(row.get(field))}
+            if values:
+                parts.append(f"{len(values)} {name}")
+        summary = " · ".join(parts)
         table = (
             f'<details class="coverage-details"><summary>{escape(summary)}</summary>{table}'
             f'<p class="muted">{escape(scope_note)}</p></details>'
@@ -701,13 +725,17 @@ def _nearest_neighbour_table(rows: list[dict[str, Any]], *, direct_dna: bool = F
         except (TypeError, ValueError):
             item["allele_comparison"] = "Not reported"
         normalized.append(item)
+    prefix_columns = (
+        [("lin_relationship", "LIN relationship")]
+        if any("display_prefix_relation" in row for row in normalized) else []
+    )
     return _table(
         normalized,
         [("query_id", "Query"), ("context_id", "Nearest relative"),
          ("distance", "Normalized distance"), ("allele_comparison", "SNP differences / compared sites" if direct_dna else "Allele differences / shared loci"),
-         ("call_overlap", "Call overlap"), ("cohort_id", "Comparison group"), ("country", "Country"), ("year", "Year")],
+         ("call_overlap", "Call overlap"), ("cohort_id", "Comparison group"), ("country", "Country"), ("year", "Year")] + prefix_columns,
         empty="No nearest relatives were reported.",
-    )
+    ) + ('<p class="muted">Shared levels count matching LIN code components, not allele differences.</p>' if prefix_columns else "")
 
 
 def _shared_tree_selection_summary(data: dict[str, Any]) -> str:
@@ -789,8 +817,7 @@ def _adaptive_context_metadata(provenance: dict[str, Any]) -> str:
         blocks.append('<p>These counts use all public metadata in the chosen LIN groups, '
                       'before tree subsampling or profile exclusions. Missing locations and '
                       'collection years remain in the denominator.</p>')
-        blocks.append(_table(countries, [("country", "Country"), ("region", "Region"),
-                      ("nuts2", "NUTS2 region"), ("count", "Public samples"),
+        blocks.append(_table(countries, location_columns(countries) + [("count", "Public samples"),
                       ("denominator", "Chosen context pool")],
                       empty="Country metadata for the complete chosen pool was not available."))
         blocks.append(_table(years, [("year", "Collection year"), ("count", "Public samples"),
@@ -954,13 +981,26 @@ def write_profile_report(
     provenance: dict | None = None,
     report_label: str = "Fast profile report",
     group_index_href: str | None = None,
+    relatedness_records: list[dict] | None = None,
 ) -> Path:
     """Write an offline HTML report, with the profile summary before relatives."""
 
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
-    data = label_analysis(_mapping(analysis), _mapping(analysis.get("sample_labels")))
+    from chronoclade.report_components.relatedness import annotate_neighbours, scope_summary
+    presentation = dict(analysis)
+    presentation["nearest_neighbours"] = annotate_neighbours(
+        analysis.get("nearest_neighbours", []), relatedness_records,
+        level=analysis.get("display_group_level", 7),
+        kind=(analysis.get("partition") or {}).get("kind"),
+    )
+    data = label_analysis(presentation, _mapping(analysis.get("sample_labels")))
     prov = _mapping(provenance)
+    relatedness_scope = scope_summary(
+        prov["relatedness_parameters"], prov.get("relatedness_audit", {}),
+        provider=prov.get("profile_context"), records=relatedness_records or (), analysis=analysis,
+        block_context_count=prov.get("bounded_public_context_count"),
+    ) if prov.get("relatedness_parameters") else ""
     paths = _mapping(data.get("paths"))
     direct_dna = data.get("distance_method") == "direct-dna"
     distance_label = "Direct SNP differences within cgMLST genes" if direct_dna else "cgMLST allele-profile differences"
@@ -1021,12 +1061,19 @@ def write_profile_report(
         )
     if not context_description:
         context_description = "Frozen local file supplied" if "public_typing" in _mapping(prov.get("inputs")) else "Not reported"
+    partition_kind = _text(_mapping(data.get("partition")).get("kind"))
+    if partition_kind == "st":
+        context_description = "No public context was retrieved or included in this supplied-input analysis"
     summary_values = [
         ("Your input genomes", query_count if query_count is not None else "Not reported"),
-        ("Public comparison genomes", public_context_count if public_context_count is not None else "Not reported"),
+        ("Public comparison genomes" if partition_kind != "st" else "Public comparisons retrieved",
+         public_context_count if public_context_count is not None else "Not reported"),
         ("Usable profiles across both sets", raw_profiles if raw_profiles is not None else "Not reported"),
     ]
     input_description = (
+        f"This report analyses {query_count} supplied input profiles partitioned by species/ST. "
+        "No public comparison records or lineage refinement are included."
+        if partition_kind == "st" and query_count is not None else
         f"This report investigates your {query_count} input genomes and compares them with "
         f"{public_context_count} additional public genomes. The selection counts and methods "
         "are recorded below."
@@ -1052,7 +1099,13 @@ def write_profile_report(
         f"{focal} genomes · Profile comparison"
     )
     adaptive_selection = bool(_records(_mapping(prov.get("adaptive_context_selection")).get("datasets")))
-    (
+    context_scope_description = (
+        _text(prov.get("context_scope"), "Supplied inputs only; no public context retrieval or lineage refinement")
+        if partition_kind == "st" else
+        "Compatible public profiles in this reported HierCC block, before assembly subsampling."
+        if partition_kind == "hiercc" else
+        "Compatible public profiles in this reported cgLIN block, before assembly subsampling."
+        if partition_kind == "cglin" else
         "All public genomes in the chosen LIN context groups, before tree subsampling."
         if adaptive_selection else (
             "Compatible public profiles in this lineage block, before assembly subsampling."
@@ -1081,6 +1134,19 @@ def write_profile_report(
          ("largest_group", "Largest group"), ("selected", "Selected cutoff")],
         empty="Threshold sensitivity is unavailable.") if sensitivity_rows else ""
     concentration = data.get("time_place_concentration")
+    distance_diagnostic_note = (
+        "These exploratory groups are profile-distance diagnostics. They do not assign cgLIN or HierCC codes; "
+        "the reported HierCC groups above define the reader-facing group display. Thresholds are not biologically validated."
+        if partition_kind == "hiercc" else
+        "These exploratory groups are profile-distance diagnostics. They do not assign cgLIN or HierCC codes; "
+        "the report uses one unassigned-lineage display category in ST-only mode. Thresholds are not biologically validated."
+        if partition_kind == "st" else
+        "These exploratory distance-cutoff groups are separate from the reported cgLIN groups used for context. "
+        "Thresholds are not biologically validated."
+        if partition_kind == "cglin" else
+        "These exploratory distance-cutoff groups are separate from the lineage groups used to select public context. "
+        "Thresholds are not biologically validated."
+    )
     root_tip = data.get("root_to_tip")
     root_tip_text = ("Gene-panel SNP-distance" if direct_dna else "Allele-distance") + " root-to-tip is exploratory. Temporal-signal testing is performed separately in the SNP-tree stage."
     if isinstance(root_tip, dict):
@@ -1121,8 +1187,7 @@ def write_profile_report(
     diagnostics = (
         '<details class="coverage-details" id="groups"><summary>Optional distance-cutoff clusters and sensitivity</summary>'
         f'<p>{escape(_text(_mapping(groups).get("interpretation", "Groups are descriptive summaries of the reported profile distances.")))}</p>'
-        '<p>These exploratory distance-cutoff groups are separate from the LIN groups used to select public context. '
-        'Thresholds are not biologically validated.</p>'
+        f'<p>{escape(distance_diagnostic_note)}</p>'
         f'{sensitivity_table}{_group_cards(groups, kind="general", bootstrap_requested=data.get("bootstrap_replicates"))}'
         f'<div id="concentration"><h3>Concentration in time and place</h3>{_group_cards(concentration, kind="concentration")}</div></details>'
         '<details class="coverage-details" id="coverage"><summary>Coverage, exclusions and context selection</summary>'
@@ -1140,11 +1205,14 @@ def write_profile_report(
         (f'<section class="stage" id="summary"><div class="stage-body"><h2>The combined dataset</h2>{message}{warnings}{_metric_cards(summary_values)}'
         f'<p>{escape(input_description)}</p>'
         f'{selection_handoff(directory, analysis)}'
-        '<p>The tables and figures below describe input and public comparison genomes together, before assembly subsampling.</p>'
-        f'<div id="geography">{combined_dataset_summary(data)}{legacy_geography}{country_figures}<p class="muted">Country figures use genomes with usable profiles; the combined metadata table also includes records without usable profiles.</p></div>'
+        + (relatedness_scope or (f'<p>{escape(context_scope_description)}</p>' if partition_kind else ''))
+        + ('<p>The tables and figures below describe supplied inputs only; no public context was retrieved or included.</p>'
+           if partition_kind == "st" else
+           '<p>The tables and figures below describe input and public comparison genomes together, before assembly subsampling.</p>')
+        + f'<div id="geography">{combined_dataset_summary(data)}{legacy_geography}{country_figures}<p class="muted">Country figures use genomes with usable profiles; the combined metadata table also includes records without usable profiles.</p></div>'
         '<details class="coverage-details"><summary>Distance definition and profile availability</summary>'
         f'<p><strong>{escape(distance_label)}</strong>. {escape(distance_explanation)}</p>'
-        f'<p>Public comparison typing: {escape(context_description)}.</p></details></div></section>'),
+        f'<p>{"Public context scope" if partition_kind == "st" else "Public comparison typing"}: {escape(context_description)}.</p></details></div></section>'),
         '<section class="stage" id="figures"><div class="stage-body"><h2>Genetic relationships</h2>'
         '<p>The NJ tree and ordination use all usable profiles in this block. Input and comparison genomes are distinguished throughout.</p>'
         + nearest_summary(analysis)
@@ -1239,11 +1307,11 @@ def write_fast_group_index(
         '<p>Choose an input dataset to explore its context.</p></div></header>'
         '<section class="stage" id="summary"><div class="stage-body">'
         '<h2>Your input datasets</h2><p>Inputs are separated by MLST sequence type, '
-        'then by clonal group. Each group has its own context selection, nearest-neighbour '
+        'then by their reported group. Each group has its own context selection, nearest-neighbour '
         'results, PCoA and genetic tree.</p>' + table
         + '<p>Available public CG pool counts exclude your inputs. Chosen public context '
-        'counts describe the complete selected LIN groups, before tree subsampling. '
-        'Open a group report to see which LIN levels were chosen and the country and '
+        'counts describe the complete selected groups, before tree subsampling. '
+        'Open a group report to see its reported grouping basis, context scope, and the country and '
         'collection-year breakdowns.</p></div></section></main></body></html>'
     )
     output = directory / "profile_report.html"

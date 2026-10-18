@@ -22,6 +22,7 @@ def test_full_ensemble_independent_resume_and_automatic_comparison(tmp_path, nat
     output = tmp_path / "trees"
     result = run_tree_ensemble(ensemble, output=output, ensemble_jobs=2)
     assert result["completed_runs"] == 2 and result["failed_runs"] == 0
+    assert 'chronoclade time ' in (output / 'README.md').read_text()
     assert len(native_stubs) == 2
     checked, _ = load_tree_ensemble(output / "tree_ensemble.json")
     assert checked == result
@@ -64,6 +65,23 @@ def test_changed_parameters_require_explicit_replacement(tmp_path, native_stubs)
     run_tree_ensemble(ensemble, output=tmp_path / "trees", seed=1)
     with pytest.raises(WorkflowError, match="parameters changed"):
         run_tree_ensemble(ensemble, output=tmp_path / "trees", seed=2)
+
+
+def test_no_completed_trees_guide_requires_recovery_before_time(tmp_path, monkeypatch):
+    _, ensemble = selection_fixture(tmp_path, dates=("", "", ""))
+
+    def fail(*args, **kwargs):
+        raise WorkflowError('Missing assemblies; see assembly_audit.json')
+
+    monkeypatch.setattr('chronoclade.tree_stage.workflow.run_tree', fail)
+    output = tmp_path / 'trees'
+    result = run_tree_ensemble(ensemble, output=output)
+    assert result['completed_runs'] == 0
+    assert result['failed_runs'] == 2
+    guide = (output / 'README.md').read_text()
+    assert 'Fix the failures before running time' in guide
+    assert 'tree_ensemble.json' in guide
+    assert 'chronoclade time ' not in guide
 
 
 def test_registration_checks_sources_and_retains_missing_tree(tmp_path, native_stubs):

@@ -56,41 +56,42 @@ def _reported(value: object) -> bool:
     if value is None:
         return False
     text = str(value).strip()
-    return text.casefold() not in {"", "unknown", "unavailable", "not reported", "none", "null", "n/a", "na", "—", "–", "-"}
+    return text.casefold() not in {"", "unknown", "unavailable", "not reported", "not provided", "not available", "unknown region", "unknown host", "unknown city", "undefined", "missing", "unspecified", "nan", "none", "null", "n/a", "na", "—", "–", "-"}
+
+
+def location_columns(rows: list[dict[str, Any]]) -> list[tuple[str, str]]:
+    """Use supplied country/region/city fields without inventing finer locations."""
+    return [("country", "Country")] + [
+        (field, label) for field, label in (("region", "Region"), ("city", "City"))
+        if any(_reported(row.get(field)) for row in rows)
+    ]
 
 
 def _geography_rows(data: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    aggregate: dict[tuple[str, tuple[str, ...]], dict[str, int]] = defaultdict(lambda: {"input": 0, "context": 0, "other": 0})
-    countries: dict[str, dict[str, int]] = defaultdict(lambda: {"input": 0, "context": 0, "other": 0})
+    aggregate = defaultdict(lambda: {"input": 0, "context": 0, "other": 0})
+    countries = defaultdict(lambda: {"input": 0, "context": 0, "other": 0})
     for row in _items(data.get("metadata_geography")):
         if not isinstance(row, dict):
             continue
         count = row.get("count")
-        if type(count) is not int or count < 0:
+        if type(count) is not int or count <= 0:
             continue
         country = str(row.get("country") or "Unknown")
         role = _origin(row)
         countries[country][role] += count
-        region = row.get("region")
-        nuts2 = row.get("nuts2")
-        if _reported(region):
-            aggregate[("region", (country, str(region).strip()))][role] += count
-        if _reported(nuts2):
-            location = (country, str(region).strip(), str(nuts2).strip()) if _reported(region) else (country, str(nuts2).strip())
-            aggregate[("nuts2", location)][role] += count
-
-    detail = []
-    for (level, location), counts in sorted(aggregate.items()):
-        detail.append({
-            "level": {"region": "Region", "nuts2": "NUTS2"}[level],
-            "place": " · ".join(location),
-            "inputs": _known_count(counts, "input"),
-            "context": _known_count(counts, "context"),
-            "total": sum(counts.values()),
-        })
+        region = str(row["region"]).strip() if _reported(row.get("region")) else ""
+        city = str(row["city"]).strip() if _reported(row.get("city")) else ""
+        if region or city:
+            aggregate[(country, region, city)][role] += count
+    detail = [
+        {"country": country, "region": region, "city": city,
+         "inputs": _known_count(counts, "input"),
+         "context": _known_count(counts, "context"), "total": sum(counts.values())}
+        for (country, region, city), counts in sorted(aggregate.items())
+    ]
     overall = [
-        {"country": country, "inputs": _known_count(counts, "input"), "context": _known_count(counts, "context"),
-         "total": sum(counts.values())}
+        {"country": country, "inputs": _known_count(counts, "input"),
+         "context": _known_count(counts, "context"), "total": sum(counts.values())}
         for country, counts in sorted(countries.items())
     ]
     return detail, overall
@@ -103,18 +104,23 @@ def _metadata_coverage(data: dict[str, Any]) -> str:
     rows: list[dict[str, Any]] = []
     if isinstance(summary, dict):
         for field, values in summary.items():
+            if field == "host" and isinstance(values, dict) and not values.get("reported", 0):
+                continue
             if isinstance(values, dict):
                 rows.append({"field": {"host": "Host", "collection_date": "Collection date"}.get(field, field), **values})
             else:
                 rows.append({"field": field, "coverage": values})
     elif isinstance(summary, list):
-        rows = [dict(row) for row in summary if isinstance(row, dict)]
+        rows = [dict(row) for row in summary if isinstance(row, dict)
+                and not (str(row.get("field", "")).lower() == "host" and not row.get("reported", 0))]
     if not rows:
         return ""
     columns = [("field", "Metadata"), ("total", "Samples"), ("reported", "Reported"),
                ("missing", "Missing"), ("coverage", "Coverage")]
     present = [column for column in columns if column[0] == "field" or any(column[0] in row and _reported(row[column[0]]) for row in rows)]
-    return '<h3>Host and collection-date coverage</h3>' + _table(
+    host_present = any(row.get("field") in {"host", "Host"} for row in rows)
+    heading = "Host and collection-date coverage" if host_present else "Collection-date coverage"
+    return f'<h3>{heading}</h3>' + _table(
         rows, present, empty="No metadata coverage summary is available."
     )
 
@@ -134,23 +140,33 @@ def combined_dataset_summary(data: object) -> str:
         ))
         detail = geography
         if detail:
-            output.append('<details class="coverage-details"><summary>Region and NUTS2 detail</summary>')
+            output.append('<details class="coverage-details"><summary>Location detail</summary>')
             output.append(_table(
                 detail,
-                [("level", "Level"), ("place", "Reported location"), ("inputs", "Inputs"),
+                location_columns(detail) + [("inputs", "Inputs"),
                  ("context", "Context"), ("total", "Total")],
-                empty="No region or NUTS2 metadata is available.",
+                empty="No region or city metadata is available.",
             ))
             output.append("</details>")
     else:
         output.append('<p class="empty">Geographic composition was not reported.</p>')
     for field in ("Host", "Collection year"):
         rows = [row for row in _items(payload.get("metadata_composition")) if isinstance(row, dict) and row.get("field") == field]
-        if rows:
+        if rows and (field != "Host" or any(
+            _reported(row.get("value")) and row.get("total", 0) > 0 for row in rows
+        )):
             output.append(f'<details class="coverage-details"><summary>{escape(field)} breakdown</summary>')
             output.append(_table(rows, [("value", field), ("input", "Inputs"), ("context", "Context"), ("total", "Total")], empty="No metadata breakdown is available."))
             output.append('</details>')
     output.append(_metadata_coverage(payload))
+    output.append(
+        '<h3>Continue with the selected genomes</h3>'
+        '<p>With the ChronoClade environment active, run these commands from this '
+        'analysis block’s output directory. The tree stage acquires selected assemblies; '
+        'the time stage dates only trees that pass its temporal assessment.</p>'
+        '<pre style="white-space:pre-wrap;overflow-wrap:anywhere"><code>chronoclade tree selection_bundle/ensemble.json --out tree --threads 4\n'
+        'chronoclade time tree/tree_ensemble.json --out time</code></pre>'
+    )
     output.append("</section>")
     return "".join(output)
 
@@ -207,10 +223,12 @@ def _metadata_comparison(selection: dict[str, Any], pool_ids: set[str], metadata
             record = metadata.get(identifier, {})
             if field == "collection_date":
                 return any(record.get(name) for name in ("collection_date", "date_start", "date_end"))
-            return bool(record.get(field))
+            return _reported(record.get(field))
 
         selected_known = sum(known(identifier) for identifier in selected_ids)
         pool_known = sum(known(identifier) for identifier in pool_ids)
+        if field == "host" and not pool_known:
+            continue
         rows.append({
             "field": label,
             "selected": f"{selected_known} / {len(selected_ids)} reported",
@@ -230,6 +248,8 @@ def _metadata_comparison(selection: dict[str, Any], pool_ids: set[str], metadata
             if field == "collection_date":
                 return str(raw)[:4] if str(raw)[:4].isdigit() else "Unknown"
             return str(raw).strip().capitalize() if field == "host" else str(raw)
+        if field == "host" and not any(_reported(metadata.get(i, {}).get(field)) for i in pool_ids):
+            continue
         pool = Counter(value(identifier) for identifier in pool_ids)
         selected = Counter(value(identifier) for identifier in selected_ids)
         composition.extend({"field": label, "value": key, "selected": selected[key], "pool": count}
@@ -341,5 +361,13 @@ def subsample_summary(directory: str | Path, data: object) -> str:
         output.append(f'<details class="coverage-details"><summary>{escape(_display(selection.get("selection_id")))} metadata comparison</summary>')
         output.append(_metadata_comparison(selection, pool_ids, metadata))
         output.append("</details>")
+    output.append(
+        '<h3>Continue with the selected genomes</h3>'
+        '<p>With the ChronoClade environment active, run these commands from this '
+        'analysis block’s output directory. The tree stage acquires selected assemblies; '
+        'the time stage dates only trees that pass its temporal assessment.</p>'
+        '<pre style="white-space:pre-wrap;overflow-wrap:anywhere"><code>chronoclade tree selection_bundle/ensemble.json --out tree --threads 4\n'
+        'chronoclade time tree/tree_ensemble.json --out time</code></pre>'
+    )
     output.append("</section>")
     return "".join(output)

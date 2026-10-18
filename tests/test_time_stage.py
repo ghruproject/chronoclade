@@ -32,6 +32,15 @@ def test_unsupported_time_needs_no_native_tools_or_tree_rebuild(
     assert "dated tree unavailable" in report and "· years" not in report
     assert report.index("Dating unsupported") < report.index("Selected samples")
     assert "Biological tree and location history" not in report
+    from urllib.parse import unquote
+    from re import search
+
+    upstream = search(r'<a href="([^"]+)">SNP-tree report</a>', report)
+    assert upstream
+    report_path = tmp_path / "time" / result["report"]["path"]
+    assert (report_path.parent / unquote(upstream[1])).resolve() == (
+        tmp_path / "tree" / tree["report"]["path"]
+    ).resolve()
     assert run_time(tmp_path / "tree/tree.json", output=tmp_path / "time") == result
     assert native_stubs == ["corrected"]
     assert json.loads((tmp_path / "tree/tree.json").read_text()) == tree

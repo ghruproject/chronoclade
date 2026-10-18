@@ -2,9 +2,11 @@
 
 import json
 from io import StringIO
+from pathlib import Path
 
 import pytest
 from Bio import Phylo
+import chronoclade
 
 from chronoclade.errors import WorkflowError
 from chronoclade.report_components.forest import date_forest
@@ -166,6 +168,15 @@ def test_comparison_keeps_failures_coverage_and_saved_tree_audit(tmp_path, nativ
             "selection-002": {"status": "failed", "reason": "Assembly acquisition failed"}
         },
     )
+    computed = result["computed_with"]
+    assert computed["component"] == "time-comparison"
+    assert computed["method_revision"] == "independent-selection-comparison-v1"
+    package_root = Path(chronoclade.__file__).resolve().parent
+    assert computed["software"]["source_file_count"] == sum(1 for _ in package_root.rglob("*.py"))
+    from chronoclade.execution_provenance import execution_provenance
+
+    expected = execution_provenance(computed["component"], computed["method_revision"])
+    assert computed["software"] == expected["software"]
     coverage = result["selection_coverage"]
     assert len(coverage["runs"]) == 2 and coverage["pool_sample_count"] == 3
     assert coverage["requested_selection_union_count"] == 3

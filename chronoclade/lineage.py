@@ -118,6 +118,9 @@ def _write_lineage_inputs(directory: Path, samples: list[Sample]) -> tuple[Path,
         "assembly",
         "collection_date",
         "location",
+        "country",
+        "region",
+        "city",
         "species",
         "lineage",
         "origin",
@@ -175,6 +178,8 @@ def _run_command(
         except (OSError, json.JSONDecodeError):
             previous = None
     if all(path.exists() for path in expected_paths) and not force and previous == fingerprint:
+        from chronoclade.progress import progress
+        progress("native", f"Reusing checked {Path(command[0]).name} output")
         return
     for path in expected_paths:
         if path.is_file():
@@ -182,19 +187,21 @@ def _run_command(
     log.parent.mkdir(parents=True, exist_ok=True)
     with log.open("w", encoding="utf-8") as handle:
         handle.write("COMMAND\n" + " ".join(command) + "\n\nOUTPUT\n")
-        completed = subprocess.run(
-            command,
-            stdout=handle,
-            stderr=subprocess.STDOUT,
-            check=False,
-            cwd=cwd,
-        )
-    missing = [path for path in expected_paths if not path.exists()]
-    if completed.returncode != 0 or missing:
-        missing_text = ", ".join(str(path) for path in missing)
-        raise WorkflowError(
-            f"Command failed or did not create expected output(s): {missing_text}. See log: {log}"
-        )
+        from chronoclade.progress import progress_task
+        with progress_task("native", Path(command[0]).name, details=f"log: {log}"):
+            completed = subprocess.run(
+                command,
+                stdout=handle,
+                stderr=subprocess.STDOUT,
+                check=False,
+                cwd=cwd,
+            )
+            missing = [path for path in expected_paths if not path.exists()]
+            if completed.returncode != 0 or missing:
+                missing_text = ", ".join(str(path) for path in missing)
+                raise WorkflowError(
+                    f"Command failed or did not create expected output(s): {missing_text}. See log: {log}"
+                )
     temporary_fingerprint = fingerprint_path.with_suffix(".json.tmp")
     temporary_fingerprint.write_text(json.dumps(fingerprint, indent=2) + "\n", encoding="utf-8")
     temporary_fingerprint.replace(fingerprint_path)
@@ -507,13 +514,24 @@ def _run_core_phylogeny(
         members,
         output=files.coherence_screen,
     )
-    if coherence["flagged_samples"] and coherence_policy == "strict":
+    if coherence["flagged_samples"] and coherence_policy == "strict" and mode == "fast":
         names = ", ".join(str(name) for name in coherence["flagged_samples"])
         raise WorkflowError(
             "Lineage-coherence screen found extreme raw-distance outlier(s): "
             f"{names}. Relative-distance flags can reflect legitimate cohort diversity and "
             f"do not establish incorrect genome identity. Review the cohort or explicitly "
             f"choose diagnostic policy. Evidence: {files.coherence_screen}"
+        )
+
+    if coherence["flagged_samples"] and mode != "fast":
+        from chronoclade.progress import progress
+
+        progress(
+            "tree",
+            "Raw-distance review: retaining all selected genomes until the "
+            "recombination-filtered screen; raw flags can reflect recombination. "
+            f"Flagged genomes: {', '.join(coherence['flagged_samples'])}. "
+            f"Evidence: {files.coherence_screen}",
         )
 
     if mode == "fast":

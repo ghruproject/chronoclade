@@ -9,9 +9,9 @@ from chronoclade.report_components.profile_summary import (
 def test_combined_dataset_summary_puts_country_totals_first_and_collapses_subregions():
     html = combined_dataset_summary({
         "metadata_geography": [
-            {"origin": "local", "country": "Kenya", "region": "Nairobi", "nuts2": "KE01", "count": 2},
-            {"origin": "context", "country": "Kenya", "region": "Nairobi", "nuts2": "KE01", "count": 3},
-            {"origin": "local", "country": "Uganda", "region": "Central", "nuts2": "UG01", "count": 1},
+            {"origin": "local", "country": "Kenya", "region": "Nairobi", "city": "Nairobi", "count": 2},
+            {"origin": "context", "country": "Kenya", "region": "Nairobi", "city": "Nairobi", "count": 3},
+            {"origin": "local", "country": "Uganda", "region": "Central", "city": "Kampala", "count": 1},
         ],
         "metadata_summary": {
             "host": {"total": 6, "reported": 5, "missing": 1},
@@ -19,8 +19,8 @@ def test_combined_dataset_summary_puts_country_totals_first_and_collapses_subreg
         },
     })
 
-    assert html.index("Country totals") < html.index("Region and NUTS2 detail")
-    assert '<details class="coverage-details"><summary>Region and NUTS2 detail</summary>' in html
+    assert html.index("Country totals") < html.index("Location detail")
+    assert '<details class="coverage-details"><summary>Location detail</summary>' in html
     assert "Kenya" in html and "5" in html and "3" in html
     assert "Host and collection-date coverage" in html
     assert "<script>" not in combined_dataset_summary({
@@ -28,17 +28,47 @@ def test_combined_dataset_summary_puts_country_totals_first_and_collapses_subreg
     })
 
 
-def test_region_detail_omits_unknown_rows_but_keeps_reported_nuts2_and_unknown_country():
+def test_nuts2_is_not_used_as_city_or_as_an_empty_location_detail():
     html = combined_dataset_summary({"metadata_geography": [
         {"origin": "local", "country": "Unknown", "region": "Unknown", "nuts2": "Unknown", "count": 2},
         {"origin": "context", "country": "Greece", "region": "Unknown", "nuts2": "EL54", "count": 3},
     ]})
+    assert "Unknown" in html
+    assert "Location detail" not in html
+    assert "EL54" not in html
+    assert "NUTS2" not in html
 
-    assert "Unknown" in html  # country metadata remains visible in country totals
-    assert "Region and NUTS2 detail" in html
-    assert "EL54" in html
-    detail = html.split("Region and NUTS2 detail", 1)[1]
-    assert "Unknown" not in detail
+
+def test_city_only_metadata_has_country_and_city_without_an_empty_region_column():
+    html = combined_dataset_summary({"metadata_geography": [
+        {"origin": "local", "country": "Greece", "city": "Athens", "count": 2},
+        {"origin": "context", "country": "Greece", "city": "Athens", "count": 3},
+    ]})
+    detail = html.split("Location detail", 1)[1]
+    assert 'scope="col">Country' in detail and 'scope="col">City' in detail
+    assert 'scope="col">Region' not in detail
+    assert "Athens" in detail and ">5</td>" in detail
+
+
+def test_unknown_only_host_and_location_fields_are_omitted():
+    html = combined_dataset_summary({
+        "metadata_geography": [{"country": "Greece", "region": "not provided", "city": "Unknown city", "count": 3}],
+        "metadata_summary": {"host": {"total": 3, "reported": 0, "missing": 3},
+                             "collection_date": {"total": 3, "reported": 0, "missing": 3}},
+        "metadata_composition": [{"field": "Host", "value": "Unknown", "total": 3}],
+    })
+    assert "Location detail" not in html
+    assert "Host" not in html
+    assert "Collection-date coverage" in html
+
+
+def test_partial_host_metadata_keeps_reported_hosts_and_missing_counts():
+    html = combined_dataset_summary({
+        "metadata_composition": [{"field": "Host", "value": "Human", "total": 2},
+                                 {"field": "Host", "value": "Unknown", "total": 1}],
+        "metadata_summary": {"host": {"total": 3, "reported": 2, "missing": 1}},
+    })
+    assert "Host breakdown" in html and "Human" in html and "Unknown" in html
 
 
 def test_region_detail_is_hidden_when_only_unknown_locations_are_reported():
@@ -48,7 +78,7 @@ def test_region_detail_is_hidden_when_only_unknown_locations_are_reported():
 
     assert "Country totals" in html
     assert "Kenya" in html
-    assert "Region and NUTS2 detail" not in html
+    assert "Location detail" not in html
 
 
 def test_subsample_summary_reports_exact_counts_links_and_collapsed_metadata(tmp_path):

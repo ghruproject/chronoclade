@@ -1,0 +1,68 @@
+[
+  {
+    "sample_id": "fixture_1",
+    "origin": "local",
+    "label": "Isolate 1",
+    "species": "Klebsiella pneumoniae",
+    "mlst_st": "39",
+    "collection_date": "2020",
+    "country": "Greece",
+    "host": "human",
+    "cgmlst_scheme": "beta:fixture",
+    "cgmlst_scheme_version": "1",
+    "cgmlst_status": "resolved",
+    "cgmlst_profile": {
+      "locus-a": "1",
+      "locus-b": "1",
+      "locus-c": "1"
+    },
+    "cglin_scheme": "beta:fixture-lin",
+    "cglin_scheme_version": "1",
+    "cglin_raw": "0,0,1,0,1,0,0,0,0,0",
+    "cglin_status": "complete"
+  },
+  {
+    "sample_id": "fixture_2",
+    "origin": "context",
+    "label": "Isolate 2",
+    "species": "Klebsiella pneumoniae",
+    "mlst_st": "39",
+    "collection_date": "2021",
+    "country": "Greece",
+    "host": "human",
+    "cgmlst_scheme": "beta:fixture",
+    "cgmlst_scheme_version": "1",
+    "cgmlst_status": "resolved",
+    "cgmlst_profile": {
+      "locus-a": "1",
+      "locus-b": "2",
+      "locus-c": "1"
+    },
+    "cglin_scheme": "beta:fixture-lin",
+    "cglin_scheme_version": "1",
+    "cglin_raw": "0,0,1,0,1,0,0,0,0,0",
+    "cglin_status": "complete"
+  },
+  {
+    "sample_id": "fixture_3",
+    "origin": "context",
+    "label": "Isolate 3",
+    "species": "Klebsiella pneumoniae",
+    "mlst_st": "39",
+    "collection_date": "2022",
+    "country": "",
+    "host": "human",
+    "cgmlst_scheme": "beta:fixture",
+    "cgmlst_scheme_version": "1",
+    "cgmlst_status": "resolved",
+    "cgmlst_profile": {
+      "locus-a": "3",
+      "locus-b": "2",
+      "locus-c": "1"
+    },
+    "cglin_scheme": "beta:fixture-lin",
+    "cglin_scheme_version": "1",
+    "cglin_raw": "0,0,1,0,1,0,0,0,0,0",
+    "cglin_status": "complete"
+  }
+]

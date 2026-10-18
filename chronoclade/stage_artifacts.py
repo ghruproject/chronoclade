@@ -220,6 +220,8 @@ def publish(output, job, stage, result):
         {"stage": stage, "status": "complete", "fingerprint": result["fingerprint"]},
     )
     write_json(output / f"{stage}.json", result)
+    from chronoclade.stage_readme import write_stage_readme
+    write_stage_readme(output, stage, report=result.get('report', {}).get('path'))
     return result
 
 

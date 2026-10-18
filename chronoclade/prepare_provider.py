@@ -9,15 +9,19 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from dataclasses import replace
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import urlopen
 
 from chronoclade.datasets import DatasetError, LocusCatalogue
+from chronoclade.artifacts import write_json
 from chronoclade.datasets.model import check_json
 from chronoclade.pathogenwatch import PathogenwatchClient, normalize_country
 from chronoclade.profile_inputs import (
     _accession_input,
+    _analysis_export_eligible,
     _analysis_exports,
     _apply_overrides,
     _canonical,
@@ -37,8 +41,39 @@ def _save(path, value):
     path.write_text(json.dumps(value, indent=2) + "\n")
 
 
+def _canonical_json_sha256(value):
+    encoded = json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _save_accession_evidence(directory, filename, value):
+    path = directory / filename
+    _save(path, value)
+    return {
+        "path": path.name,
+        "canonical_json_sha256": _canonical_json_sha256(value),
+        "bytes": path.stat().st_size,
+    }
+
+
 def _has_profile(row):
     return bool(row.get("cgmlst_profile") or row.get("cgmlst_novel_alleles"))
+
+
+def _resume_checkpoint_ids(cache_path):
+    """An absent cache means typing never started; an existing bad cache is rejected."""
+    from chronoclade.query_typing import typing_checkpoint_sample_ids
+
+    cache_path = Path(cache_path)
+    if cache_path.is_symlink():
+        raise DatasetError("Typing checkpoint cache path is a symlink; refusing resume")
+    if not cache_path.exists():
+        return []
+    if not cache_path.is_dir():
+        raise DatasetError("Typing checkpoint cache is not a directory; refusing resume")
+    return typing_checkpoint_sample_ids(cache_path)
 
 
 def _has_lineage(row):
@@ -67,7 +102,9 @@ def apply_metadata_overrides(rows, overrides, base):
                 fields.update(
                     k
                     for k, value in override.items()
-                    if value and k not in {"source_genome_id", "accession"}
+                    if k not in {"source_genome_id", "accession", "sample_id"}
+                    and value is not None
+                    and (not isinstance(value, str) or value.strip())
                 )
         sources[row.get("source_genome_id") or row["sample_id"]] = fields
     updated = _apply_overrides(rows, overrides, base)
@@ -78,13 +115,41 @@ def apply_metadata_overrides(rows, overrides, base):
     return updated
 
 
-def _resolve_accessions(path, species, client):
+def _resolve_accessions(path, species, client, work=None):
     identifiers, overrides = _accession_input(path)
     candidates = []
     organisms = None
-    for ident in identifiers:
-        if re.fullmatch(r"[1-9A-HJ-NP-Za-km-z]{20,22}", ident):
+    evidence_dir = Path(work) / "accession_resolution" if work is not None else None
+    evidence_records = []
+
+    def persist_evidence():
+        if evidence_dir is not None:
+            _save(
+                evidence_dir / "receipt.json",
+                {
+                    "schema": "chronoclade.accession-resolution-evidence",
+                    "schema_version": 1,
+                    "hash_definition": "sha256 of UTF-8 canonical decoded JSON; not raw transport bytes",
+                    "records": evidence_records,
+                },
+            )
+
+    if evidence_dir is not None:
+        evidence_dir.mkdir(parents=True, exist_ok=True)
+
+    for input_index, ident in enumerate(identifiers):
+        prefix = f"{input_index:04d}"
+        is_uuid = bool(re.fullmatch(r"[1-9A-HJ-NP-Za-km-z]{20,22}", ident))
+        record = {
+            "input_index": input_index,
+            "identifier": ident,
+            "search_mode": "exact_uuid" if is_uuid else "public_accession_search",
+            "details": [],
+        }
+        evidence_records.append(record)
+        if is_uuid:
             searches = [{"uuid": ident}]
+            record.update(reported_count=1, returned_count=1, result_ids=[ident])
         else:
             organisms = organisms or client.supported_organisms()
             organism = next(
@@ -97,24 +162,61 @@ def _resolve_accessions(path, species, client):
             )
             if organism is None:
                 raise DatasetError("Accession queries require an exact supported --species")
-            response = client.request_json(
-                "POST",
-                "/api/search/genomes",
-                body={
+            request = {
+                "method": "POST",
+                "endpoint": "/api/search/genomes",
+                "body": {
                     "organismId": str(organism["organismId"]),
                     "searchText": ident,
                     "qc": [True, False],
                 },
-                params={"limit": 100, "sort": "id"},
+                "params": {"limit": 100, "sort": "id"},
+            }
+            if evidence_dir is not None:
+                record["request"] = _save_accession_evidence(
+                    evidence_dir, f"{prefix}-search-request.json", request
+                )
+            response = client.request_json(
+                "POST",
+                "/api/search/genomes",
+                body=request["body"],
+                params=request["params"],
             )
             count = response.get("meta", {}).get("count")
             searches = response.get("genomes")
+            record.update(
+                reported_count=count if type(count) is int else None,
+                returned_count=len(searches) if isinstance(searches, list) else None,
+                result_ids=[item.get("uuid") for item in searches if isinstance(item, dict)]
+                if isinstance(searches, list)
+                else [],
+            )
+            if evidence_dir is not None:
+                record["response"] = _save_accession_evidence(
+                    evidence_dir, f"{prefix}-search-response.json", response
+                )
+            record["status"] = "search_response_captured"
+            persist_evidence()
             if type(count) is not int or not isinstance(searches, list) or count != len(searches):
+                record["status"] = "rejected_incomplete_search"
+                persist_evidence()
                 raise DatasetError("Accession search is incomplete; supply an exact source UUID")
-        for search in searches:
+        record.setdefault("status", "exact_uuid")
+        if evidence_dir is not None and is_uuid:
+            persist_evidence()
+        for search_index, search in enumerate(searches):
             detail = client.request_json(
                 "GET", "/api/genomes/details", params={"id": search["uuid"]}
             )
+            if evidence_dir is not None:
+                detail_evidence = _save_accession_evidence(
+                    evidence_dir, f"{prefix}-detail-{search_index:04d}.json", detail
+                )
+                detail_evidence["source_genome_id"] = search["uuid"]
+                detail_evidence["result_index"] = search_index
+                record["details"].append(detail_evidence)
+                record["status"] = "detail_responses_captured"
+                persist_evidence()
             if (
                 detail.get("uuid") != search["uuid"]
                 or detail.get("projectAccess", "PUBLIC") != "PUBLIC"
@@ -225,7 +327,7 @@ def enrich_exact_ena(rows, *, fetch=None):
 
 
 def catalogues_for_records(rows, explicit=()):
-    """Use explicit universes; observed server exports are always incomplete."""
+    """Keep complete universes strict; expand incomplete catalogues only by observed loci."""
     catalogues = list(explicit)
     scopes = {}
     for row in rows:
@@ -241,23 +343,31 @@ def catalogues_for_records(rows, explicit=()):
         )
         scopes.setdefault(key, []).append(row)
     for (scheme, version, database_version, digest), members in scopes.items():
-        if any(
-            (c.scheme_id, c.scheme_version, c.database_version, c.database_sha256)
-            == (scheme, version, database_version, digest)
-            for c in catalogues
-        ):
+        matching = [index for index, catalogue in enumerate(catalogues)
+                    if (catalogue.scheme_id, catalogue.scheme_version,
+                        catalogue.database_version, catalogue.database_sha256)
+                    == (scheme, version, database_version, digest)]
+        if matching and all(catalogues[index].complete for index in matching):
+            continue
+        observed = set()
+        for row in members:
+            observed.update(row.get("cgmlst_profile") or {})
+            observed.update(row.get("cgmlst_novel_alleles") or {})
+            observed.update(row.get("cgmlst_loci") or [])
+        loci = sorted(observed)
+        if matching:
+            for index in matching:
+                catalogue = catalogues[index]
+                extra = sorted(set(loci) - set(catalogue.loci))
+                if extra and not catalogue.complete:
+                    source = catalogue.source
+                    if not source.startswith("Observed same-scope locus union; prior source: "):
+                        source = "Observed same-scope locus union; prior source: " + source
+                    catalogues[index] = replace(
+                        catalogue, loci=(*catalogue.loci, *extra), source=source, complete=False,
+                    )
             continue
         declared = [tuple(r["cgmlst_loci"]) for r in members if r.get("cgmlst_loci")]
-        loci = sorted(
-            set().union(
-                *(
-                    set(r.get("cgmlst_profile") or {})
-                    | set(r.get("cgmlst_novel_alleles") or {})
-                    | set(r.get("cgmlst_loci") or [])
-                    for r in members
-                )
-            )
-        )
         if loci:
             complete = bool(
                 declared
@@ -364,6 +474,10 @@ def resolve_queries(
     public_typing=None,
     cglin_export=None,
     enrich_metadata=True,
+    native_checkpoint=None,
+    native_attempt=None,
+    resume_typing=False,
+    cohort_validator=None,
 ):
     """Resolve and type inputs, without public context discovery."""
     client = client or PathogenwatchClient()
@@ -376,7 +490,13 @@ def resolve_queries(
             rows, details["downloads"], client, work / "query_exports", provider
         )
     elif input_kind == "accessions":
-        rows = _resolve_accessions(Path(input_value).resolve(), species, client)
+        rows = _resolve_accessions(Path(input_value).resolve(), species, client, work=work)
+        evidence = work / "accession_resolution" / "receipt.json"
+        provider["accession_resolution_evidence"] = {
+            "path": "accession_resolution/receipt.json",
+            "sha256": hashlib.sha256(evidence.read_bytes()).hexdigest(),
+            "bytes": evidence.stat().st_size,
+        }
     elif input_kind == "assemblies":
         path = Path(input_value).resolve()
         rows = [
@@ -398,10 +518,25 @@ def resolve_queries(
             row["species"] = species
     if any(not r.get("species") for r in rows):
         raise DatasetError("Each input needs --species or a provider species identity")
+    if cohort_validator is not None:
+        cohort_validator(rows)
+    provider_queries_requested = input_kind != "assemblies" or (
+        bool(client.api_key)
+        and any(
+            _analysis_export_eligible(row, name)
+            for row in rows
+            for name in ("cgmlst", "klebsiella-lincodes", "hclink")
+        )
+    )
     rows = _grouped_analysis_exports(rows, client, work / "query_exports_grouped", provider)
     rows = _grouped_analysis_exports(
         rows, client, work / "query_lineages", provider, download_names={"klebsiella-lincodes"}
     )
+    rows = _grouped_analysis_exports(
+        rows, client, work / "query_hiercc", provider, download_names={"hclink"}
+    )
+    from chronoclade.provider_hiercc import without_internal_proof
+    rows = without_internal_proof(rows)
     if public_typing:
         from chronoclade.public_typing import annotate_public_typing, load_public_typing
 
@@ -428,7 +563,9 @@ def resolve_queries(
                     )
                 row.update(assignment)
     operations = {
-        "provider_retrieval": "run_exact_queries",
+        "provider_retrieval": "run_exact_queries"
+        if provider_queries_requested
+        else "not_run_local_assemblies",
         "context_discovery": "not_run",
         "typing": "not_run",
         "lineage_assignment": "not_run",
@@ -464,6 +601,21 @@ def resolve_queries(
                 reference_database="ready_validated_configuration",
                 typing_tool_installation="configured_available",
             )
+            if native_checkpoint is not None and resume_typing:
+                from chronoclade.query_typing import validate_typing_checkpoint
+
+                checkpoint_path = Path(native_checkpoint)
+                cached_ids = _resume_checkpoint_ids(checkpoint_path)
+                if cached_ids:
+                    checkpoint_rows = [row for row in rows if row["sample_id"] in cached_ids]
+                    if [row["sample_id"] for row in checkpoint_rows] != cached_ids:
+                        raise DatasetError("Typing checkpoint contains samples outside the resolved cohort")
+                    checkpoint_samples = materialise_assemblies(
+                        checkpoint_rows, output=work / "query_assemblies_preflight", client=client
+                    )
+                    validate_typing_checkpoint(
+                        checkpoint_samples, Path(typing_config), Path(native_checkpoint)
+                    )
             assigned = assign_existing_profiles(rows, config, work / "native_lineage_assignment")
             if assigned:
                 operations["lineage_assignment"] = "run_existing_compatible_profiles"
@@ -476,9 +628,30 @@ def resolve_queries(
                 samples = materialise_assemblies(
                     need, output=work / "query_assemblies", client=client
                 )
-                assignments = type_query_assemblies(
-                    samples, Path(typing_config), work / "native_typing"
-                )
+                if native_checkpoint is None:
+                    assignments = type_query_assemblies(
+                        samples, Path(typing_config), work / "native_typing"
+                    )
+                else:
+                    assignments = type_query_assemblies(
+                        samples,
+                        Path(typing_config),
+                        Path(native_checkpoint),
+                        # A prepare resume can fail before native typing ever
+                        # creates its per-sample checkpoint directory. In that
+                        # case this is the first native typing attempt, while
+                        # an existing cache must still be resumed and validated.
+                        resume=resume_typing and Path(native_checkpoint).exists(),
+                        attempt_output=Path(native_attempt),
+                    )
+                    # Retain the established portable export as well as the
+                    # prepare-owned recovery cache, which is removed on success.
+                    write_json(work / "native_typing" / "query_typing.json", {
+                        "schema_version": 1,
+                        "created_at": datetime.now(timezone.utc).isoformat(),
+                        "typing_mode": "full",
+                        "assignments": assignments,
+                    })
                 by_id = {r["sample_id"]: r for r in assignments}
                 for row, sample in zip(need, samples, strict=True):
                     row.update(by_id[row["sample_id"]])
@@ -513,7 +686,7 @@ def resolve_queries(
         }
         for r in rows
         for key in (
-            "country", "region", "nuts2", "host", "isolation_source", "collection_date",
+            "country", "region", "city", "nuts2", "host", "isolation_source", "collection_date",
             "hospital", "hospital_code", "publication_isolate_id", "specimen_type",
             "clinical_specimen", "study_accession",
         )

@@ -1,0 +1,94 @@
+{
+  "groups": [
+    {
+      "organismId": "562",
+      "ids": [
+        108048
+      ],
+      "name": "Escherichia coli",
+      "supported": true,
+      "downloads": [
+        {
+          "name": "cgmlst",
+          "label": "cgMLST (Escherichia/Shigella cgMLST v1 - Enterobase)",
+          "job": "cgmlst-562-1"
+        },
+        {
+          "name": "clermontyping",
+          "label": "ClermonTyping",
+          "job": "clermontyping-562-1"
+        },
+        {
+          "name": "ectyper",
+          "label": "ECTyper",
+          "job": "ectyper-562-1"
+        },
+        {
+          "name": "hclink",
+          "label": "HierCC",
+          "job": "hclink-562-4"
+        },
+        {
+          "name": "mlst",
+          "label": "MLST (Escherichia coli#1 - Enterobase)",
+          "job": "mlst-562-5"
+        },
+        {
+          "name": "mlst2",
+          "label": "MLST 2 (Escherichia coli#2 - Pasteur)",
+          "job": "mlst2-562-2"
+        },
+        {
+          "name": "plasmidfinder",
+          "label": "PlasmidFinder",
+          "job": "plasmidfinder-ebacter-1"
+        },
+        {
+          "name": "rfplus",
+          "label": "ResFinder",
+          "job": "rfplus-562-1"
+        },
+        {
+          "name": "stecfinder",
+          "label": "STECFinder",
+          "job": "stecfinder-1"
+        },
+        {
+          "name": "virulencefinder",
+          "label": "VirulenceFinder",
+          "job": "virulencefinder-562-1"
+        }
+      ]
+    }
+  ],
+  "requested_numeric_ids": [
+    108048
+  ],
+  "retrieved_at": "2026-10-18T04:09:06.630616+00:00",
+  "request_contract": {
+    "schema": "chronoclade.export-capability-request",
+    "schema_version": 1,
+    "base_url": "https://pathogen.watch",
+    "requested_numeric_ids": [
+      108048
+    ],
+    "requested_source_ids": [
+      "iLGx7naVnHXTvwPF8DEgAo"
+    ],
+    "download_names": [
+      "cgmlst"
+    ],
+    "row_scope": [
+      {
+        "species": "Escherichia coli",
+        "organism_id": "562",
+        "mlst_st": "131",
+        "cgmlst_scheme": null,
+        "cgmlst_scheme_version": null,
+        "cglin_scheme": null,
+        "cglin_scheme_version": null
+      }
+    ]
+  },
+  "sha256": "7c537260f5b2ec03acf59532445851931c0bb32ef321ba8d659c9b18f274348f"
+}

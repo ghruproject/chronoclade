@@ -43,6 +43,8 @@ def time_command(
         Console().print(f"Time ensemble: {output.resolve() / 'time_ensemble.json'}")
         Console().print(f"Completed: {result['completed_runs']}; failed: {result['failed_runs']}")
         Console().print(f"Comparison: {output.resolve() / result['report']['path']}")
+        if result["failed_runs"]:
+            raise typer.Exit(2)
     else:
         Console().print(f"Time manifest: {output.resolve() / 'time.json'}")
         Console().print(f"Dating status: {result['dating_status']}")

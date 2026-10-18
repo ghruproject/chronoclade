@@ -12,6 +12,8 @@ from chronoclade.evidence import EvidenceError, pairwise_distances, read_alignme
 from chronoclade.metadata import Sample
 
 
+COHERENCE_SCREEN_POLICY_VERSION = "raw_review_corrected_gate_v2"
+
 MIN_ROBUST_Z = 10.0
 MIN_MEDIAN_RATIO = 5.0
 

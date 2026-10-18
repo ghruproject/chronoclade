@@ -8,7 +8,9 @@ import sys
 from Bio import Phylo
 import numpy as np
 
-from chronoclade.temporal_diagnostics import date_regression, allele_unit_diagnostic
+from chronoclade.temporal_diagnostics import (
+    date_regression, allele_unit_diagnostic, date_distance_point,
+)
 
 
 NOTE = ('The clock-compatible root minimises regression residual mean squared using '
@@ -85,7 +87,7 @@ def add_root_comparisons(analysis, records, directory):
         tree = Phylo.read(path if path.is_absolute() else directory / path, 'newick')
         rows = [by_id[name] for name in cohort['sample_ids'] if name in by_id]
         eligible = date_regression(
-            [dict(row, root_to_tip=0) for row in rows],
+            [date_distance_point(row, 0) for row in rows],
             distance_field='root_to_tip', distance_units='', label='Date eligibility')
         dated_ids = {point['sample_id'] for point in eligible['points']}
         eligible_rows = [row for row in rows if row['sample_id'] in dated_ids]
@@ -119,7 +121,8 @@ def add_root_comparisons(analysis, records, directory):
                              if d.get('cohort_id') == cohort['cohort_id']), {})
             def diagnostic(current):
                 value = date_regression(
-                    [dict(row, root_to_tip=current.distance(row['sample_id'])) for row in eligible_rows],
+                    [date_distance_point(row, current.distance(row['sample_id']))
+                     for row in eligible_rows],
                     distance_field='root_to_tip', distance_units=analysis.get('distance_units', ''),
                     label='Root comparison')
                 factor = previous.get('normalization_loci') or previous.get('scale_loci')

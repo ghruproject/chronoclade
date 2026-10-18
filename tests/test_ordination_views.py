@@ -124,3 +124,31 @@ def test_512_group_view_keeps_every_point_and_bounds_searchable_legends(tmp_path
     assert "Search all groups" in html and "Show all groups" in html
     assert "max-height:140px" in html
     assert "Search all" in html and "Show all categories" in html
+
+
+def test_absent_optional_metadata_has_no_controls_or_payload_fields(tmp_path):
+    records = [dict(sample_id='a', host='unknown', region='not provided', city='', nuts2='EL30'),
+               dict(sample_id='b', host='not available', region=None, city='Unknown city')]
+    result = write_ordination_views(tmp_path, 'missing_metadata', [[0,0],[1,1]], records)
+    html = Path(result['pcoa_views_html']).read_text()
+    payload = json.loads(re.search(r'id="ordination-data">(.*?)</script>', html).group(1))
+    assert payload['metadata_fields'] == []
+    for field in ('host','region','city'):
+        assert f'value="{field}"' not in html
+        assert f'pcoa_{field}_figure' not in result
+        assert all(field not in row for row in payload['rows'])
+
+
+def test_city_and_region_views_use_only_reported_fields_and_keep_coordinates(tmp_path):
+    records = [dict(sample_id='a', role='input', city='Athens', region='Attica', nuts2='EL30'),
+               dict(sample_id='b', role='context', city=None, region=None, nuts2='ITC4')]
+    coordinates = [[0,1],[2,3]]
+    result = write_ordination_views(tmp_path, 'city_metadata', coordinates, records)
+    html = Path(result['pcoa_views_html']).read_text()
+    payload = json.loads(re.search(r'id="ordination-data">(.*?)</script>', html).group(1))
+    assert payload['metadata_fields'] == ['region','city']
+    assert 'value="city"' in html and 'value="region"' in html
+    assert payload['rows'][0]['city'] == 'Athens'
+    assert payload['rows'][1]['city'] == 'Unknown city'
+    assert [row['coordinates']['ordination'] for row in payload['rows']] == coordinates
+    assert 'ITC4' not in html and 'EL30' not in html

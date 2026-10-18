@@ -51,7 +51,15 @@ assignments. Query typing must match exact sample identity, species and any know
 input assembly SHA256. Missing profiles and lineages remain separate checks.
 
 `--typing-config` enables the pinned native upstream caller and assigner. A
-compatible existing profile missing its lineage goes directly to the assigner,
+native assembly call needs `blastn` and `makeblastdb` on the executable path:
+run it with `pixi run --frozen --environment default chronoclade prepare ...`.
+The lean `-e prepare` environment handles existing profiles/provider typing
+and does not include those executables. A
+new assembly also needs a verified seven-gene MLST ST in its metadata for public
+species/ST context discovery. Native cgMLST/cgLIN/HierCC calling does not
+calculate that seven-gene ST; a cgMLST profile identifier is a different value.
+Missing ST must be resolved before claiming the public context search is ready.
+An existing compatible profile missing its lineage goes directly to the assigner,
 without assembly acquisition. Other incomplete inputs acquire **input** assemblies
 and run native typing. A missing/unready configuration publishes an incomplete
 bundle with an explicit reference-database reason, rather than inventing calls.
@@ -60,6 +68,11 @@ frozen typing does not require a Pasteur key. Fresh Klebsiella lineage assignmen
 requires its configured Pasteur reference database; E. coli assignment requires
 its scheme-specific HierCC reference database.
 
+For native Klebsiella reference setup, follow the [one-time Pasteur authorisation](pasteur-auth.md)
+walkthrough. Client-key files, browser consent and reference installation are
+separate steps; the command saves access privately without requiring a password
+in your typing configuration.
+
 Live metadata enrichment uses exact linked ENA run/BioSample accessions. It fills
 missing country, collection date, host and isolation source only when returned
 records agree. Existing values retain precedence, source raw values and conflicts
@@ -67,11 +80,40 @@ remain recorded, and unrelated identities are rejected. It never derives a regio
 or date precision from an upload date. `--no-enrich-metadata` disables enrichment.
 Missing metadata and request failures preserve the sample.
 
+Location metadata uses separate `country`, `region` and `city` columns. Supply
+only the detail you have; ChronoClade does not infer a city from a region or a
+legacy NUTS2 code. Reports omit entirely unreported region, city and host fields,
+including their colour controls. Where a field is partly reported, missing
+values remain visible as Unknown.
+
 Provider cgMLST exports list observed loci only. Their automatically generated
 catalogue is explicitly incomplete; no full-universe call fraction is claimed.
 Supply `--catalogues` with a matching full scheme catalogue to assess completeness.
 Native callers provide the ordered full locus universe. Source responses and exports
 are copied into the checksummed bundle after credential checks.
+
+## Resume interrupted native preparation
+
+If live/local preparation using `--typing-config` is interrupted, repeat the
+same command with `--resume`:
+
+```console
+pixi run --frozen --environment default chronoclade prepare assemblies.csv \
+  --input-kind assemblies --typing-config /path/to/query_config.json \
+  --out prepared-assemblies --resume
+```
+
+Preparation retains its work beside the requested output, for example
+`prepared-assemblies.work/`. Completed sample typing is checkpointed; a sample
+interrupted before completion is rerun in a new attempt directory. The error
+message identifies the retained work and the resume command. Keep the input,
+configuration, software and references unchanged when resuming. Changed or
+corrupt recovery state is refused rather than silently mixed with new results.
+Provider metadata may be retrieved again before exact cohort checks complete.
+
+A completed output remains immutable, even with `--resume`. Frozen profile and
+dataset imports do not use this native recovery mechanism. The standalone
+`type-queries` command also accepts `--resume` for its own typing output.
 
 ## Frozen input contract
 
@@ -182,6 +224,31 @@ profile export retrieval. Local upstream MLST 8.0.0, plincer 7.0.0 and hclink 4.
 were discovered; their reference databases were unavailable, independently of
 those installed tools. A fixture with 120 matching public profiles verifies the
 unbounded explicit-level context path and exclusion of an unrelated prefix.
+
+### Live collection CLI acceptance
+
+On 17 October 2026, the ordinary `chronoclade prepare` CLI accepted the supplied
+Ellington *et al.* (2015) collection URL (`jX5cwsoyJ1KDquMqssUzAD`). It reconciled
+all 23 public collection members with the published dataset and imported all 23
+existing cgMLST profiles from the advertised Pathogenwatch export. Collection
+date, country and region were present for all members. Metadata enrichment,
+native typing, assembly acquisition, lineage assignment and context discovery
+were not run. The provider-derived 2,202-locus catalogue is explicitly incomplete;
+no lineage export was advertised for this *S. aureus* collection. Dataset
+publication completed, while typing readiness remains incomplete because the
+catalogue is partial and lineage readiness is unassessed for this species.
+
+The v2 Python source fingerprint was unchanged before and after the command
+(126 files; SHA-256
+`2064afdafa8b1294450f303f86b2e06e08aa4aa4989f707cb73350977908e013`). The
+environment used Python 3.11.14 and lacked pandas and phylo-treetime, so its
+runtime did not match the freeze record; the thin prepare path still completed.
+The short UUID was also accepted by the collection-ID parser, but this was a
+parser-equivalence check, not a second live CLI run. This acceptance is limited
+to *S. aureus* collection membership and existing-profile import. It makes no
+Klebsiella, E. coli, native HierCC, or biological-equivalence claim. Raw inputs,
+provider responses, prepared outputs and command evidence are under
+`validation/beta/collection-input-live/`.
 
 Upstream tool contracts are documented by [Pathogenwatch MLST](https://github.com/pathogenwatch-oss/mlst),
 [plincer](https://github.com/pathogenwatch-oss/plincer) and

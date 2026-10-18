@@ -7,14 +7,49 @@ import numpy as np
 from Bio import Phylo
 
 from chronoclade.context_refinement import _lineage
+from chronoclade.provider_hiercc import reported_metadata, reported_scope
 
 
-def assign_lineage_groups(analysis, records):
-    """Use reported LIN prefixes; never infer a code from distances or neighbours."""
+def assign_lineage_groups(analysis, records, *, level=7):
+    """Assign reported lineage labels, or one neutral category in ST-only mode."""
+    if isinstance(level, bool) or not isinstance(level, int) or not 5 <= level <= 10:
+        raise ValueError("Display LIN level must be an integer between 5 and 10")
     partition = analysis.get('partition') or {}
-    if partition.get('kind') != 'cglin':
+    kind = partition.get('kind')
+    if kind == 'hiercc':
+        hiercc_level = partition.get('level')
+        if not isinstance(hiercc_level, str) or not hiercc_level.startswith('HC') or not hiercc_level[2:].isdigit():
+            raise ValueError('HierCC display requires the explicit HC level used for partitioning')
+        members = defaultdict(list)
+        namespaces = {}
+        for row in records:
+            assignment = _lineage(row, 'hiercc', hiercc_level)
+            label = (f'HierCC {hiercc_level}: ' + str(assignment[2])
+                     if assignment is not None else f'HierCC {hiercc_level}: unassigned')
+            if assignment is not None:
+                namespaces[label] = {'scheme': assignment[0],
+                                     'scheme_version': row.get('hiercc_scheme_version') if reported_scope(row) else assignment[1],
+                                     'code': assignment[2], **reported_metadata(row)}
+            members[label].append(row['sample_id'])
+        analysis['lineage_groups'] = [
+            {'group_id': label, 'sample_ids': ids, 'method': 'reported HierCC assignment',
+             'kind': 'hiercc', 'level': hiercc_level, **namespaces.get(label, {})}
+            for label, ids in sorted(members.items())]
+        analysis['display_group_basis'] = 'reported_hiercc'
+        analysis['display_group_level'] = hiercc_level
+        return {ident: label for label, ids in members.items() for ident in ids}
+    if kind == 'st':
+        label = 'Lineage unassigned'
+        ids = [row['sample_id'] for row in records]
+        analysis['lineage_groups'] = [
+            {'group_id': label, 'sample_ids': ids, 'method': 'lineage not used in ST-only mode',
+             'kind': 'unassigned'}
+        ] if ids else []
+        analysis['display_group_basis'] = 'unassigned_lineage'
+        analysis['display_group_level'] = None
+        return {ident: label for ident in ids}
+    if kind != 'cglin':
         return None
-    level = 7
     members = defaultdict(list)
     namespaces = {}
     for row in records:
@@ -35,12 +70,12 @@ def assign_lineage_groups(analysis, records):
     return {ident: label for label, ids in members.items() for ident in ids}
 
 
-def render_lineage_groups(analysis, records, directory, *, reuse_coordinates=False):
+def render_lineage_groups(analysis, records, directory, *, reuse_coordinates=False, level=7):
     """Refresh presentation only from saved tree and distance-coordinate evidence."""
     from .group_tree import write_group_tree
     from .ordination import write_ordination_views
     from .tree_ordination import ordination_bases
-    assignments = assign_lineage_groups(analysis, records)
+    assignments = assign_lineage_groups(analysis, records, level=level)
     if assignments is None:
         return
     directory = Path(directory)
@@ -74,6 +109,7 @@ def render_lineage_groups(analysis, records, directory, *, reuse_coordinates=Fal
             coords, _, bases = ordination_bases(tree, rows, direct_coords)
         stem = cohort['cohort_id']
         cohort['tree_groups_html'] = write_group_tree(tree, rows, analysis['sample_labels'], assignments,
-            directory / f'{stem}_tree_groups.html', distance_units=analysis.get('distance_units'))
+            directory / f'{stem}_tree_groups.html', distance_units=analysis.get('distance_units'),
+            group_basis=analysis.get('display_group_basis'))
         cohort.update(write_ordination_views(directory, stem, coords, rows, groups=assignments,
             title='NJ-tree distance ordination', coordinate_views=bases, default_basis='nj_tree'))

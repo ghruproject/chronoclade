@@ -139,6 +139,8 @@ def test_combined_metadata_round_trip(tmp_path: Path) -> None:
     context_assembly.write_text(">context\nAAAA\n", encoding="utf-8")
     context = candidate("SAMN1", "Philippines", "2023-02")
     context.assembly = str(context_assembly.resolve())
+    context.region = "Central Luzon"
+    context.city = "Manila"
 
     focal = [
         Sample(
@@ -149,12 +151,16 @@ def test_combined_metadata_round_trip(tmp_path: Path) -> None:
             "Escherichia coli",
             "ST131",
             "local",
+            city="Oxford",
+            region="Oxfordshire",
         )
     ]
     combined = write_combined_metadata(tmp_path / "combined.csv", focal, [context])
     parsed = read_metadata(combined)
 
     assert [sample.origin for sample in parsed] == ["local", "context"]
+    assert parsed[0].city == "Oxford" and parsed[0].region == "Oxfordshire"
+    assert parsed[1].city == "Manila" and parsed[1].region == "Central Luzon"
     with combined.open(newline="", encoding="utf-8") as handle:
         rows = list(csv.DictReader(handle))
     assert rows[1]["location"] == "Philippines"

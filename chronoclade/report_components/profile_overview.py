@@ -7,7 +7,7 @@ from chronoclade.location_network.reconstruction import observed_host
 from chronoclade.metadata_dates import sample_date_interval
 from chronoclade.sample_labels import display_label
 
-from .profile_summary import _dataset_metadata, _origin, _read_json, _selection_path, _table
+from .profile_summary import _dataset_metadata, _origin, _read_json, _reported, _selection_path, _table
 
 
 def _bundle(directory):
@@ -25,7 +25,8 @@ def input_scope(data, provenance):
         return f'All {total} input genomes are in this analysis block.'
     remaining = total - current
     kind = data.get('partition', {}).get('kind')
-    name = 'LIN' if kind == 'cglin' else 'HierCC' if kind == 'hiercc' else 'lineage'
+    name = ('cgLIN' if kind == 'cglin' else 'HierCC' if kind == 'hiercc'
+            else 'species/ST profile' if kind == 'st' else 'lineage')
     elsewhere = ('The remaining inputs are outside this block; check All groups for their assignment and status.'
                  if scope.get('assigned_inputs', total) < total else
                  f'The remaining {remaining} inputs are analysed in the other block reports, available through All groups.')
@@ -110,9 +111,14 @@ def genetic_group_summary(directory, data):
     if not groups:
         return ''
 
+    analysed_ids = {ident for group in groups if isinstance(group, dict)
+                    for ident in group.get('sample_ids', [])}
+    optional_fields = [field for field in ('region', 'city', 'host')
+                       if any(_reported(metadata.get(ident, {}).get(field)) for ident in analysed_ids)]
+
     def composition(members, field):
-        counts = Counter((observed_host(row.get(field)) if field == 'host' else row.get(field))
-                         or 'Unknown' for row in members)
+        counts = Counter((observed_host(row.get(field)) if field == 'host' else str(row.get(field)).strip())
+                         if _reported(row.get(field)) else 'Unknown' for row in members)
         return '; '.join(f'{value} {count}' for value, count in sorted(counts.items(), key=lambda p: (-p[1], p[0])))
 
     rows = []
@@ -136,19 +142,37 @@ def genetic_group_summary(directory, data):
             period += f'; {missing} undated'
         rows.append({'group': label, 'inputs': roles['input'] if not roles['other'] else 'Unknown',
                      'public': roles['context'] if not roles['other'] else 'Unknown', 'total': len(ids),
-                     'countries': composition(members, 'country'), 'hosts': composition(members, 'host'),
+                     'countries': composition(members, 'country'),
+                     **{field: composition(members, field) for field in optional_fields},
                      'years': period})
-    title = 'cgLIN groups at a glance' if data.get('display_group_basis') == 'reported_cglin' else 'Genetic groups at a glance'
-    note = ('These groups share the reported cgLIN prefix at the displayed level. No additional distance cutoff defines membership.'
-            if data.get('display_group_basis') == 'reported_cglin' else
-            'Groups use the recorded direct profile-distance cutoff, not their separation on the two-dimensional plot. '
-            'They are exploratory genetic groups, distinct from the LIN blocks used to retrieve context.')
+    basis = data.get('display_group_basis')
+    if basis == 'reported_cglin':
+        title = 'cgLIN groups at a glance'
+        note = ('These groups share the reported cgLIN prefix at the displayed level. '
+                'No additional distance cutoff defines membership.')
+    elif basis == 'reported_hiercc':
+        title = 'HierCC groups at a glance'
+        note = (f'These groups use the reported HierCC assignment at {data["display_group_level"]}, '
+                'within this analysis block. No profile-distance cutoff defines membership; '
+                'missing or unresolved assignments remain unassigned.')
+    elif basis == 'unassigned_lineage':
+        title = 'Lineage status at a glance'
+        note = ('All profiles share one unassigned-lineage display category because this ST-only analysis '
+                'does not group by lineage. This category is not an inferred lineage or genetic cluster.')
+    else:
+        title = 'Genetic groups at a glance'
+        note = ('Groups use the recorded direct profile-distance cutoff, not their separation on the two-dimensional plot. '
+                'They are exploratory genetic groups, distinct from the selected analysis partition.')
+    columns = [('group', 'Group'), ('inputs', 'Inputs'), ('public', 'Public'), ('total', 'Total'),
+               ('countries', 'Countries (counts)')]
+    headings = {'region': 'Regions (counts)', 'city': 'Cities (counts)', 'host': 'Hosts (counts)'}
+    columns.extend((field, headings[field]) for field in optional_fields)
+    columns.append(('years', 'Collection years'))
+    composition_note = 'location and host' if 'host' in optional_fields else 'location'
     return (f'<h3>{title}</h3>'
             '<p>Group names match the ordination colour key. Counts combine inputs and public comparisons; '
-            'country and host counts include missing metadata as Unknown.</p>'
-            + _table(rows, [('group', 'Group'), ('inputs', 'Inputs'), ('public', 'Public'), ('total', 'Total'),
-                            ('countries', 'Countries (counts)'), ('hosts', 'Hosts (counts)'),
-                            ('years', 'Collection years')], empty='')
+            f'{composition_note} counts include missing metadata as Unknown.</p>'
+            + _table(rows, columns, empty='')
             + f'<p class="muted">{note}</p>')
 
 
@@ -163,6 +187,16 @@ def grouping_rule(data):
                 f'{level} cgLIN positions match, using the same typing scheme. '
                 'The codes come from the prepared typing results; no 2% distance cutoff or MDS clustering is used. '
                 'Unassigned codes remain unassigned. Select a cgLIN group in either figure to highlight its genomes in both.</p>')
+    if data.get('display_group_basis') == 'reported_hiercc':
+        level = escape(str(data['display_group_level']))
+        return ('<p class="group-rule"><strong>What defines the groups?</strong> '
+                f'Colours show reported HierCC assignments at {level}, within this analysis block. '
+                'Codes come from the prepared typing results; no profile-distance cutoff or MDS clustering defines membership. '
+                'Missing or unresolved assignments remain unassigned. Select a HierCC group in either figure to highlight its genomes in both.</p>')
+    if data.get('display_group_basis') == 'unassigned_lineage':
+        return ('<p class="group-rule"><strong>What defines the groups?</strong> '
+                'This ST-only analysis uses one unassigned-lineage display category. No lineage or genetic clusters '
+                'are inferred from profile distances.</p>')
     cutoff = data.get('distance_threshold')
     groups = data.get('genetic_groups') or []
     if not groups or not isinstance(cutoff, (int, float)):
