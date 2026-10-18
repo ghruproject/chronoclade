@@ -335,6 +335,9 @@ def analyse_profiles(
     distance_units = distance_model.metadata["distance_units"] if distance_model else "cgMLST mismatch fraction"
     sequence_fields = ["snp_differences", "shared_called_sites", "missing_call_loci",
                        "missing_sequence_loci", "unequal_length_loci"] if distance_model else []
+    if distance_model and distance_model.metadata.get("alignment_method"):
+        sequence_fields += ["gap_vs_base_columns", "both_gap_columns", "indel_tracts",
+                            "no_jointly_called_sites_loci"]
     pairs, incompatible, exclusions = [], Counter(), []
     distances = np.full((len(records), len(records)), np.nan)
     np.fill_diagonal(distances, 0)

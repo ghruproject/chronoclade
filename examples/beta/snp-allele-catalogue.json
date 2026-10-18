@@ -1,0 +1,18 @@
+{
+  "schema": "chronoclade.allele-sequence-catalogue",
+  "schema_version": 1,
+  "status": "complete",
+  "synthetic": true,
+  "description": "Invented DNA, allele labels and frozen database identity; no real typing or biological relatedness claims.",
+  "scope": {
+    "species": "Klebsiella pneumoniae",
+    "scheme_id": "beta:synthetic-snp",
+    "scheme_version": "1",
+    "database_version": "synthetic-v1",
+    "database_sha256": "7967e0ab38ece556f731e6fbe5787621084706237392429c81fbf07f6677e3fd"
+  },
+  "artifact": {
+    "path": "snp-alleles.csv",
+    "sha256": "7967e0ab38ece556f731e6fbe5787621084706237392429c81fbf07f6677e3fd"
+  }
+}

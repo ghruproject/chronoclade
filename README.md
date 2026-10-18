@@ -11,8 +11,9 @@ support a time tree. Four commands save separate datasets, reports and manifests
 | `tree` | Acquire the selected assemblies, build corrected SNP trees and assess temporal signal | `tree/tree_ensemble.json` |
 | `time` | Date supported trees and compare alternative selections | `time/time_ensemble.json` and its linked report |
 
-Allele-profile distance is the cgMLST default. An optional direct-DNA mode compares
-nucleotide sequences within the same cgMLST genes. Sequence embeddings are parked
+Categorical allele-profile distance is the recommended cgMLST default. An optional
+direct-DNA mode compares nucleotide sequences after aligning each locus separately
+within the same cgMLST genes. Sequence embeddings are parked
 as [research notes](docs/research/parked-sequence-embeddings.md), with no active
 embedding workflow.
 
@@ -31,17 +32,18 @@ pixi run chronoclade preflight
 Large cgMLST blocks require RapidNJ. On supported macOS hosts, run
 `pixi run chronoclade setup-scale`; Apple Silicon currently requires Rosetta.
 See [installation](docs/installation.md) and [large-block analysis](docs/cgmlst-scale.md).
-The current Apple Silicon acceptance includes a small new-assembly Klebsiella
-run through all four commands, plus separate supported and unsupported dating
-examples. Typing references and provider/assembly caches were reused. Linux
-x86_64, physical HPC and E. coli/HierCC validation remain deferred. Start with the
+The current beta scope is exploratory Klebsiella pneumoniae analysis on Apple
+Silicon macOS. The recorded four-command run and separate supported and
+unsupported dating examples reused configured typing references and
+provider/assembly caches. Linux x86_64, physical HPC/SLURM, and E. coli/HierCC
+remain parked. Start with the
 [Mac walkthrough](docs/mac-klebsiella-walkthrough.md), the
 [worked Klebsiella example](docs/beta/WORKED_EXAMPLE.md), and the concise
 [acceptance checklist](docs/beta/ACCEPTANCE_PLAN.md).
 
-The beta closeout branch is `codex/klebsiella-beta-closeout` until its pull
-request is merged. The worked example distinguishes recorded native runs from
-the lightweight synthetic example.
+See the [local beta closeout record](docs/beta/LOCAL_BETA_CLOSEOUT.md) for the
+installed-wheel check and final local handoff. The worked example distinguishes
+recorded native runs from the lightweight synthetic example.
 
 Separate Pixi environments are available for each stage.
 
@@ -102,9 +104,12 @@ style and uses accessions where available.
 Tables have search, sorting and a 10-row default. NJ opens as a complete overview,
 with zoom to inputs, a group or a sample. NJ and MDS share group highlighting;
 their selectors show the 20 largest groups plus all input-containing groups, with
-search across the complete group list. Displayed Klebsiella groups use reported
-level-7 cgLIN prefixes. Nearest relatives rank by actual distances, with coverage
-and ties retained.
+search across the complete group list. Displayed groups use compatible reported
+cgLIN prefixes. These prefixes describe reported lineage relationships; they are
+not validated close-relative cutoffs. Nearest relatives rank by actual distances,
+with coverage and ties retained. Additional automatic cluster selection that is
+distinct and time-aware remains research, pending independent epidemiological
+benchmarks, and is not a beta blocker.
 
 Every comparable profile remains in the guide analysis. Subsampling applies to the
 next stage. All inputs and required neighbours are retained; `--context-size` is a
@@ -149,23 +154,13 @@ For the real local Apple Silicon assembly-to-report route, see the
 [Klebsiella walkthrough](docs/mac-klebsiella-walkthrough.md). It records which
 references, context data and assemblies the accepted run reused.
 
-## Species references and beta status
+## Klebsiella beta scope
 
-Klebsiella has a native cgMLST/cgLIN reference setup route. The local E. coli
-beta also builds the public EnteroBase caller reference and supports explicit
-`type-queries --profiles-only` calling followed by `cgmlst --partition-by st`.
-That input-only route does not retrieve public context or assign HierCC codes.
-Compatible HierCC reference setup and assignment remain under verification;
-public cgMLST profiles alone do not contain the HC group labels.
-
-`chronoclade list-schemes` lists the registered EnteroBase catalogues, and
-`chronoclade setup-scheme Escherichia.cgMLSTv1 --destination refs/ecoli` installs
-one frozen allele catalogue. A downloaded catalogue is separate from a caller
-index and a lineage-assignment reference. Catalogue availability for additional
-organisms does not establish fully tested native or public-context support.
-See [EnteroBase references](docs/beta/ENTEROBASE_SUPPORT.md),
-[E. coli evidence](docs/beta/ECOLI_NATIVE_ACCEPTANCE.md), and the
-[local beta acceptance matrix](docs/beta/ACCEPTANCE_PLAN.md).
+The supported beta workflow is scoped to Klebsiella pneumoniae on Apple Silicon
+macOS. E. coli/HierCC, Linux x86_64 and physical HPC/SLURM remain parked pending
+their own compatible references and environment-specific validation. The
+acceptance plan records evidence and limitations; see also the
+[local beta closeout record](docs/beta/LOCAL_BETA_CLOSEOUT.md).
 
 ## Reports and output folders
 

@@ -276,7 +276,7 @@ def run_cgmlst(
         requested[identifier] = matches[0]["sample_id"]
     models = {}
     if distance_method == "direct-dna":
-        from chronoclade.cgmlst.dna import DNAComparator
+        from chronoclade.cgmlst.dna import AlignedDNAComparator
         from chronoclade.profile_analysis import MAX_RECORDS
         for block in blocks:
             if len(block["records"]) > MAX_RECORDS:
@@ -284,7 +284,7 @@ def run_cgmlst(
                     f"Direct DNA currently supports up to {MAX_RECORDS} records per block; "
                     "no samples have been discarded. Use allele profiles for larger blocks."
                 )
-            models[block["block_id"]] = DNAComparator(allele_catalogue, block["records"])
+            models[block["block_id"]] = AlignedDNAComparator(allele_catalogue, block["records"])
     from chronoclade.provider_hiercc import source_snapshot
     parameters = {
         "provider_reported_hiercc": source_snapshot(records),

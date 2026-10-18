@@ -1,0 +1,78 @@
+{
+  "synthetic": true,
+  "alignment_sites": 90,
+  "missing_n_count": 30,
+  "mafft_variable_loci": [
+    "snp-a",
+    "indel-b",
+    "missing-c"
+  ],
+  "pairs": [
+    {
+      "sample_a": "snp_query",
+      "sample_b": "snp_equal",
+      "snp_differences": 1,
+      "shared_called_sites": 90,
+      "gap_vs_base_columns": 0,
+      "indel_tracts": 0,
+      "shared_called_loci": 3,
+      "allele_differences": 1
+    },
+    {
+      "sample_a": "snp_query",
+      "sample_b": "snp_indel",
+      "snp_differences": 1,
+      "shared_called_sites": 89,
+      "gap_vs_base_columns": 1,
+      "indel_tracts": 1,
+      "shared_called_loci": 3,
+      "allele_differences": 2
+    },
+    {
+      "sample_a": "snp_query",
+      "sample_b": "snp_missing",
+      "snp_differences": 1,
+      "shared_called_sites": 60,
+      "gap_vs_base_columns": 0,
+      "indel_tracts": 0,
+      "shared_called_loci": 2,
+      "allele_differences": 1
+    },
+    {
+      "sample_a": "snp_equal",
+      "sample_b": "snp_indel",
+      "snp_differences": 2,
+      "shared_called_sites": 89,
+      "gap_vs_base_columns": 1,
+      "indel_tracts": 1,
+      "shared_called_loci": 3,
+      "allele_differences": 3
+    },
+    {
+      "sample_a": "snp_equal",
+      "sample_b": "snp_missing",
+      "snp_differences": 2,
+      "shared_called_sites": 60,
+      "gap_vs_base_columns": 0,
+      "indel_tracts": 0,
+      "shared_called_loci": 2,
+      "allele_differences": 1
+    },
+    {
+      "sample_a": "snp_indel",
+      "sample_b": "snp_missing",
+      "snp_differences": 1,
+      "shared_called_sites": 59,
+      "gap_vs_base_columns": 1,
+      "indel_tracts": 1,
+      "shared_called_loci": 2,
+      "allele_differences": 2
+    }
+  ],
+  "sha256": {
+    "snp-alleles.csv": "7967e0ab38ece556f731e6fbe5787621084706237392429c81fbf07f6677e3fd",
+    "snp-profiles.json": "6ecf88d775a90f4a03ca59438ea13bc58ebd3ccd9d9a1170b77b2ee061c9af5e",
+    "snp-catalogues.json": "4da509ae97e57c3e2bd001a8a33631a7661002e531eb362b4c3f7d3b785f8e4e",
+    "snp-allele-catalogue.json": "e580d995b6d0158560e2221b58ce5ca4962744d69dd08361f2ebad4dad68b165"
+  }
+}

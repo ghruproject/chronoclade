@@ -1,0 +1,15 @@
+[
+  {
+    "scheme_id": "beta:synthetic-snp",
+    "scheme_version": "1",
+    "loci": [
+      "snp-a",
+      "indel-b",
+      "missing-c"
+    ],
+    "source": "Entirely invented three-locus DNA and allele labels; installation smoke fixture only, not real typing evidence. Database fingerprint is the exact snp-alleles.csv SHA256.",
+    "database_version": "synthetic-v1",
+    "database_sha256": "7967e0ab38ece556f731e6fbe5787621084706237392429c81fbf07f6677e3fd",
+    "complete": true
+  }
+]

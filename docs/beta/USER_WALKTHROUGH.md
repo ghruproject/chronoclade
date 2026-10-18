@@ -1,13 +1,17 @@
 Current starting points: [Mac walkthrough](../mac-klebsiella-walkthrough.md) and
 [recorded Klebsiella example](WORKED_EXAMPLE.md). This page retains earlier fixture
-review instructions; simulated acceptance is recorded [separately](SIMULATED_REVIEWS.md).
+review instructions as a template for future human feedback. The current simulated
+walkthrough gate passed as recorded in [simulated reviews](SIMULATED_REVIEWS.md)
+and the [local closeout record](LOCAL_BETA_CLOSEOUT.md); real-user sessions remain
+a follow-up.
 
 # Independent user walkthrough
 
-Use this script with two basic bioinformatics users, independently and without
-developer coaching. It records usability evidence for
-[UX-02](ACCEPTANCE_PLAN.md). No participant findings are
-pre-filled; UX-02 remains blocked until two people complete the exercise.
+This is a task template for two future basic bioinformatics users to work
+independently without developer coaching. The current beta gate does not depend
+on those sessions: two independent simulated walkthroughs passed within their
+documented scope. Record real-user usability findings here when participants
+become available; do not describe simulated checks as human evidence.
 
 ## Pick a route
 
@@ -65,16 +69,16 @@ and time steps without setting up Pathogenwatch credentials or Pasteur typing
 references. It does not fetch public context. Tree and time still require the
 default Pixi native software environment.
 
-The local packet now includes current V7 default-Pixi software preflight evidence
+The local packet includes V7 default-Pixi software preflight evidence
 and a separately scoped, independently reviewed V7 Linux ARM64 four-module
 run on the same supplied pretyped fixture. These are automated checks, not
 participant sessions. It also retains the historical V4 CLI/source identity, a
 prior fresh V3 native eight-genome reference run, a separate scoped read-only link audit, and distinct
 V4 profile/wheel/source-check evidence. The V3 strict runner remains recorded
 as failed at its time-report link verifier. The packet does not claim that the
-full native four-module workflow has been rerun under V4. No participant
-results are prefilled; UX-02 remains open until two independent people finish
-and their observations are recorded.
+full native four-module workflow has been rerun under V4. No human participant
+results are prefilled; sessions remain follow-up work and do not block the
+approved simulated acceptance gate.
 
 **Biological full-stack route:** use a separately agreed biological input with
 matching complete cgMLST catalogue, compatible lineage assignments, exact

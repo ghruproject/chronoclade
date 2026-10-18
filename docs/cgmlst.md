@@ -155,14 +155,25 @@ The command validates the catalogue locally; it does not fetch assemblies or
 infer sequences from allele numbers. Ambiguous DNA bases and duplicate catalogue
 entries are rejected.
 
-Equal-length homologous allele sequences are compared sitewise. Missing calls,
-missing sequences and unequal-length loci are excluded and recorded in
-`sequence_comparison_audit.json`. Minimum overlap applies to compared loci.
-Distance is raw nucleotide differences divided by jointly compared nucleotide
-sites; the nearest-relative ranking uses raw differences and retains ties.
-These are gene-panel SNP comparisons, not genome-wide or recombination-adjusted
-SNP distances. Positional comparison assumes the same locus coordinates;
-compensating indels or misaligned alleles require separate alignment work.
+For each locus, observed allele sequences are aligned with MAFFT, including
+equal-length variable alleles. Each genome's aligned loci are then reconstructed
+and concatenated in canonical scheme order. Missing calls or missing sequences
+become `N`; alignment gaps remain `-`. Entire loci are not dropped merely because
+their alleles differ in length. Globally absent loci retain explicit zero-width
+partition records.
+
+SNP distance counts differences only at jointly A/C/G/T columns, divided by the
+number of those columns. Gap-versus-base columns and indel tracts are reported
+separately; zero SNPs does not establish sequence identity. Minimum overlap
+applies to loci with jointly callable nucleotide sites. Nearest relatives rank
+by raw SNP differences and retain ties. These are aligned gene-panel comparisons,
+not genome-wide or recombination-adjusted SNP distances. Alignment uncertainty
+remains a limitation.
+
+The Pixi `cgmlst` and default environments include MAFFT. Each block's
+`locus_alignment/` directory preserves the concatenated FASTA, locus partitions,
+per-locus alignments and tool provenance; `sequence_comparison_audit.json` links
+this evidence and records missing calls/sequences.
 
 Direct DNA requires an explicit cutoff in nucleotide mismatch fraction. The
 example cutoff is descriptive, not a validated epidemiological boundary. Allele

@@ -3,6 +3,13 @@
 Updated 18 October 2026. This page records the current decision; earlier source
 snapshots and their separate evidence remain in [acceptance history](ACCEPTANCE_HISTORY.md).
 
+Latest installed-package check: [local beta closeout](LOCAL_BETA_CLOSEOUT.md).
+The current wheel completed all four stages on eight supplied assemblies with
+fresh Python dependencies, using the locked native tools. The optional per-locus
+SNP route has its own bundled synthetic example and six verified pairwise results.
+This adds current package evidence without replacing the separately scoped
+native-typing, public-context and supported-dating benchmarks below.
+
 ## Decision and scope
 
 The Apple Silicon Klebsiella workflow is ready for exploratory scientific use,

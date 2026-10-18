@@ -1,0 +1,78 @@
+[
+  {
+    "sample_id": "snp_query",
+    "origin": "local",
+    "label": "snp_query",
+    "species": "Klebsiella pneumoniae",
+    "collection_date": "2020",
+    "country": "Synthetic",
+    "cgmlst_scheme": "beta:synthetic-snp",
+    "cgmlst_scheme_version": "1",
+    "cgmlst_database_version": "synthetic-v1",
+    "cgmlst_database_sha256": "7967e0ab38ece556f731e6fbe5787621084706237392429c81fbf07f6677e3fd",
+    "cgmlst_status": "resolved",
+    "cgmlst_profile": {
+      "snp-a": "1",
+      "indel-b": "1",
+      "missing-c": "1"
+    },
+    "mlst_st": "synthetic"
+  },
+  {
+    "sample_id": "snp_equal",
+    "origin": "local",
+    "label": "snp_equal",
+    "species": "Klebsiella pneumoniae",
+    "collection_date": "2020",
+    "country": "Synthetic",
+    "cgmlst_scheme": "beta:synthetic-snp",
+    "cgmlst_scheme_version": "1",
+    "cgmlst_database_version": "synthetic-v1",
+    "cgmlst_database_sha256": "7967e0ab38ece556f731e6fbe5787621084706237392429c81fbf07f6677e3fd",
+    "cgmlst_status": "resolved",
+    "cgmlst_profile": {
+      "snp-a": "2",
+      "indel-b": "1",
+      "missing-c": "1"
+    },
+    "mlst_st": "synthetic"
+  },
+  {
+    "sample_id": "snp_indel",
+    "origin": "local",
+    "label": "snp_indel",
+    "species": "Klebsiella pneumoniae",
+    "collection_date": "2020",
+    "country": "Synthetic",
+    "cgmlst_scheme": "beta:synthetic-snp",
+    "cgmlst_scheme_version": "1",
+    "cgmlst_database_version": "synthetic-v1",
+    "cgmlst_database_sha256": "7967e0ab38ece556f731e6fbe5787621084706237392429c81fbf07f6677e3fd",
+    "cgmlst_status": "resolved",
+    "cgmlst_profile": {
+      "snp-a": "1",
+      "indel-b": "2",
+      "missing-c": "2"
+    },
+    "mlst_st": "synthetic"
+  },
+  {
+    "sample_id": "snp_missing",
+    "origin": "local",
+    "label": "snp_missing",
+    "species": "Klebsiella pneumoniae",
+    "collection_date": "2020",
+    "country": "Synthetic",
+    "cgmlst_scheme": "beta:synthetic-snp",
+    "cgmlst_scheme_version": "1",
+    "cgmlst_database_version": "synthetic-v1",
+    "cgmlst_database_sha256": "7967e0ab38ece556f731e6fbe5787621084706237392429c81fbf07f6677e3fd",
+    "cgmlst_status": "resolved",
+    "cgmlst_profile": {
+      "snp-a": "3",
+      "indel-b": "1",
+      "missing-c": null
+    },
+    "mlst_st": "synthetic"
+  }
+]
