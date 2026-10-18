@@ -156,10 +156,6 @@ shared-anchor ancestor date from whole-selection roots, which may describe
 different ancestors. Between-selection ranges measure sampling sensitivity;
 they are not confidence intervals or proof of convergence.
 
-The earlier sequence-embedding work is parked in the
-[research notes](research/parked-sequence-embeddings.md), with its evidence and
-revisit criteria.
-
 ## Local and SLURM jobs
 
 The same stage command can be saved as a local or SLURM job:
