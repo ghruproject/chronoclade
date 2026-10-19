@@ -3,7 +3,7 @@
 import shutil
 import sys
 
-REQUIRED_TOOLS = ("ska", "iqtree", "ClonalFrameML", "treetime")
+REQUIRED_TOOLS = ("ska", "iqtree", "Profile", "ClonalFrameML", "verticall", "minimap2", "treetime")
 
 
 def tool_status() -> dict[str, str | None]:

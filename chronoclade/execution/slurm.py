@@ -65,11 +65,26 @@ def write_slurm_ensemble(stage, source, *, output, results, resources,
         raise ValueError("Each tree selection needs at least three genomes")
     options = dict(options or {})
     allowed = ({"threads", "randomisations", "randomisation_jobs", "support_replicates", "seed",
-                "assess_temporal", "coherence_policy", "temporal_p_value"} if stage == "tree"
+                "assess_temporal", "coherence_policy", "temporal_p_value", "reference_sample_id",
+                "recombination_method", "phipack_window", "phipack_step", "phipack_threshold"} if stage == "tree"
                else {"allow_unsupported", "cluster_snp_cutoff"})
     if set(options) - allowed:
         raise ValueError("Unsupported array options: " + ", ".join(sorted(set(options) - allowed)))
     if stage == "tree":
+        from chronoclade.phipack import validate_options
+        options.setdefault('recombination_method', 'phipack')
+        options.setdefault('phipack_window', 10000)
+        options.setdefault('phipack_step', 5000)
+        options.setdefault('phipack_threshold', 0.05)
+        validate_options(options['recombination_method'], options.get('phipack_window', 10000),
+                         options.get('phipack_step', 5000), options.get('phipack_threshold', 0.05))
+        if options.get("reference_sample_id") is not None:
+            from chronoclade.tree_stage.workflow import selection_rows
+            for _, member in members:
+                selection = _read(member)
+                _, rows = selection_rows(member, selection)
+                if options["reference_sample_id"] not in {r["sample_id"] for r in rows if r["role"] == "input"}:
+                    raise ValueError("Explicit reference sample must be an exact selected input genome in every selection")
         from chronoclade.tree_stage.support import validate_replicates
         validate_replicates(options.get("support_replicates", 0))
         if options.get("randomisations", 100) < 0:
@@ -173,6 +188,8 @@ def run_task(path, index):
         if plan["stage"] == "tree":
             from chronoclade.tree_stage.workflow import run_tree as runner
             from chronoclade.pathogenwatch import load_api_key
+            # Plans predating the method option requested the historical engine.
+            options.setdefault('recombination_method', 'clonalframeml')
             options.update(api_key=load_api_key(),
                            assembly_cache=Path(plan["results"]) / "assembly_cache")
         else:

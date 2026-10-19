@@ -42,6 +42,11 @@ def slurm_ensemble_command(
     threads: Annotated[int | None, typer.Option(min=1, help='Tree threads; defaults to cpus')] = None,
     randomisation_jobs: Annotated[int | None, typer.Option(min=1, help='Tree permutation workers; defaults to cpus')] = None,
     randomisations: Annotated[int, typer.Option(min=0)] = 100,
+    reference_sample_id: Annotated[str | None, typer.Option(help='Tree reference: exact selected input sample ID')] = None,
+    recombination_method: Annotated[str, typer.Option(help='Tree filtering: phipack, clonalframeml or verticall')] = 'phipack',
+    phipack_window: Annotated[int, typer.Option(min=200)] = 10000,
+    phipack_step: Annotated[int, typer.Option(min=1)] = 5000,
+    phipack_threshold: Annotated[float, typer.Option(min=0.000001, max=1)] = 0.05,
     support_replicates: Annotated[int, typer.Option(min=0)] = 0,
     seed: int = 42,
     temporal_p_value: Annotated[float, typer.Option(min=0.000001, max=1)] = 0.05,
@@ -57,8 +62,14 @@ def slurm_ensemble_command(
     options = (dict(threads=threads or cpus, randomisation_jobs=randomisation_jobs or cpus,
                     randomisations=randomisations, support_replicates=support_replicates, seed=seed,
                     temporal_p_value=temporal_p_value, coherence_policy=coherence_policy,
-                    assess_temporal=assess_temporal)
+                    assess_temporal=assess_temporal, recombination_method=recombination_method,
+                    phipack_window=phipack_window, phipack_step=phipack_step,
+                    phipack_threshold=phipack_threshold)
                if stage == EnsembleStage.tree else dict(cluster_snp_cutoff=cluster_snp_cutoff, allow_unsupported=allow_unsupported))
+    if reference_sample_id is not None:
+        if stage != EnsembleStage.tree:
+            raise typer.BadParameter('--reference-sample-id is only valid for tree arrays')
+        options['reference_sample_id'] = reference_sample_id
     try:
         path = write_slurm_ensemble(
             stage.value, source, output=output, results=results,

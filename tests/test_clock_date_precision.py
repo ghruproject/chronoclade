@@ -85,3 +85,69 @@ def test_observed_and_dated_native_routes_use_intervals_without_metadata_mutatio
         "a": "1980-XX-XX", "b": "1981-05-XX",
     } for rows in captured)
     assert files.metadata.read_bytes() == metadata
+
+
+@pytest.mark.parametrize("value", ["1980-XX-XX", "1980-05-XX", "1980-XX-17", "1980.5", "[1980:1981.5]"])
+def test_native_eligibility_accepts_valid_clock_dates_without_integer_split(value):
+    from chronoclade.native_pipeline import _dated_members
+    from chronoclade.metadata_dates import clock_date_interval
+
+    sample = _sample("input", value)
+    assert clock_date_interval(value)["status"] == "valid"
+    assert _dated_members([sample]) == [sample]
+    assert sample.collection_date == value
+
+
+@pytest.mark.parametrize("value", ["[1982:1980]", "nan", "inf", "1980-13-XX", "1980-02-30", "0000.5", "before 2009", "2006-2009"])
+def test_native_eligibility_rejects_invalid_or_undeclared_calibrations_without_crash(value):
+    from chronoclade.native_pipeline import _dated_members
+
+    sample = _sample("input", value)
+    assert _dated_members([sample]) == []
+    assert sample.collection_date == value
+
+
+def test_native_future_interval_eligibility_uses_lower_bound_without_clipping():
+    from datetime import date
+    from chronoclade.native_pipeline import _dated_members
+    from chronoclade.metadata_dates import clock_date_interval
+
+    current = date.today().year
+    spanning = _sample("spanning", f"[{current - 1}:{current + 1}]")
+    future = _sample("future", f"[{current + 1}:{current + 2}]")
+    assert _dated_members([spanning, future]) == [spanning]
+    assert clock_date_interval(spanning.collection_date)["year_max"] == current + 1
+
+
+def test_initial_published_cohort_retains_97_inputs_with_92_calibration_dates():
+    from chronoclade.native_pipeline import _dated_members
+
+    known = [_sample(f"known{i}", str(1932 + i % 84)) for i in range(92)]
+    uncertain = [_sample(f"uncertain{i}", value) for i, value in enumerate(
+        ["2006-2009", "before 2009", "1996-2001", "before 2009", "2008-2013"])]
+    cohort = known + uncertain
+    original = [sample.collection_date for sample in cohort]
+    assert _dated_members(cohort) == known
+    assert len(cohort) == 97 and [sample.collection_date for sample in cohort] == original
+
+
+def test_legacy_clock_retains_uncertain_tips_without_inventing_date_bounds(tmp_path):
+    import math
+    from chronoclade.native_pipeline import LineageFiles, _clock_dates_path
+    from treetime.utils import parse_dates
+
+    files = LineageFiles.in_directory(tmp_path)
+    files.metadata.write_text("sample_id,collection_date\nknown,1980\nrange,[1981:1982]\ncensored,before 2009\ninformal,2006-2009\n")
+    original = files.metadata.read_bytes()
+    target = _clock_dates_path(files)
+    rows = list(csv.DictReader(target.open()))
+    assert len(rows) == 4
+    assert {r["sample_id"]: r["collection_date"] for r in rows} == {
+        "known": "1980-XX-XX", "range": "[1981:1982]", "censored": "", "informal": "",
+    }
+    parsed = parse_dates(str(target), name_col="sample_id", date_col="collection_date")
+    assert parsed["range"] == [1981.0, 1982.0]
+    # This installed parser represents blank constraints as NaN; ClockTree
+    # explicitly treats those as undated, retaining the structural tips.
+    assert math.isnan(parsed["censored"]) and math.isnan(parsed["informal"])
+    assert files.metadata.read_bytes() == original

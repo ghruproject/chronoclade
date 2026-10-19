@@ -29,6 +29,11 @@ clonalframeml = ">=1.20,<1.21"
 iqtree = ">=2.4,<4"
 ska2 = ">=0.5.1,<0.6"
 blast = ">=2.16,<3"
+phipack = ">=1.1,<2"
+# Verticall depends on pytest; keep its conda version compatible with dev PyPI.
+verticall = ">=0.4.3,<0.5"
+minimap2 = ">=2.28,<3"
+pytest = ">=8,<9"
 
 [feature.time.dependencies]
 treetime = ">=0.12.1,<0.13"

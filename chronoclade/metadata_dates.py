@@ -3,6 +3,7 @@
 import calendar
 from collections.abc import Mapping
 import datetime as dt
+import math
 import re
 from datetime import date
 from typing import Any
@@ -21,6 +22,40 @@ def treetime_date(value: Any) -> str:
     if re.fullmatch(r"\d{4}-\d{2}", text):
         return f"{text}-XX"
     return text
+
+
+def clock_date_interval(value: Any) -> dict:
+    """Validate native clock eligibility without changing the original date.
+
+    Calendar and explicit XX dates use the shared calendar-bound validation.
+    Decimal years and TreeTime's finite [start:end] syntax retain their numeric
+    bounds. Censored dates and informal ranges require a separate declared date
+    model; this function does not invent a bound for them.
+    """
+    text = str(value or "").strip()
+    numeric = re.fullmatch(r"\d{4}\.\d+", text)
+    interval = re.fullmatch(r"\[(\d{4}(?:\.\d+)?):(\d{4}(?:\.\d+)?)\]", text)
+    if numeric or interval:
+        lower, upper = map(float, interval.groups()) if interval else (float(text), float(text))
+        if not math.isfinite(lower) or not math.isfinite(upper) or not 1 <= lower <= upper < 10000:
+            return {"status": "invalid", "reason": "invalid_numeric_date_interval"}
+        future = lower > _decimal_year(date.today())
+        return {"status": "future" if future else "valid",
+                "reason": "future_collection_date" if future else None,
+                "year_min": lower, "year_max": upper,
+                "precision": "interval" if interval else "numeric"}
+
+    calendar_value = text
+    if re.fullmatch(r"\d{4}-XX-XX", text):
+        calendar_value = text[:4]
+    elif re.fullmatch(r"\d{4}-\d{2}-XX", text):
+        calendar_value = text[:7]
+    elif re.fullmatch(r"\d{4}-XX-\d{2}", text):
+        year, _, day = text.split("-")
+        calendar_value = f"{year}-01-{day}/{year}-12-{day}"
+    elif text and not re.fullmatch(r"\d{4}(?:-\d{2}(?:-\d{2})?)?", text):
+        return {"status": "invalid", "reason": "unsupported_clock_date_format"}
+    return sample_date_interval({"collection_date": calendar_value})
 
 
 def date_interval(row, *, allow_future=False):

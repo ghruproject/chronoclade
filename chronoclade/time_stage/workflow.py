@@ -122,6 +122,7 @@ def run_time(tree_manifest, *, output, force=False, allow_unsupported=False):
             "selected_sample_ids": tree["selected_sample_ids"],
             "temporal_assessment": assessment,
             "coherence_screening": tree.get("coherence_screening"),
+            "recombination": tree.get("recombination"),
             "parameters": parameters,
             "tools": tool_evidence,
             "dating_status": "unsupported",
@@ -241,6 +242,12 @@ def run_time(tree_manifest, *, output, force=False, allow_unsupported=False):
         write_json(job / "assessment.json", assessment)
         write_json(job / "selected_metadata.json", rows)
         note = "<p>Dating override explicitly requested.</p>" if result["dating_override"] else ""
+        if (result.get('recombination') or {}).get('method') == 'phipack':
+            from chronoclade.phipack import report_html
+            note += report_html(result['recombination'])
+        elif (result.get('recombination') or {}).get('method') == 'verticall':
+            from chronoclade.verticall_filter import report_html
+            note += report_html(result['recombination'])
         result["report"] = reference(
             output,
             write_report(

@@ -162,7 +162,12 @@ pixi run chronoclade time tree/tree_ensemble.json --out time --ensemble-jobs 1
 ```
 
 Tree acquires assemblies for the exact selected IDs, runs SKA2, IQ-TREE and
-ClonalFrameML, and assesses temporal signal. Alternative selections share a
+fast PHIPack window filtering, rebuilds the filtered tree and assesses temporal
+signal. Use `--recombination-method clonalframeml` for branch-specific correction.
+Use `--recombination-method verticall` for reference-relative Verticall masking
+and a rebuilt tree. Each method records its filtering and callable-site policy.
+PHIPack masks suspect windows; untestable windows remain explicitly unassessed.
+Alternative selections share a
 verified assembly cache, mapping reference and recorded seed policy. Time reads
 the saved results and uses TreeTime when the temporal assessment supports dating.
 It also writes an ensemble comparison report. A single selection manifest is

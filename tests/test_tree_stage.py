@@ -66,7 +66,7 @@ def native_stubs(monkeypatch):
     )
     calls = []
 
-    def core(files, members, reference, threads, force, coherence_policy="strict", seed=None):
+    def core(files, members, reference, threads, force, coherence_policy="strict", seed=None, **options):
         calls.append("corrected")
         ids = [s.sample_id for s in members]
         newick = "(" + ",".join(f"{ident}:0.001" for ident in ids) + ");\n"
@@ -79,7 +79,13 @@ def native_stubs(monkeypatch):
         from chronoclade.coherence import screen_alignment
         screen_alignment(files.alignment, members, output=files.coherence_screen)
         screen_alignment(files.filtered_alignment, members, output=files.clonal_coherence_screen)
-        return files.tree, files.filtered_alignment, None
+        summary = None
+        if options.get('recombination_method') == 'phipack':
+            summary = dict(method='phipack', significant_windows=0, tested_windows=0,
+                           untested_windows=1, recombination_removed_sites=0,
+                           alignment_sites=2000, fdr_threshold=0.05,
+                           limitation='Synthetic native-tool fixture; no biological inference.')
+        return files.tree, files.filtered_alignment, summary
 
     monkeypatch.setattr(lineage, "_run_core_phylogeny", core)
     return calls
@@ -256,7 +262,7 @@ def test_coherence_policy_binds_resume_and_report(tmp_path, native_stubs):
     assert diagnostic["coherence_screening"]["policy"] == "diagnostic"
     assert diagnostic["parameters"]["coherence_policy"] == "diagnostic"
     assert len(native_stubs) == 2
-    assert "Raw and corrected coherence audits" in (tmp_path / "tree" / diagnostic["report"]["path"]).read_text()
+    assert "Raw and filtered coherence audits" in (tmp_path / "tree" / diagnostic["report"]["path"]).read_text()
 
 
 def test_diagnostic_warning_and_flagged_statistics_in_saved_report(tmp_path, native_stubs, monkeypatch):

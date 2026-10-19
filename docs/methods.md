@@ -63,7 +63,7 @@ genome's median raw SNP proportion with the cohort distribution. A genome is
 flagged only when it is both at least five times the cohort median and an
 extreme robust outlier (robust z-score at least 10). Raw flags are written to
 `lineage_coherence.tsv` and retained for review; recombination can inflate raw
-distances. After ClonalFrameML, the same relative check is repeated on the filtered
+distances. After the selected recombination filter, the same relative check is repeated on the filtered
 alignment and written to `clonal_lineage_coherence.tsv` before clock analysis.
 The default strict policy stops on filtered-alignment flags. Explicit diagnostic
 policy retains all selected genomes and carries a visible warning into the reports.
@@ -73,7 +73,35 @@ safeguard, not a universal bacterial SNP threshold or a transmission definition.
 
 IQ-TREE estimates the starting maximum-likelihood phylogeny with a GTR+G model.
 
-ClonalFrameML estimates recombination on that tree and reports 1-based, closed
+The default recombination method is PHIPack Profile window filtering. It scans
+10,000 mapped bases at a time in 5,000-base steps with a 100-base PHI neighbourhood,
+without crossing reference-record boundaries. Benjamini–Hochberg adjustment is
+applied across all finite window tests; windows with q ≤ 0.05 are removed in full
+from every genome, along with columns not callable as A/C/G/T in every genome.
+IQ-TREE then estimates the filtered tree anew. Untestable windows are retained
+and explicitly counted; they are not evidence of no recombination. Window masks
+are exploratory regions, not branch-specific importation calls. See the
+[PHIPack manual](https://gensoft.pasteur.fr/docs/PhiPack/1.0/phimanual.pdf) for the
+profile test and its unadjusted native output. ChronoClade checks native test
+status as well as numeric CSV output because an unavailable approximation can
+leave an uninitialised CSV value. The method and settings are recorded in tree
+and time results. PHIPack results do not imply equivalent filtering or ages to
+the earlier ClonalFrameML benchmark.
+
+The optional `--recombination-method verticall` runs native Verticall
+reference-to-query comparisons and sample-specific horizontal/unaligned masking
+on each reference sequence independently. Safe called-segment assembly
+snapshots meet its ambiguity requirements without changing original assemblies.
+An exact auxiliary reference row supplies coordinates and is excluded after
+masking; every selected sample is retained. Native masked alignments are saved,
+and the downstream common alignment uses only columns called in every selected
+sample before fresh IQ-TREE inference. This additional complete-site policy is
+explicit, rather than implying that the native masked alignment has no missing
+data. Secondary results use the first native result, not a result selected for
+preferred clock behavior. Region calls and complete-column accounting are
+retained. See the [Verticall alignment workflow](https://github.com/rrwick/Verticall/wiki/Alignment-tree-workflow).
+
+With `--recombination-method clonalframeml`, ClonalFrameML estimates recombination on that tree and reports 1-based, closed
 alignment intervals for each affected branch. With `-output_filtered true` and
 `-ignore_incomplete_sites true`, it constructs one shared clonal alignment by
 removing every column assigned to an import on any branch and every column with
@@ -102,6 +130,12 @@ Original year/month precision stays in the metadata; clock inputs serialize
 years as `YYYY-XX-XX` and months as `YYYY-MM-XX` so TreeTime receives the
 corresponding intervals, including in date permutations. This conversion does
 not add support for censored dates or other interval formats.
+
+Native clock eligibility also accepts explicit finite numeric years and
+TreeTime's `[start:end]` numeric ranges, preserving their bounds. Informal ranges
+such as `2006-2009` and censored dates such as `before 2009` are not converted
+automatically: those tips remain in the selected tree without a calibration
+date until a justified date model is supplied. No missing bound is invented.
 
 Root-to-tip regression is useful for visual inspection. It is not treated as a
 formal temporal-signal test because population structure can associate genetic

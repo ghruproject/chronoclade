@@ -259,6 +259,10 @@ def _run_core_phylogeny(
     force: bool,
     coherence_policy: str = "strict",
     seed: int | None = None,
+    recombination_method: str = "clonalframeml",
+    phipack_window: int = 10000,
+    phipack_step: int = 5000,
+    phipack_threshold: float = 0.05,
 ) -> tuple[Path, Path, dict[str, object] | None]:
     if coherence_policy not in {"strict", "diagnostic"}:
         raise WorkflowError("Coherence policy must be strict or diagnostic")
@@ -359,6 +363,40 @@ def _run_core_phylogeny(
             (files.starting_tree, files.alignment),
         ),
     ]
+    if recombination_method in {"phipack", "verticall"}:
+        if recombination_method == "phipack":
+            from chronoclade.phipack import run_profile_mask
+            alignment, summary = run_profile_mask(
+                files, reference.assembly, threads=threads, force=force,
+                window=phipack_window, step=phipack_step, threshold=phipack_threshold,
+            )
+        else:
+            from chronoclade.verticall_filter import run_verticall_mask
+            alignment, summary = run_verticall_mask(
+                files, members, reference.assembly, threads=threads, force=force,
+            )
+        filtered_screen = screen_alignment(alignment, members, output=files.clonal_coherence_screen)
+        if filtered_screen["flagged_samples"] and coherence_policy == "strict":
+            raise WorkflowError(
+                f"Lineage-coherence screen found extreme {recombination_method}-filtered distance outlier(s): "
+                + ", ".join(filtered_screen["flagged_samples"])
+                + ". Review the cohort or explicitly choose diagnostic policy."
+            )
+        # Preserve the raw tree separately; estimate the filtered topology and
+        # branch lengths anew rather than relabelling the original tree.
+        raw = phylogeny_stages[0]
+        _run_command(raw[0], log=files.directory / 'logs' / raw[1], expected=raw[2],
+                     force=force, cwd=files.directory, inputs=raw[3])
+        prefix = files.directory / f'{recombination_method}_tree'
+        tree = prefix.with_suffix('.treefile')
+        command = list(raw[0])
+        command[command.index('-s') + 1] = str(alignment)
+        command[command.index('-pre') + 1] = str(prefix)
+        _run_command(command, log=files.directory / f'logs/{recombination_method}_tree.log', expected=tree,
+                     force=force, cwd=files.directory, inputs=(alignment,))
+        return tree, alignment, summary
+    if recombination_method != "clonalframeml":
+        raise WorkflowError("Recombination method must be phipack, clonalframeml or verticall")
     for command, log_name, expected, inputs in phylogeny_stages:
         _run_command(
             command,
@@ -387,7 +425,7 @@ def _run_core_phylogeny(
 
 def _clock_dates_path(files: LineageFiles) -> Path:
     """Prepare precise external clock inputs without changing saved metadata."""
-    from chronoclade.metadata_dates import treetime_date
+    from chronoclade.metadata_dates import clock_date_interval, treetime_date
 
     source = files.directory / "clock_dates.csv"
     if not source.is_file():
@@ -395,7 +433,8 @@ def _clock_dates_path(files: LineageFiles) -> Path:
     with source.open(newline="", encoding="utf-8") as stream:
         rows = [
             {"sample_id": row["sample_id"],
-             "collection_date": treetime_date(row.get("collection_date"))}
+             "collection_date": treetime_date(row.get("collection_date"))
+             if clock_date_interval(row.get("collection_date"))["status"] == "valid" else ""}
             for row in csv.DictReader(stream)
         ]
     target = files.directory / "treetime_dates.csv"
@@ -437,24 +476,10 @@ def _run_observed_clock(files: LineageFiles, tree: Path, sequence_length: int, f
 
 def _dated_members(members: list[Sample]) -> list[Sample]:
     """Keep genuinely usable date values without inventing dates for other tips."""
-    from chronoclade.metadata import MetadataError, _validate_date
+    from chronoclade.metadata_dates import clock_date_interval
 
-    from datetime import date
-
-    result = []
-    for sample in members:
-        try:
-            _validate_date(sample.collection_date, row_number=0)
-            # Partial dates are represented by their earliest possible day.
-            parts = [int(part) for part in sample.collection_date.split("-")]
-            earliest = date(parts[0], parts[1] if len(parts) > 1 else 1,
-                            parts[2] if len(parts) > 2 else 1)
-            if earliest > date.today():
-                continue
-        except MetadataError:
-            continue
-        result.append(sample)
-    return result
+    return [sample for sample in members
+            if clock_date_interval(sample.collection_date)["status"] == "valid"]
 
 
 def _run_dated_tree(

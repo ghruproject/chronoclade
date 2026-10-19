@@ -117,12 +117,17 @@ def run_tree_ensemble(ensemble_manifest, *, output, ensemble_jobs=1, force=False
     source = Path(ensemble_manifest).expanduser().resolve()
     ensemble = load_selection_ensemble(source)
     options.setdefault("coherence_policy", "strict")
+    options.setdefault("recombination_method", "phipack")
+    options.setdefault("phipack_window", 10000)
+    options.setdefault("phipack_step", 5000)
+    options.setdefault("phipack_threshold", 0.05)
     safe_parameters = {key: str(value) if isinstance(value, Path) else value
                        for key, value in options.items() if key != "api_key"}
     safe_parameters["ensemble_jobs"] = ensemble_jobs
     safe_parameters["phylogeny_seed"] = options.get("seed", 42)
     safe_parameters["phylogeny_seed_policy"] = "explicit_IQ_TREE"
-    safe_parameters["reference_selection_policy"] = "highest_N50_common_input"
+    safe_parameters["reference_selection_policy"] = ("explicit_input" if options.get("reference_sample_id") is not None
+                                                     else "highest_N50_common_input")
     output, manifest, result = _initial(
         output, source, "tree", [s["selection_id"] for s in ensemble["selections"]], safe_parameters, force,
     )

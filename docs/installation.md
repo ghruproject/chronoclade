@@ -20,9 +20,13 @@ Check the installed programs:
 pixi run chronoclade preflight
 ```
 
-The table should report paths for `ska`, `iqtree`, `ClonalFrameML` and
+The table should report paths for `ska`, `iqtree`, `Profile` (PHIPack) and
 `treetime`. Run ChronoClade through `pixi run` so these programs remain on the
 same executable path.
+
+For Verticall, run `pixi run chronoclade preflight --stage tree
+--recombination-method verticall`; this checks `verticall` and `minimap2` in
+addition to SKA, IQ-TREE and TreeTime. Both are included in the tree environment.
 
 ## Separate command environments
 

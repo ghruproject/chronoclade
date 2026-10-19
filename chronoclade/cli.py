@@ -71,13 +71,18 @@ def version() -> None:
 @app.command()
 def preflight(
     stage: Annotated[str, typer.Option(help="Software checks for all, prepare, cgmlst, tree or time")] = "all",
+    recombination_method: Annotated[str, typer.Option(help="Tree filtering: phipack, clonalframeml or verticall")] = "phipack",
 ) -> None:
     """Check stage software; references, credentials and inputs are checked separately."""
 
     from chronoclade.native_tools import native_platform_supported, tool_status
 
-    requirements = {"all": None, "prepare": (), "cgmlst": (),
-                    "tree": ("ska", "iqtree", "ClonalFrameML", "treetime"),
+    if recombination_method not in {"phipack", "clonalframeml", "verticall"}:
+        _fail(ValueError("Recombination method must be phipack, clonalframeml or verticall"))
+    recombination_tools = {"phipack": ("Profile",), "clonalframeml": ("ClonalFrameML",),
+                           "verticall": ("verticall", "minimap2")}[recombination_method]
+    requirements = {"all": ("ska", "iqtree", *recombination_tools, "treetime"), "prepare": (), "cgmlst": (),
+                    "tree": ("ska", "iqtree", *recombination_tools, "treetime"),
                     "time": ("treetime",)}
     if stage not in requirements:
         _fail(ValueError("Stage must be all, prepare, cgmlst, tree or time"))
@@ -85,9 +90,9 @@ def preflight(
     table.add_column("Tool")
     table.add_column("Status")
     ok = True
-    for tool, path in tool_status().items():
-        if requirements[stage] is not None and tool not in requirements[stage]:
-            continue
+    status = tool_status()
+    for tool in requirements[stage]:
+        path = status.get(tool)
         if path:
             table.add_row(tool, f"[green]{path}[/green]")
         else:

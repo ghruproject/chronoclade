@@ -13,6 +13,12 @@ class CoherencePolicy(str, Enum):
     diagnostic = "diagnostic"
 
 
+class RecombinationMethod(str, Enum):
+    phipack = "phipack"
+    clonalframeml = "clonalframeml"
+    verticall = "verticall"
+
+
 def register(app):
     app.command("tree")(tree_command)
 
@@ -21,6 +27,11 @@ def tree_command(
     selection: Annotated[Path, typer.Argument(help="Validated selection or ensemble manifest")],
     output: Annotated[Path, typer.Option("--out", "--output", "-o")] = Path("tree_results"),
     threads: Annotated[int, typer.Option(min=1)] = 1,
+    reference_sample_id: Annotated[str | None, typer.Option(help="Exact selected input genome to use as reference; default highest N50 input")] = None,
+    recombination_method: Annotated[RecombinationMethod, typer.Option(help="phipack (fast default), clonalframeml, or verticall reference-relative masking")] = RecombinationMethod.phipack,
+    phipack_window: Annotated[int, typer.Option(min=200, help="PHIPack scanning window in mapped bases")] = 10000,
+    phipack_step: Annotated[int, typer.Option(min=1, help="PHIPack scanning step in mapped bases")] = 5000,
+    phipack_threshold: Annotated[float, typer.Option(min=0.000001, max=1, help="PHIPack Benjamini-Hochberg FDR threshold")] = 0.05,
     support_replicates: Annotated[int, typer.Option(min=0, help="Optional filtered-alignment UFBoot2 replicates: 0 disables; otherwise at least 1000. Separate supported ML tree; dating topology unchanged.")] = 0,
     randomisations: Annotated[int, typer.Option(min=0, help="Clustered date permutations; default 100. Smaller quick screens have coarser empirical p-values.")] = 100,
     randomisation_jobs: Annotated[int, typer.Option(min=1)] = 1,
@@ -42,6 +53,8 @@ def tree_command(
     try:
         runner = run_tree
         options = {}
+        if reference_sample_id is not None:
+            options["reference_sample_id"] = reference_sample_id
         if assembly_cache is not None:
             options["assembly_cache"] = assembly_cache
         if _read(selection).get("schema") == "chronoclade.selection-ensemble":
@@ -60,6 +73,10 @@ def tree_command(
             assess_temporal=assess_temporal,
             force=force,
             coherence_policy=coherence_policy.value,
+            recombination_method=recombination_method.value,
+            phipack_window=phipack_window,
+            phipack_step=phipack_step,
+            phipack_threshold=phipack_threshold,
             api_key=_api_key(api_key_env),
             base_url=base_url,
             **options,

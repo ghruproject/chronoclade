@@ -139,7 +139,14 @@ def run_tree(
     assembly_cache=None,
     coherence_policy="strict",
     support_replicates=0,
+    reference_sample_id=None,
+    recombination_method="phipack",
+    phipack_window=10000,
+    phipack_step=5000,
+    phipack_threshold=0.05,
 ):
+    from chronoclade.phipack import validate_options
+    validate_options(recombination_method, phipack_window, phipack_step, phipack_threshold)
     from chronoclade.tree_stage.support import validate_replicates
     validate_replicates(support_replicates)
     if threads < 1 or randomisation_jobs < 1 or randomisations < 0 or not 0 < temporal_p_value <= 1:
@@ -157,9 +164,14 @@ def run_tree(
         raise WorkflowError("Native tree requires input genomes for its common reference")
     if len({row["species"] for row in rows}) != 1:
         raise WorkflowError("Tree selection spans incompatible species")
-    tool_evidence = tools(
-        ["ska", "iqtree", "ClonalFrameML"] + (["treetime"] if assess_temporal else [])
-    )
+    if reference_sample_id is not None and reference_sample_id not in {
+            row["sample_id"] for row in rows if row["role"] == "input"}:
+        raise WorkflowError("Explicit reference sample must be an exact selected input genome")
+    native_tools = ["ska", "iqtree"] + {
+        "phipack": ["Profile"], "clonalframeml": ["ClonalFrameML"],
+        "verticall": ["verticall", "minimap2"],
+    }[recombination_method]
+    tool_evidence = tools(native_tools + (["treetime"] if assess_temporal else []))
     parameters = dict(
         threads=threads,
         randomisations=randomisations,
@@ -168,12 +180,17 @@ def run_tree(
         seed=seed,
         phylogeny_seed=seed,
         phylogeny_seed_policy="explicit_IQ_TREE",
-        reference_selection_policy="highest_N50_common_input",
+        reference_selection_policy="explicit_input" if reference_sample_id is not None else "highest_N50_common_input",
+        reference_sample_id=reference_sample_id,
         assess_temporal=assess_temporal,
         base_url=base_url,
         coherence_policy=coherence_policy,
         coherence_screen_policy_version=COHERENCE_SCREEN_POLICY_VERSION,
         support_replicates=support_replicates,
+        recombination_method=recombination_method,
+        phipack_window=phipack_window,
+        phipack_step=phipack_step,
+        phipack_threshold=phipack_threshold,
     )
     local_hashes = {
         row["sample_id"]: file_sha256(local_assembly(row, dataset_path))
@@ -181,7 +198,7 @@ def run_tree(
         if local_assembly(row, dataset_path)
     }
     computed_with = execution_provenance(
-        "tree", "recombination-corrected-phylogeny-v2",
+        "tree", "recombination-filtered-phylogeny-v3",
         software_version=header("tree")["software"]["version"],
     )
     digest = fingerprint(
@@ -199,7 +216,7 @@ def run_tree(
         previous = json.loads(saved.read_text())
         if previous.get("fingerprint") == digest:
             return load_tree_result(saved)
-    require_tools(["ska", "iqtree", "ClonalFrameML"])
+    require_tools(native_tools)
     output, job = prepare_job(output, digest, "tree", force)
     try:
         from chronoclade.native_pipeline import (
@@ -241,9 +258,16 @@ def run_tree(
         files = LineageFiles.in_directory(job)
         _write_lineage_inputs(job, members)
         input_members = [sample for sample in members if sample.origin == "local"]
-        selected_reference = select_reference(input_members)
-        tree_path, alignment, _ = _run_core_phylogeny(
-            files, members, selected_reference, threads, force, coherence_policy=coherence_policy, seed=seed
+        selected_reference = (next(sample for sample in input_members
+                                   if sample.sample_id == reference_sample_id)
+                              if reference_sample_id is not None else select_reference(input_members))
+        recombination_options = (dict(recombination_method=recombination_method,
+                                     phipack_window=phipack_window, phipack_step=phipack_step,
+                                     phipack_threshold=phipack_threshold)
+                                 if recombination_method != "clonalframeml" else {})
+        tree_path, alignment, recombination = _run_core_phylogeny(
+            files, members, selected_reference, threads, force, coherence_policy=coherence_policy, seed=seed,
+            **recombination_options,
         )
         coherence = {"policy": coherence_policy, "screen_policy_version": COHERENCE_SCREEN_POLICY_VERSION, "raw_action": "review_and_retain", "corrected_action": "abort_on_flags" if coherence_policy == "strict" else "review_and_retain"}
         for label, audit_path in (("raw", files.coherence_screen), ("corrected", files.clonal_coherence_screen)):
@@ -275,19 +299,30 @@ def run_tree(
                 raise WorkflowError(f"{name} does not preserve exact selected IDs")
         from chronoclade.recombination_report import write_recombination_evidence
 
-        recombination = write_recombination_evidence(
-            alignment=files.alignment,
-            filtered_alignment=alignment,
-            importations=files.importations,
-            output_directory=job,
-            reference=selected_reference.assembly,
-        )
+        recombination_html = ''
+        if recombination_method == "clonalframeml":
+            recombination = write_recombination_evidence(
+                alignment=files.alignment, filtered_alignment=alignment,
+                importations=files.importations, output_directory=job,
+                reference=selected_reference.assembly,
+            )
+            recombination.update(method="clonalframeml", correction_applied=True)
+        else:
+            if recombination_method == 'phipack':
+                from chronoclade.phipack import report_html
+            else:
+                from chronoclade.verticall_filter import report_html
+            if not isinstance(recombination, dict) or recombination.get('method') != recombination_method:
+                raise WorkflowError(f'Missing {recombination_method} masking evidence')
+            recombination_html = report_html(recombination)
         from chronoclade.tree_stage.support import run_branch_support, support_html
         branch_support = run_branch_support(
             alignment=alignment, corrected_tree=tree_path, directory=job,
             output_root=output, replicates=support_replicates, threads=threads,
             seed=seed, force=force,
         )
+        if branch_support.get('status') == 'complete':
+            branch_support['alignment_basis'] = f'{recombination_method}-filtered alignment'
         sites = complete_alignment_sites(alignment)
         dated = _dated_members(members)
         assessment = {
@@ -348,7 +383,7 @@ def run_tree(
             job / "corrected_tree.svg",
             nearest_ids=selection.get("required_nearest_context_ids", ()),
             nearest_label="Mandatory cgMLST-guide neighbours (ties retained)",
-            title="Recombination-adjusted selected-sample tree",
+            title=f"{recombination_method}-filtered selected-sample tree",
             distance_label="Substitutions/site",
             dating_note="Collection dates are metadata; this tree is not time scaled.",
         )
@@ -424,7 +459,7 @@ def run_tree(
                         "coherence_screening": coherence,
                     },
                     rows=rows,
-                    extra=support_html(branch_support) + "<details><summary>Raw and corrected coherence audits</summary><pre>" + escape(json.dumps(coherence, indent=2)) + "</pre></details>",
+                    extra=recombination_html + support_html(branch_support) + "<details><summary>Raw and filtered coherence audits</summary><pre>" + escape(json.dumps(coherence, indent=2)) + "</pre></details>",
                     network=network,
                     host_network=host_network,
                     state_networks=state_networks,
@@ -433,7 +468,7 @@ def run_tree(
                             "recombination_map.svg",
                             "ClonalFrameML inferred importation and filtering profile",
                         ),
-                        ("corrected_tree.svg", "Corrected biological tree; substitutions/site"),
+                        ("corrected_tree.svg", f"{recombination_method}-filtered biological tree; substitutions/site"),
                         ("clock/root_to_tip_regression.svg", "Root-to-tip temporal diagnostic"),
                         ("date_randomisation.svg", "Clustered date-permutation screen"),
                     ],
