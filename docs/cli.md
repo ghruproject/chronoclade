@@ -50,6 +50,22 @@ Run `chronoclade COMMAND --help` for the installed options. See
 [Pasteur authorisation](pasteur-auth.md) for the tool-install, consent and
 authenticated reference-build sequence.
 
+## Compressed storage
+
+Use the global `--storage compact` option before a stage command, or set
+`CHRONOCLADE_STORAGE=compact`, to compact successful outputs. Generated jobs
+preserve this setting. The default is `plain`; both settings read compressed inputs.
+
+| Command | Purpose |
+| --- | --- |
+| `storage pack DIRECTORY [--dry-run] [--codec zstd\|gzip] [--min-size-mb 1]` | Compact eligible idle payloads after exact round-trip verification |
+| `storage status DIRECTORY [--json]` | Show logical, stored and restored sizes |
+| `storage verify DIRECTORY` | Check archives, original content hashes and restored copies |
+| `storage restore DIRECTORY` | Restore original files for external tools; retain archives |
+
+See [compressed storage](storage.md) for supported payloads, concurrency, space
+requirements and compatibility with older installations.
+
 ## Viewer exports
 
 `export` reads a saved result and creates a **new** directory. It checks sample

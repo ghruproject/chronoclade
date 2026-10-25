@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+
 import csv
 from dataclasses import asdict
 from datetime import datetime, timezone
@@ -15,6 +16,7 @@ import tempfile
 
 import numpy as np
 
+from chronoclade.storage import available, logical_size, materialize, open_binary, open_text, read_text
 from chronoclade import __version__
 from .model import (
     AlleleMatrix,
@@ -37,7 +39,7 @@ def _json(value):
 
 def _digest(path):
     digest = hashlib.sha256()
-    with path.open("rb") as stream:
+    with open_binary(path) as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
@@ -224,7 +226,7 @@ def write_dataset(dataset: PreparedDataset, directory: str | Path) -> Path:
 
 
 def _read_json(path):
-    return json.loads(path.read_text(encoding="utf-8"))
+    return json.loads(read_text(path))
 
 
 def _verified_artifact(root, spec, expected_format, seen):
@@ -237,7 +239,7 @@ def _verified_artifact(root, spec, expected_format, seen):
     if relative.is_absolute() or any(part in {".", ".."} for part in raw.split("/")):
         raise DatasetError("Dataset artifact path escapes the bundle")
     path = (root / raw).resolve()
-    if not path.is_relative_to(root) or path in seen or not path.is_file():
+    if not path.is_relative_to(root) or path in seen or not available(path):
         raise DatasetError("Dataset artifact is missing, duplicated, or outside the bundle")
     seen.add(path)
     checksum, size = spec.get("sha256"), spec.get("bytes")
@@ -246,7 +248,7 @@ def _verified_artifact(root, spec, expected_format, seen):
     if (
         type(size) is not int
         or size < 0
-        or path.stat().st_size != size
+        or logical_size(path) != size
         or _digest(path) != checksum
     ):
         raise DatasetError(f"Dataset artifact checksum/size mismatch: {raw}")
@@ -309,9 +311,9 @@ def _load_bundle(root, manifest, mmap_mode):
         )
         _verified_artifact(root, table["inspection"], "csv", seen)
         if name == "samples":
-            rows[name] = _read_samples(np.load(data, allow_pickle=False, mmap_mode="r"))
+            rows[name] = _read_samples(np.load(materialize(data), allow_pickle=False, mmap_mode="r"))
         else:
-            with data.open(encoding="utf-8") as stream:
+            with open_text(data) as stream:
                 rows[name] = tuple(json.loads(line) for line in stream)
         if len(rows[name]) != table["rows"]:
             raise DatasetError(f"Dataset table row count mismatch: {name}")
@@ -325,7 +327,7 @@ def _load_bundle(root, manifest, mmap_mode):
         if not isinstance(categories, list) or not isinstance(entry["sample_ids"], list):
             raise DatasetError("Dataset profiles require explicit sample IDs and vocabulary")
         codes = np.load(
-            _verified_artifact(root, entry["codes"], "npy", seen),
+            materialize(_verified_artifact(root, entry["codes"], "npy", seen)),
             allow_pickle=False,
             mmap_mode=mmap_mode,
         )

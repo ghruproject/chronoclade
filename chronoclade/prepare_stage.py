@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from chronoclade.storage import read_text, available, logical_size
+from chronoclade.file_snapshots import copy_evidence_snapshot
+
 import json
 import re
 import shutil
@@ -37,7 +40,7 @@ class PrepareResult:
 
 def _json(path: Path):
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
+        value = json.loads(read_text(path))
         check_json(value, location=path.name)
         return value
     except (OSError, ValueError) as error:
@@ -190,13 +193,13 @@ def _portable_assemblies(dataset, source_root, staging):
                 continue
             path = Path(reference).expanduser()
             path = path if path.is_absolute() else source_root / path
-            if path.is_file():
+            if available(path):
                 digest = file_sha256(path)
                 relative = f"assemblies/{digest}{path.suffix}"
                 destination = staging / relative
                 destination.parent.mkdir(exist_ok=True)
                 if not destination.exists():
-                    shutil.copyfile(path, destination)
+                    copy_evidence_snapshot(path, destination)
                 row["assembly_reference"] = relative
                 artifacts[relative] = {
                     "path": relative,
@@ -241,14 +244,14 @@ def _validate_previous_stage(root):
         ):
             raise DatasetError("Existing prepare artifact requires a safe relative path")
         artifact = (root / raw).resolve()
-        if not artifact.is_relative_to(root) or raw in seen or not artifact.is_file():
+        if not artifact.is_relative_to(root) or raw in seen or not available(artifact):
             raise DatasetError(
                 "Existing prepare artifact is missing, duplicated or outside the bundle"
             )
         seen.add(raw)
         if (
             type(item.get("bytes")) is not int
-            or artifact.stat().st_size != item["bytes"]
+            or logical_size(artifact) != item["bytes"]
             or file_sha256(artifact) != item.get("sha256")
         ):
             raise DatasetError(f"Existing prepare artifact checksum/size mismatch: {raw}")
@@ -359,7 +362,7 @@ def _readiness(dataset, manifest):
                 "readiness": "ready" if not reasons else "incomplete",
                 "reasons": reasons,
                 "assembly_status": "bundled"
-                if reference and (manifest.parent / reference).is_file()
+                if reference and available(manifest.parent / reference)
                 else "external_reference"
                 if reference
                 else "retrieval_not_assessed"

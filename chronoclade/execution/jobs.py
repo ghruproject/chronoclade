@@ -39,8 +39,11 @@ class JobSpec:
     arguments: tuple[str, ...]
     working_directory: Path
     executable: str = "chronoclade"
+    storage_policy: str = "plain"
 
     def __post_init__(self):
+        if self.storage_policy not in {"plain", "compact"}:
+            raise ValueError("Storage policy must be plain or compact")
         if self.stage not in {"prepare", "cgmlst", "tree", "time", "time-compare"}:
             raise ValueError("Unknown analysis stage")
         if not self.working_directory.is_dir():
@@ -57,7 +60,8 @@ class JobSpec:
 
     @property
     def argv(self):
-        return [self.executable, self.stage, *self.arguments]
+        options = ["--storage", "compact"] if self.storage_policy == "compact" else []
+        return [self.executable, *options, self.stage, *self.arguments]
 
 
 def write_job(spec: JobSpec, output: Path, *, resources=None):

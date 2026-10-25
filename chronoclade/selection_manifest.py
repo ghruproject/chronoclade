@@ -7,6 +7,7 @@ move their common parent together to preserve relative source references.
 
 from __future__ import annotations
 
+
 import json
 import csv
 import hashlib
@@ -17,6 +18,7 @@ import shutil
 import tempfile
 from collections import Counter
 
+from chronoclade.storage import available, materialize, read_text
 from chronoclade import __version__
 from chronoclade.artifacts import file_sha256, write_json
 from chronoclade.datasets import DatasetError, load_dataset
@@ -35,7 +37,7 @@ ENSEMBLE_SCHEMA = "chronoclade.selection-ensemble"
 
 def _read(path):
     try:
-        result = json.loads(Path(path).read_text(encoding="utf-8"))
+        result = json.loads(read_text(path))
     except (OSError, ValueError) as error:
         raise WorkflowError(f"Cannot read manifest {path}: {error}") from error
     if not isinstance(result, dict):
@@ -48,7 +50,7 @@ def _reference(base, path, actual=None):
     return {"path": Path(os.path.relpath(path, base)).as_posix(), "sha256": file_sha256(actual)}
 
 
-def _resolve(base, spec, field, *, external=False):
+def _resolve(base, spec, field, *, external=False, restore=True):
     if not isinstance(spec, dict):
         raise WorkflowError(f"{field} requires a path/checksum reference")
     raw, digest = spec.get("path"), spec.get("sha256")
@@ -66,11 +68,11 @@ def _resolve(base, spec, field, *, external=False):
     path = (base / raw).resolve()
     if not external and not path.is_relative_to(base.resolve()):
         raise WorkflowError(f"{field}.path escapes its bundle")
-    if not path.is_file():
+    if not available(path):
         raise WorkflowError(f"{field}.path does not exist: {raw}")
     if file_sha256(path) != digest:
         raise WorkflowError(f"{field}.sha256 does not match {raw}")
-    return path
+    return materialize(path) if restore else path
 
 
 def _header(manifest, schema):

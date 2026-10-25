@@ -1,11 +1,13 @@
 """Validated, checksum-bound tree/time result contracts and job publication."""
 
+
 import hashlib
 import json
 import os
 from pathlib import Path
 import shutil
 
+from chronoclade.storage import logical_files
 from chronoclade import __version__
 from chronoclade.artifacts import file_sha256, write_json
 from chronoclade.errors import WorkflowError
@@ -69,8 +71,8 @@ def header(stage):
 def artifacts(root, job):
     return {
         p.relative_to(job).as_posix(): reference(root, p)
-        for p in sorted(job.rglob("*"))
-        if p.is_file() and p.name != "job.json"
+        for p in sorted(logical_files(job))
+        if p.name != "job.json"
     }
 
 
@@ -98,7 +100,7 @@ def load_result(path, stage):
     if not isinstance(entries, dict) or not entries:
         raise WorkflowError("Stage result requires hashed artifacts")
     for name, spec in entries.items():
-        _resolve(path.parent, spec, f"artifacts.{name}")
+        _resolve(path.parent, spec, f"artifacts.{name}", restore=False)
     assessment = result.get("temporal_assessment")
     if not isinstance(assessment, dict) or type(assessment.get("supported")) is not bool:
         raise WorkflowError("Stage result requires an explicit temporal assessment")
@@ -155,7 +157,7 @@ def load_tree_result(path):
         ]
         if len(tips) != len(ids) or set(tips) != set(ids):
             raise WorkflowError(f"{name} does not contain exact selected identifiers")
-    sequences = read_alignment(_resolve(base, result["alignment"], "alignment"))
+    sequences = read_alignment(_resolve(base, result["alignment"], "alignment", restore=False))
     if set(sequences) != set(ids):
         raise WorkflowError("Corrected alignment does not contain exact selected identifiers")
     import json

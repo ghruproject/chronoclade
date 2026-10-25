@@ -74,6 +74,8 @@ def prepare_command(
     except (OSError, ValueError) as error:
         console.print(f"Error: {error}", style="bold red", markup=False)
         raise typer.Exit(code=2) from error
+    from chronoclade.storage import completed_output
+    completed_output(output)
     console.print(f"Dataset manifest: {result.dataset_manifest}", markup=False)
     console.print(f"Preparation audit: {result.report_path}", markup=False)
     console.print("Preparation readiness describes frozen typing and metadata; tree assembly availability and temporal signal are assessed in later stages.", markup=False)

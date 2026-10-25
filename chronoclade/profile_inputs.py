@@ -14,6 +14,8 @@ import hashlib
 import io
 import json
 from pathlib import Path
+
+from chronoclade.storage import available, materialize
 import re
 import time
 from typing import Callable, Iterable
@@ -219,9 +221,10 @@ def _canonical(raw: dict, *, origin: str, species: str = "", base: Path | None =
     ):
         path = Path(assembly).expanduser()
         path = path if path.is_absolute() else base / path
-        if not path.is_file():
+        if not available(path):
             raise ProfileInputError(f"Assembly does not exist for {sample}: {path}")
-        row["assembly"] = str(path.resolve())
+        row["assembly"] = str(materialize(path.resolve()))
+        path = Path(row["assembly"])
         row["assembly_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
     else:
         row.pop("assembly", None)

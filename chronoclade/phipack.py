@@ -10,7 +10,9 @@ import re
 from Bio import SeqIO
 import numpy as np
 
+from chronoclade.storage import open_text
 from chronoclade.errors import WorkflowError
+from chronoclade.evidence import read_alignment
 
 
 def validate_options(method, window, step, threshold):
@@ -78,11 +80,12 @@ def run_profile_mask(files, reference, *, threads, force, window=10000, step=500
     validate_options('phipack', window, step, threshold)
     directory = files.directory / 'phipack'
     directory.mkdir(exist_ok=True)
-    sequences = {r.id: str(r.seq).upper() for r in SeqIO.parse(files.alignment, 'fasta')}
+    sequences = read_alignment(files.alignment)
     if not sequences or len({len(s) for s in sequences.values()}) != 1:
         raise WorkflowError('PHIPack requires an equal-length selected alignment')
     length = len(next(iter(sequences.values())))
-    records = list(SeqIO.parse(reference, 'fasta'))
+    with open_text(reference) as stream:
+        records = list(SeqIO.parse(stream, 'fasta'))
     if sum(len(r) for r in records) != length:
         raise WorkflowError('PHIPack reference boundaries disagree with mapped alignment length')
     specs = []

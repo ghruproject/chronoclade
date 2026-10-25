@@ -49,6 +49,9 @@ def time_command(
         Console().print(f"Time manifest: {output.resolve() / 'time.json'}")
         Console().print(f"Dating status: {result['dating_status']}")
 
+    from chronoclade.storage import completed_output
+    completed_output(output)
+
 
 def comparison_command(
     ensemble: Annotated[Path, typer.Argument(help="Selection ensemble.json")],

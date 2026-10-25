@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+
 import csv
 import hashlib
 import json
@@ -10,6 +11,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Iterable
 
+from chronoclade.storage import available, materialize, open_binary, open_text, logical_size
 from chronoclade.coherence import screen_alignment
 from chronoclade.location_network.marginal import UNKNOWN
 from chronoclade.errors import WorkflowError
@@ -147,10 +149,14 @@ def _run_command(
             previous = json.loads(fingerprint_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             previous = None
-    if all(path.exists() for path in expected_paths) and not force and previous == fingerprint:
+    if all(available(path) for path in expected_paths) and not force and previous == fingerprint:
         from chronoclade.progress import progress
         progress("native", f"Reusing checked {Path(command[0]).name} output")
+        for path in expected_paths:
+            materialize(path)
         return
+    for path in inputs:
+        materialize(path)
     for path in expected_paths:
         if path.is_file():
             path.unlink()
@@ -181,15 +187,15 @@ def _file_fingerprint(path: Path) -> dict[str, object]:
     """Hash one direct stage input so stale outputs are not silently reused."""
 
     resolved = path.expanduser().resolve()
-    if not resolved.is_file():
+    if not available(resolved):
         raise WorkflowError(f"Stage input does not exist: {resolved}")
     digest = hashlib.sha256()
-    with resolved.open("rb") as handle:
+    with open_binary(resolved) as handle:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
     return {
         "path": str(resolved),
-        "size_bytes": resolved.stat().st_size,
+        "size_bytes": logical_size(resolved),
         "sha256": digest.hexdigest(),
     }
 
@@ -199,7 +205,7 @@ def alignment_length(path: Path) -> int:
 
     lengths: list[int] = []
     current = 0
-    with path.open(encoding="utf-8") as handle:
+    with open_text(path) as handle:
         for raw_line in handle:
             line = raw_line.strip()
             if not line:
@@ -226,7 +232,7 @@ def complete_alignment_sites(path: Path) -> int:
     incomplete = bytearray(length)
     position = 0
     seen_header = False
-    with path.open(encoding="utf-8") as handle:
+    with open_text(path) as handle:
         for raw_line in handle:
             line = raw_line.strip()
             if not line:

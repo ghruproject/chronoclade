@@ -1,11 +1,13 @@
 """Execute assembly phylogeny from a validated immutable selection."""
 
+
 from pathlib import Path
 import json
 from html import escape
 
 from Bio import Phylo
 
+from chronoclade.storage import available, materialize
 from chronoclade.artifacts import file_sha256, write_json
 from chronoclade.coherence import COHERENCE_SCREEN_POLICY_VERSION
 from chronoclade.datasets import load_dataset
@@ -44,7 +46,7 @@ def local_assembly(row, dataset_path):
         return None
     path = Path(raw).expanduser()
     path = path if path.is_absolute() else dataset_path.parent / path
-    return path.resolve() if path.is_file() else None
+    return materialize(path.resolve()) if available(path) else None
 
 
 def acquire_assemblies(rows, dataset_path, job, *, api_key, base_url, threads, cache_dir=None):

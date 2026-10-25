@@ -102,6 +102,9 @@ def tree_command(
         if (result.get("coherence_screening") or {}).get("warning"):
             Console().print(result["coherence_screening"]["warning"], style="bold yellow", markup=False)
 
+    from chronoclade.storage import completed_output
+    completed_output(output)
+
 
 def _api_key(environment):
     from chronoclade.pathogenwatch import load_api_key

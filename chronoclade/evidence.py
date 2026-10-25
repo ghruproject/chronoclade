@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+
 from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 
+from chronoclade.storage import open_text
 from chronoclade.metadata import Sample
 
 
@@ -26,7 +28,7 @@ def read_alignment(path: Path) -> dict[str, str]:
 
     sequences: dict[str, list[str]] = {}
     current = ""
-    with path.open(encoding="utf-8") as handle:
+    with open_text(path) as handle:
         for raw_line in handle:
             line = raw_line.strip()
             if not line:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+
 import json
 import shutil
 from contextlib import ExitStack, nullcontext
@@ -9,6 +10,7 @@ from dataclasses import asdict
 from functools import wraps
 from pathlib import Path
 
+from chronoclade.storage import available as storage_available, read_text
 from chronoclade.artifacts import file_sha256
 from chronoclade.execution_provenance import execution_provenance
 from chronoclade.cglin import parse_code, resolved_prefix
@@ -359,9 +361,9 @@ def discover_profile_context(
         for index, (species, st) in enumerate(sorted(scopes)):
             checkpoint_path = work / f"matched_{index}.json"
             scope = {"index": index, "species": species, "st": st}
-            if checkpoint_path.exists():
+            if storage_available(checkpoint_path):
                 try:
-                    checkpoint = json.loads(checkpoint_path.read_text())
+                    checkpoint = json.loads(read_text(checkpoint_path))
                 except (OSError, ValueError) as error:
                     raise DatasetError(f"Cannot read context scope checkpoint {index}") from error
                 body = {k: v for k, v in checkpoint.items() if k != "checkpoint_sha256"}
@@ -396,7 +398,7 @@ def discover_profile_context(
                 organism = envelope["provenance"]["organism_capabilities"]
             else:
                 public_path = work / f"public_{index}.json"
-                if public_path.exists():
+                if storage_available(public_path):
                     try:
                         envelope = load_catalogue(public_path)
                     except Exception as error:
@@ -429,7 +431,7 @@ def discover_profile_context(
                         }
                     )
                     continue
-                if not public_path.exists():
+                if not storage_available(public_path):
                     freeze_options = {"resume": True} if resume else {}
                     if preflight is not None and isinstance(client, PathogenwatchClient):
                         freeze_options["expected_count"] = preflight['pools'][index]['candidate_count']

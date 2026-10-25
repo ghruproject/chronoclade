@@ -61,6 +61,7 @@ nav:
   - Reference:
       - Command line: cli.md
       - Output files: outputs.md
+      - Compressed storage: storage.md
 
 markdown_extensions:
   - admonition

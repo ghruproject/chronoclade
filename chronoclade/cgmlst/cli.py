@@ -135,3 +135,11 @@ def cgmlst_command(
     if status != "complete":
         console.print(f"Analysis {status}: inspect unresolved inputs and report before continuing", style="bold red")
         raise typer.Exit(code=2)
+
+    from chronoclade.storage import completed_output
+    completed_output(output)
+    if fetch_context or context_source:
+        completed_output(source.parent)
+        retrieval = source.parent.with_name(source.parent.name + "_retrieval")
+        if retrieval.is_dir():
+            completed_output(retrieval)

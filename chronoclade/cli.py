@@ -10,7 +10,9 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from chronoclade.storage import StorageSession
 from chronoclade import __version__
+from chronoclade.storage_cli import app as storage_app
 from chronoclade.prepare_cli import prepare_command
 from chronoclade.cgmlst.cli import cgmlst_command
 from chronoclade.cgmlst.refresh import refresh_command
@@ -44,16 +46,34 @@ app.command("authorize-pasteur")(authorize_pasteur_command)
 register_tree(app)
 register_time(app)
 
+app.add_typer(storage_app, name="storage")
+
 app.command("compare-clocks")(compare_clocks_command)
 app.command("calibrate-lin")(calibrate_lin_command)
 
 
 @app.callback()
 def command_options(
+    ctx: typer.Context,
     quiet: Annotated[bool, typer.Option(help="Hide progress messages; retain summaries and errors")] = False,
+    storage: Annotated[str, typer.Option("--storage", envvar="CHRONOCLADE_STORAGE",
+        help="Output storage: plain or compact (lossless zstd)")] = "plain",
 ):
     from chronoclade.progress import configure_progress
     configure_progress(quiet=quiet)
+    try:
+        session = StorageSession(storage)
+        session.__enter__()
+    except ValueError as error:
+        _fail(error)
+
+    def close_storage():
+        try:
+            session.__exit__(None, None, None)
+        except (OSError, ValueError) as error:
+            _fail(error)
+
+    ctx.call_on_close(close_storage)
 
 
 def _fail(error: Exception) -> None:

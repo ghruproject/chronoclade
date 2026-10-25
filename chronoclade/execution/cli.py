@@ -14,7 +14,8 @@ def job_command(stage: str, arguments: Annotated[list[str], typer.Argument()],
     """Write an exact local/SLURM command; use -- before stage flags."""
     from .jobs import JobSpec, SlurmResources, write_job
     try:
-        spec = JobSpec(stage, tuple(arguments), Path.cwd(), executable)
+        from chronoclade.storage import current_policy
+        spec = JobSpec(stage, tuple(arguments), Path.cwd(), executable, current_policy())
         resources = SlurmResources(cpus, memory_gb, walltime, account, partition, gpus) if slurm else None
         path = write_job(spec, output, resources=resources)
     except (ValueError, OSError) as exc:

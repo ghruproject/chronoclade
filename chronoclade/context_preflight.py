@@ -1,11 +1,13 @@
 """Public count-only planning before detailed metadata or profile acquisition."""
 from __future__ import annotations
 
+
 from collections import Counter
 from datetime import datetime, timezone
 from html import escape
 from pathlib import Path
 
+from chronoclade.storage import available
 from chronoclade.artifacts import file_sha256, write_json
 from chronoclade.datasets import DatasetError, load_dataset
 from chronoclade.mlst_typing import numeric_st
@@ -49,7 +51,7 @@ def plan_context(dataset_manifest, *, client=None, max_candidates=None, cache_ro
             pool['reason'] = 'alternative_mlst_namespace_not_primary_achtman'
             continue
         cached = Path(cache_root)/f'public_{index}.json' if cache_root else None
-        if cached and cached.exists():
+        if cached and available(cached):
             envelope = load_catalogue(cached)
             provenance = envelope['provenance']
             query = provenance['query']

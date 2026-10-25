@@ -6,6 +6,7 @@ public context. The API key is available separately for authenticated downloads.
 
 from __future__ import annotations
 
+
 import hashlib
 import json
 import os
@@ -20,6 +21,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 
+from chronoclade.storage import read_text
 from chronoclade.progress import progress, progress_task
 from chronoclade.metadata_dates import normalize_dates
 
@@ -837,7 +839,7 @@ def catalogue_summary(rows: list[dict]) -> dict:
 def load_raw_catalogue(path: Path | str) -> dict:
     """Validate raw capture integrity without adopting its normalized rows."""
     try:
-        envelope = json.loads(Path(path).read_text(encoding="utf-8"))
+        envelope = json.loads(read_text(path))
     except (OSError, ValueError) as error:
         raise PathogenwatchError("Cannot read Pathogenwatch frozen catalogue") from error
     if not isinstance(envelope, dict) or envelope.get("schema_version") != 1:

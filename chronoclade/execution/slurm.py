@@ -13,6 +13,7 @@ import sys
 from datetime import datetime, timezone
 from time import perf_counter
 
+from chronoclade.storage import StorageSession, current_policy, completed_output
 from chronoclade.artifacts import file_sha256, write_json
 from chronoclade.errors import WorkflowError
 from chronoclade.execution.ensemble import (
@@ -117,7 +118,7 @@ def write_slurm_ensemble(stage, source, *, output, results, resources,
         "schema": "chronoclade.slurm-ensemble", "schema_version": 1, "stage": stage,
         "source": reference(output, source), "results": str(results), "tasks": tasks,
         "options": options, "resources": asdict(resources), "max_parallel": max_parallel,
-        "working_directory": str(Path.cwd()),
+        "working_directory": str(Path.cwd()), "storage": current_policy(),
     })
     command = shlex.join([sys.executable, "-m", __name__, str(plan)])
     directives = [f"#SBATCH --cpus-per-task={resources.cpus}",
@@ -165,6 +166,14 @@ def _load_plan(path):
 
 
 def run_task(path, index):
+    plan = _read(Path(path))
+    with StorageSession(plan.get("storage", "plain")):
+        result = _run_task(path, index)
+        completed_output(plan["tasks"][index]["output"])
+        return result
+
+
+def _run_task(path, index):
     """One task owns one output; credentials are loaded only at execution time."""
     path, plan, _ = _load_plan(path)
     if not 0 <= index < len(plan["tasks"]):
@@ -221,6 +230,12 @@ def run_task(path, index):
 
 
 def collect(path):
+    plan = _read(Path(path))
+    with StorageSession(plan.get("storage", "plain")):
+        return _collect(path)
+
+
+def _collect(path):
     """Validate successful receipts, retain absent tasks, never rerun inference."""
     path, plan, source = _load_plan(path)
     manifests = []

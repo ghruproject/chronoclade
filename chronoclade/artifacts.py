@@ -6,10 +6,12 @@ import os
 from pathlib import Path
 import tempfile
 
+from chronoclade.storage import open_binary
+
 
 def file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
-    with Path(path).open("rb") as handle:
+    with open_binary(path) as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()

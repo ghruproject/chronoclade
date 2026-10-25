@@ -30,3 +30,5 @@ validation/
 research/
 reviews/
 .impeccable/
+
+.venv/

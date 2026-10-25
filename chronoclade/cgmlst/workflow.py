@@ -8,6 +8,7 @@ import json
 import sys
 from pathlib import Path
 
+from chronoclade.storage import available
 from chronoclade import __version__
 from chronoclade.artifacts import file_sha256, write_json
 from chronoclade.datasets import load_dataset
@@ -46,7 +47,7 @@ def _restore_artifact_paths(value, root):
     if isinstance(value, str) and len(value) < 4096 and "\n" not in value:
         path = Path(value)
         try:
-            if not path.is_absolute() and (root / path).is_file():
+            if not path.is_absolute() and available(root / path):
                 return str(root / path)
         except OSError:
             pass
@@ -377,7 +378,7 @@ def run_cgmlst(
             saved = json.loads(numerical_path.read_text())
             for relative, digest in saved["artifacts"].items():
                 path = directory / relative
-                if not path.is_file() or file_sha256(path) != digest:
+                if not available(path) or file_sha256(path) != digest:
                     raise ValueError(f"cgmlst resume numerical artifact changed: {relative}")
             analysis = _restore_artifact_paths(saved["analysis"], directory)
         else:

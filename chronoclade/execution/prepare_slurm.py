@@ -12,6 +12,9 @@ import sys
 import tempfile
 
 from chronoclade.artifacts import file_sha256, write_json
+from chronoclade.storage import (StorageSession, current_policy, completed_output,
+                                logical_files)
+from chronoclade.file_snapshots import copy_evidence_snapshot
 from chronoclade.datasets import DatasetError, load_dataset
 from chronoclade.errors import WorkflowError
 from chronoclade.execution.slurm import _script
@@ -105,7 +108,8 @@ def write_slurm_prepare(source, *, typing_config, output, results, resources,
     write_json(plan, {'schema': 'chronoclade.slurm-prepare', 'schema_version': 1,
                       'source': reference(output, source), 'typing_config': str(config),
                       'records': records, 'species': species, 'identity': identity, 'results': str(results),
-                      'tasks': tasks, 'resources': asdict(resources), 'max_parallel': max_parallel})
+                      'tasks': tasks, 'resources': asdict(resources), 'max_parallel': max_parallel,
+                      'storage': current_policy()})
     plan.with_suffix('.sha256').write_text(file_sha256(plan) + '\n')
     command = shlex.join([sys.executable, '-m', __name__, str(plan)])
     directives = [f'#SBATCH --cpus-per-task={resources.cpus}',
@@ -189,6 +193,14 @@ def _checked_result(path, plan, index):
 
 
 def run_task(path, index):
+    plan = _read(Path(path))
+    with StorageSession(plan.get("storage", "plain")):
+        result = _run_task(path, index)
+        completed_output(plan["tasks"][index]["output"])
+        return result
+
+
+def _run_task(path, index):
     from chronoclade.prepare_stage import run_prepare
     from chronoclade.progress import progress_task, progress
     path, plan = _load(path, index)
@@ -240,14 +252,15 @@ def run_task(path, index):
             write_json(status_path, status)
 
 
-
 def _tree_hashes(root):
     result = {}
-    for entry in sorted(root.rglob('*')):
+    for physical in root.rglob('*'):
+        if physical.is_symlink():
+            raise DatasetError('Worker evidence contains a symlink; refusing collection')
+    for entry in sorted(logical_files(root)):
         if entry.is_symlink():
             raise DatasetError('Worker evidence contains a symlink; refusing collection')
-        if entry.is_file():
-            result[entry.relative_to(root).as_posix()] = file_sha256(entry)
+        result[entry.relative_to(root).as_posix()] = file_sha256(entry)
     return result
 
 
@@ -261,7 +274,14 @@ def _retain_evidence(source, target):
     temporary = Path(tempfile.mkdtemp(prefix='.prepare-evidence-', dir=target.parent.parent))
     try:
         copied = temporary / 'copy'
-        shutil.copytree(source, copied)
+        if any(source.rglob("*.cc-storage.json")):
+            copied.mkdir()
+            for entry in logical_files(source):
+                destination = copied / entry.relative_to(source)
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                copy_evidence_snapshot(entry, destination)
+        else:
+            shutil.copytree(source, copied)
         if _tree_hashes(copied) != expected:
             raise DatasetError('Worker evidence changed during collection copy')
         os.replace(copied, target)
@@ -296,6 +316,15 @@ def _validate_final(destination, datasets, path, plan):
     return final
 
 def collect(path):
+    plan = _read(Path(path))
+    with StorageSession(plan.get("storage", "plain")):
+        result = _collect(path)
+        if result == 0:
+            completed_output(plan["results"])
+        return result
+
+
+def _collect(path):
     """Publish the whole original cohort, with no ST or cgMLST inference."""
     from chronoclade.prepare_stage import run_prepare
     from chronoclade.progress import progress

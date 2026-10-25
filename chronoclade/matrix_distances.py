@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+
 import json
 from pathlib import Path
 import numpy as np
+from chronoclade.storage import materialize
 from chronoclade.artifacts import file_sha256
 
 
@@ -127,7 +129,7 @@ class BinaryDistanceEvidence:
                 raise ValueError("Binary evidence path escapes its manifest directory")
             if validate and file_sha256(path) != spec["sha256"]:
                 raise ValueError(f"Binary distance checksum mismatch: {kind}")
-            array = np.load(path, mmap_mode="r", allow_pickle=False)
+            array = np.load(materialize(path), mmap_mode="r", allow_pickle=False)
             if not isinstance(array, np.ndarray):
                 raise ValueError(f"Binary distance file must contain one NumPy array: {kind}")
             if array.shape != (len(self.sample_ids),) * 2:

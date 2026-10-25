@@ -287,3 +287,25 @@ def test_incomplete_collection_retains_scheduler_category(prepared_plan, monkeyp
     assert status['failures'][0]['scheduler']['state'] == 'CANCELLED'
     assert 'Scheduler CANCELLED' in status['failures'][0]['reason']
     assert not (plan.parent.parent / 'prepared').exists()
+
+
+def test_compact_workers_collect_and_reuse_without_typing(prepared_plan, monkeypatch):
+    from chronoclade import storage
+    from chronoclade.artifacts import file_sha256
+    plan, _, calls = prepared_plan
+    saved = json.loads(plan.read_text())
+    saved['storage'] = 'compact'
+    plan.write_text(json.dumps(saved))
+    plan.with_suffix('.sha256').write_text(file_sha256(plan) + '\n')
+    pack = storage.pack
+    monkeypatch.setattr(storage, 'pack', lambda root: pack(root, min_bytes=0))
+    m.run_task(plan, 0)
+    m.run_task(plan, 1)
+    assert storage.inspect(plan.parent / 'runs')
+    assert m.collect(plan) == 0
+    assert storage.inspect(Path(saved['results']))
+    count = len(calls)
+    m.run_task(plan, 0)
+    assert m.collect(plan) == 0
+    assert len(calls) == count
+    assert storage._SESSION.get() is None

@@ -35,6 +35,11 @@ or the [small offline example](examples/beta/README.md).
 
 Separate Pixi environments are available for each stage.
 
+Use `chronoclade --storage compact COMMAND ...` to keep large reusable payloads
+compressed, or `chronoclade storage pack DIRECTORY` for idle existing results.
+Files are restored automatically when native tools or memory maps need them;
+manifest checksums and cached results remain usable. See [compressed storage](docs/storage.md).
+
 ## Prepare your input genomes
 
 Supply a Pathogenwatch collection UUID or full collection URL, an accession list,

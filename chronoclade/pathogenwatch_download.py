@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+
 import gzip
 import fcntl
 import hashlib
@@ -18,6 +19,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlparse
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
+from chronoclade.storage import open_binary
 from chronoclade.file_snapshots import copy_evidence_snapshot
 from chronoclade.pathogenwatch_identity import PublicIdentityError, resolve_public_source_identity
 
@@ -224,7 +226,8 @@ def download_assemblies(
                     try:
                         saved = json.loads(metadata.read_text())
                         blob = cache_dir / (saved["sha256"] + ".fasta")
-                        existing = blob.read_bytes()
+                        with open_binary(blob) as stream:
+                            existing = stream.read()
                         if (
                             saved["source_genome_id"] == source
                             and hashlib.sha256(existing).hexdigest() == saved["sha256"]

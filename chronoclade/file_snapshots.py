@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+
 import os
 from pathlib import Path
 import shutil
 import sys
 
+from chronoclade.storage import open_binary, receipt_path
 from chronoclade.errors import WorkflowError
 
 
@@ -36,6 +38,14 @@ def copy_evidence_snapshot(source: Path, destination: Path) -> str:
     source, destination = Path(source), Path(destination)
     if os.path.lexists(destination):
         raise WorkflowError(f"Evidence destination already exists: {destination}")
+    if not source.is_file() and receipt_path(source).is_file():
+        try:
+            with open_binary(source) as original, destination.open("xb") as copied:
+                shutil.copyfileobj(original, copied)
+        except BaseException:
+            destination.unlink(missing_ok=True)
+            raise
+        return "decompressed_copy"
     if _clone_file(source, destination):
         return "copy_on_write"
     destination.unlink(missing_ok=True)
