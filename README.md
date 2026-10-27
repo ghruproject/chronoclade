@@ -1,3 +1,8 @@
+> [!IMPORTANT]
+> **Development has moved to GitLab.**
+> The maintained repository is [cgps/ghru/chronoclade](https://gitlab.com/cgps/ghru/chronoclade). Please use GitLab for the latest code, issues, and merge requests.
+> This GitHub copy is retained for existing links and migration checks.
+
 # ChronoClade
 
 ChronoClade compares bacterial genomes with public context using cgMLST profiles,
